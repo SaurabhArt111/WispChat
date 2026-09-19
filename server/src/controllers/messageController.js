@@ -83,13 +83,54 @@ export async function sendMessage(req, res) {
 export async function uploadMedia(req, res) {
   const files = req.files || [];
   const attachments = files.map((f) => ({
-    url: `/uploads/${f.filename}`,
+    // f.mediaFolder is set by the upload middleware's diskStorage.destination
+    // so the URL always matches the folder the file actually landed in
+    // (images/, videos/, audio/, documents/, gifs/, stickers/).
+    url: `/uploads/${f.mediaFolder}/${f.filename}`,
     name: f.originalname,
     mimeType: f.mimetype,
     size: f.size,
     kind: kindFromMime(f.mimetype),
   }));
   res.json({ attachments });
+}
+
+// Powers the "Media & Storage" breakdown chart in ProfileModal: how many
+// attachments of each kind (image/video/audio/file) the user has sent or
+// received across every conversation they're part of, and how much space
+// they take up — a direct reflection of the images/videos/audio/documents/
+// gifs folder split the upload middleware now sorts files into on disk.
+export async function getMediaStats(req, res) {
+  const conversations = await Conversation.find({ participants: req.user._id }, "_id");
+  const conversationIds = conversations.map((c) => c._id);
+
+  const stats = await Message.aggregate([
+    { $match: { conversation: { $in: conversationIds }, deletedForEveryone: { $ne: true } } },
+    { $unwind: "$attachments" },
+    {
+      $group: {
+        _id: "$attachments.kind",
+        count: { $sum: 1 },
+        totalBytes: { $sum: { $ifNull: ["$attachments.size", 0] } },
+      },
+    },
+  ]);
+
+  const byKind = { image: 0, video: 0, audio: 0, file: 0 };
+  const bytesByKind = { image: 0, video: 0, audio: 0, file: 0 };
+  for (const row of stats) {
+    if (row._id in byKind) {
+      byKind[row._id] = row.count;
+      bytesByKind[row._id] = row.totalBytes;
+    }
+  }
+
+  res.json({
+    counts: byKind,
+    bytes: bytesByKind,
+    totalCount: Object.values(byKind).reduce((a, b) => a + b, 0),
+    totalBytes: Object.values(bytesByKind).reduce((a, b) => a + b, 0),
+  });
 }
 
 export async function editMessage(req, res) {

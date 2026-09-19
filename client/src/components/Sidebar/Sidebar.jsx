@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import Avatar from "../common/Avatar";
+import LiquidGlassPanel from "../common/LiquidGlassPanel";
 import ConversationItem from "./ConversationItem";
 import NewChatModal from "./NewChatModal";
 import NewGroupModal from "./NewGroupModal";
@@ -107,7 +108,11 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-topbar">
+      <LiquidGlassPanel
+        className="sidebar-topbar-lg"
+        panelClassName="sidebar-topbar"
+        config={{ blurAmount: 0.28, refraction: 0.3, edgeHighlight: 0.2, saturation: 0.1 }}
+      >
         <button className="sidebar-self" onClick={openSelfMenu} title="Your Profile & Settings">
           <Avatar user={user} size={38} showStatus online />
         </button>
@@ -139,7 +144,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
             <PlusIcon size={18} />
           </button>
         </div>
-      </div>
+      </LiquidGlassPanel>
 
       <div className="sidebar-search-wrap">
         <div className="sidebar-search">

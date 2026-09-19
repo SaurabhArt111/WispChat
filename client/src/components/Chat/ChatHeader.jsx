@@ -4,6 +4,7 @@ import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
+import LiquidGlassPanel from "../common/LiquidGlassPanel";
 import { formatLastSeen } from "../../utils/time";
 import client from "../../api/client";
 import GroupInfoModal from "./GroupInfoModal";
@@ -130,7 +131,12 @@ export default function ChatHeader({
   }
 
   return (
-    <header className="chat-header">
+    <LiquidGlassPanel
+      as="header"
+      className="chat-header-lg"
+      panelClassName="chat-header"
+      config={{ blurAmount: 0.3, refraction: 0.35, edgeHighlight: 0.25, saturation: 0.1 }}
+    >
       {/* Back button for mobile view */}
       <button
         className="icon-btn chat-header-back"
@@ -196,6 +202,6 @@ export default function ChatHeader({
           onClose={() => setShowGroupInfo(false)}
         />
       )}
-    </header>
+    </LiquidGlassPanel>
   );
 }

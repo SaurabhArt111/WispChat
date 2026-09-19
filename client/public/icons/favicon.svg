@@ -1,0 +1,23 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12161d"/>
+      <stop offset="1" stop-color="#0b0e12"/>
+    </linearGradient>
+    <linearGradient id="wisp" x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5ef2c0"/>
+      <stop offset="1" stop-color="#3ddba7"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <path d="M32 15
+           c11 0 19 7 19 16
+           c0 9 -8 16 -19 16
+           c-2 0 -4 0 -6 -1
+           l-7 4
+           c-1 1 -2 0 -2 -1
+           l2 -6
+           c-4 -3 -7 -7 -7 -12
+           c0 -9 8 -16 19 -16 Z"
+        fill="url(#wisp)"/>
+</svg>

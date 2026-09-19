@@ -11,6 +11,7 @@ import { ContextMenuProvider } from "./context/ContextMenuContext.jsx";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/toast.css";
+import "./styles/liquidglass.css";
 
 // Restore stored user accent theme
 const savedAccent = localStorage.getItem("wisp_accent");

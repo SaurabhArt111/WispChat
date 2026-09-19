@@ -1,0 +1,73 @@
+/* --- PWA banners (update available / install prompt / iOS tip) ---
+   Fixed to the bottom of the viewport, stacked, dismissible. Styled to
+   match the app's existing glass/surface tokens so they read as part of
+   the product rather than a bolted-on browser widget. */
+
+.pwa-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 10px 12px 10px 16px;
+  border-radius: var(--radius-md, 14px);
+  background: var(--surface-3);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-size: 13.5px;
+  animation: pwa-banner-in 0.25s var(--ease, ease) both;
+}
+
+.pwa-banner + .pwa-banner {
+  bottom: 74px;
+}
+
+.pwa-banner span {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+}
+
+.pwa-banner svg {
+  flex-shrink: 0;
+  color: var(--wisp);
+}
+
+@keyframes pwa-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (max-width: 640px) {
+  .pwa-banner {
+    bottom: 12px;
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+  }
+  .pwa-banner + .pwa-banner {
+    bottom: 68px;
+  }
+  @keyframes pwa-banner-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

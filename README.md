@@ -27,10 +27,55 @@ A MERN application — React (hand-written CSS, no Tailwind) + Node/Express/Mong
 
 ## Not included (flagged as follow-up work)
 
-Voice/video calling (WebRTC), end-to-end encryption, push notifications, and PWA/offline
-support existed in the original two apps but were out of scope to rebuild here — the codebases
-were too large to safely merge in full. The architecture (sockets, message model) leaves room
-to add these later.
+Voice/video calling (WebRTC) and end-to-end encryption existed in the original two apps but
+were out of scope to rebuild here — the codebases were too large to safely merge in full. The
+architecture (sockets, message model) leaves room to add these later.
+
+## PWA (installable app)
+
+The client now builds as a full Progressive Web App via `vite-plugin-pwa`:
+- **Installable** on Android/desktop Chrome/Edge (custom in-app "Install Wisp" banner, driven by
+  `beforeinstallprompt`) and on iOS/iPadOS via Add to Home Screen (a one-time in-app tip, since
+  iOS Safari has no install-prompt API).
+- **Standalone launch**, themed status bar, app icons (incl. Android maskable icons) and basic
+  iOS splash screens — see `client/public/icons/`.
+- **Offline-capable**: the app shell precaches on install; `/api/*` calls use a network-first
+  strategy with a short-lived cache fallback; `/uploads/*` media uses cache-first (a given file
+  never changes once uploaded); Google Fonts are cached too. `/socket.io/*` is never intercepted.
+- **Auto-update with user control**: new deploys show a small "Reload to update" banner instead
+  of silently swapping the app under the user (see `src/components/common/PwaManager.jsx`).
+
+Nothing about routing, auth, sockets, or existing UI was changed to add this — it's additive.
+
+## Liquid glass effect
+
+`@ybouane/liquidglass` (WebGL refraction/blur/Fresnel glass) is applied to the chat header and
+sidebar top bar via a reusable `<LiquidGlassPanel>` wrapper
+(`src/components/common/LiquidGlassPanel.jsx`). It feature-detects WebGL2, respects
+`prefers-reduced-motion`, and falls back to the app's existing plain CSS frosted-glass look if
+the effect can't initialize for any reason — so it's purely a visual upgrade, never a hard
+dependency.
+
+## Media storage layout
+
+Uploaded files are no longer dumped flat into `server/uploads/`. The upload middleware now
+sorts every file into a type-specific subfolder as it's saved:
+
+```
+server/uploads/
+  images/          regular photos
+  gifs/            animated GIFs (kept separate from images/ for easy purging/CDN rules)
+  videos/
+  audio/           voice notes, audio attachments
+  documents/       PDFs, zips, and anything else that isn't image/video/audio
+  stickers/        reserved for a future sticker-pack feature
+  profile-photos/  reserved for on-disk avatar storage (avatars are currently stored as
+                   base64 data URLs on the User document, so this folder is unused for now —
+                   wiring an avatar upload endpoint through it later is a drop-in change)
+```
+
+A "Media & Storage" chart in Profile & Settings visualizes this split (counts + size per media
+kind), backed by a small aggregation endpoint (`GET /api/messages/media/stats`).
 
 ## Running it
 
@@ -74,11 +119,18 @@ server/
   src/middleware/       auth (JWT), upload (multer)
 client/
   src/context/          Auth, Socket, Chat, ContextMenu, Toast
-  src/components/Sidebar/     chat list, new chat/group, profile, friend requests
+  src/components/Sidebar/     chat list, new chat/group, profile, friend requests, media stats
   src/components/Chat/        header, message list/bubble, composer, forward, lightbox
   src/components/MediaComposer/  pre-send editor + canvas image editor
+  src/components/common/      shared UI incl. LiquidGlassPanel, PwaManager
   src/styles/            hand-written CSS, design tokens in tokens.css
+  public/icons/           generated PWA icon set (see below)
 ```
+
+App icons were generated from a single brand SVG (`client/public/icons` source design not
+checked in — regenerate any time by editing an SVG and rasterizing with `sharp`, or swap the
+PNGs directly) at every size `vite-plugin-pwa`'s manifest references, plus a maskable variant
+with safe-zone padding for Android adaptive icons and a couple of basic iOS splash screens.
 
 ## Design system
 Dark-mode-first "ink + mint glow" identity: `--ink`/`--surface` backgrounds, `--wisp` mint

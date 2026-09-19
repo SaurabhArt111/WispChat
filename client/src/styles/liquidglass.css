@@ -1,0 +1,44 @@
+/* --- Liquid Glass panel ---
+   .lg-root is the capture root: a decorative animated backdrop canvas plus
+   the actual glass panel content, both direct children so the library can
+   see and composite them. Until (and unless) the WebGL effect activates,
+   .lg-panel keeps the existing frosted-glass CSS look via --surface-glass,
+   so there is zero visual regression when WebGL2 is unavailable. */
+
+.lg-root {
+  position: relative;
+  isolation: isolate;
+}
+
+.lg-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+}
+
+.lg-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: background var(--fast, 0.15s) var(--ease, ease);
+}
+
+/* Once the WebGL instance is up and running, the library injects its own
+   canvas into .lg-panel and renders true refraction/blur — let the backdrop
+   show through and drop the CSS approximation so we don't double-blur. */
+.lg-root.lg-active .lg-backdrop {
+  opacity: 1;
+}
+
+.lg-root.lg-active .lg-panel {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

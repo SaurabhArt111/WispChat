@@ -10,11 +10,13 @@ import {
   reactToMessage,
   forwardMessage,
   markRead,
+  getMediaStats,
 } from "../controllers/messageController.js";
 
 const router = Router();
 router.use(requireAuth);
 
+router.get("/media/stats", getMediaStats);
 router.get("/:conversationId", getMessages);
 router.post("/:conversationId", sendMessage);
 router.post("/:conversationId/read", markRead);

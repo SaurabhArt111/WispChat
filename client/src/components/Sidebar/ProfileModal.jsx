@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import Modal from "../common/Modal";
+import MediaStatsChart from "./MediaStatsChart";
 import { CameraIcon, CopyIcon, SparklesIcon } from "../common/Icons";
+import "../../styles/mediastats.css";
 
 const ACCENTS = [
   { id: "default", name: "Mint Emerald", color: "#5ef2c0" },
@@ -26,6 +28,14 @@ export default function ProfileModal({ onClose }) {
     const saved = localStorage.getItem("wisp_enter_send");
     return saved !== null ? saved === "true" : true;
   });
+  const [mediaStats, setMediaStats] = useState(null);
+
+  useEffect(() => {
+    client
+      .get("/messages/media/stats")
+      .then((res) => setMediaStats(res.data))
+      .catch(() => {});
+  }, []);
 
   function handleAvatarFile(e) {
     const file = e.target.files?.[0];
@@ -179,6 +189,13 @@ export default function ProfileModal({ onClose }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="field">
+        <label>
+          <span>Media & Storage</span>
+        </label>
+        <MediaStatsChart stats={mediaStats} />
       </div>
     </Modal>
   );
