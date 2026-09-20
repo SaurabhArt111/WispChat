@@ -1,22 +1,61 @@
 import { useState } from "react";
 import { useChat } from "../context/ChatContext";
+import { useStatus } from "../context/StatusContext";
+import AsideRail from "../components/Sidebar/AsideRail";
 import Sidebar from "../components/Sidebar/Sidebar";
+import ArchivedPanel from "../components/Sidebar/ArchivedPanel";
+import GroupsPanel from "../components/Sidebar/GroupsPanel";
+import StatusPanel from "../components/Sidebar/StatusPanel";
+import MediaStoragePanel from "../components/Sidebar/MediaStoragePanel";
+import PlaceholderPanel from "../components/Sidebar/PlaceholderPanel";
+import ProfileModal from "../components/Sidebar/ProfileModal";
 import ChatWindow from "../components/Chat/ChatWindow";
 import ConnectionBanner from "../components/common/ConnectionBanner";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
-import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
+import { SparklesIcon, PlusIcon, UsersIcon, PhoneIcon, MegaphoneIcon } from "../components/common/Icons";
 import "../styles/layout.css";
 
 export default function ChatApp() {
   const { activeId } = useChat();
+  const { hasUnread } = useStatus();
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [view, setView] = useState("chats");
 
   return (
     <div className={`app-shell ${activeId ? "has-active-chat" : ""}`}>
       <ConnectionBanner />
-      <Sidebar onOpenNewChat={() => setShowNewChat(true)} onOpenNewGroup={() => setShowNewGroup(true)} />
+      <AsideRail
+        view={view}
+        onChangeView={setView}
+        onOpenProfile={() => setShowProfile(true)}
+        hasUnreadStatus={hasUnread}
+      />
+
+      {view === "chats" && (
+        <Sidebar onOpenNewChat={() => setShowNewChat(true)} onOpenNewGroup={() => setShowNewGroup(true)} />
+      )}
+      {view === "archived" && <ArchivedPanel />}
+      {view === "groups" && <GroupsPanel />}
+      {view === "status" && <StatusPanel />}
+      {view === "media" && <MediaStoragePanel />}
+      {view === "calls" && (
+        <PlaceholderPanel
+          title="Calls"
+          icon={PhoneIcon}
+          description="Voice & video calling isn't built yet — it's on the roadmap. For now, calls happen wherever you already talk outside Wisp."
+        />
+      )}
+      {view === "broadcast" && (
+        <PlaceholderPanel
+          title="Broadcast Lists"
+          icon={MegaphoneIcon}
+          description="Sending one message to several chats at once isn't available yet — it's on the roadmap."
+        />
+      )}
+
       <div className="app-main">
         {activeId ? (
           <ChatWindow key={activeId} />
@@ -39,8 +78,8 @@ export default function ChatApp() {
             </div>
             <div className="welcome-shortcuts">
               <div className="shortcut-item">
-                <span className="shortcut-key">/</span>
-                <span>Focus search</span>
+                <span className="shortcut-key">Ctrl + F</span>
+                <span>Find a chat</span>
               </div>
               <div className="shortcut-item">
                 <span className="shortcut-key">Ctrl + V</span>
@@ -58,6 +97,7 @@ export default function ChatApp() {
 
       {showNewChat && <NewChatModal onClose={() => setShowNewChat(false)} />}
       {showNewGroup && <NewGroupModal onClose={() => setShowNewGroup(false)} />}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </div>
   );
 }

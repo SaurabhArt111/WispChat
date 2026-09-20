@@ -192,26 +192,28 @@ export default function Composer({
       )}
 
       <form className="composer" onSubmit={handleSubmit}>
-        <button
-          type="button"
-          className={`icon-btn ${showEmoji ? "active" : ""}`}
-          title="Emoji picker"
-          onClick={() => setShowEmoji((s) => !s)}
-        >
-          <SmileIcon size={20} />
-        </button>
-
-        <button
-          type="button"
-          className="icon-btn"
-          title="Attach files (images, videos, docs)"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <PaperclipIcon size={20} />
-        </button>
-        <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
 
         <div className="composer-input-container">
+          <button
+            type="button"
+            className={`icon-btn ${showEmoji ? "active" : ""}`}
+            title="Emoji picker"
+            onClick={() => setShowEmoji((s) => !s)}
+          >
+            <SmileIcon size={20} />
+          </button>
+
+          <button
+            type="button"
+            className="icon-btn"
+            title="Attach files (images, videos, docs)"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <PaperclipIcon size={20} />
+          </button>
+
+          <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
+
           <textarea
             ref={textareaRef}
             rows={1}

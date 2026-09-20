@@ -5,6 +5,7 @@ import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import { formatClock } from "../../utils/time";
 import Avatar from "../common/Avatar";
+import ActionSheetModal from "../common/ActionSheetModal";
 import AttachmentView from "./AttachmentView";
 import QuickReactions from "./QuickReactions";
 import ForwardModal from "./ForwardModal";
@@ -111,11 +112,12 @@ export default function MessageBubble({
   isHighlighted,
 }) {
   const { user } = useAuth();
-  const { reactToMessage, deleteMessage } = useChat();
+  const { reactToMessage, requestDeleteMessage, undoDeleteMessage } = useChat();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const [showForward, setShowForward] = useState(false);
   const [showQuickReact, setShowQuickReact] = useState(false);
+  const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const reactPopRef = useRef(null);
 
   useEffect(() => {
@@ -147,9 +149,41 @@ export default function MessageBubble({
     );
   }
 
+  if (message.pendingDelete) {
+    return (
+      <div
+        id={`msg-${message._id}`}
+        className={`bubble-row ${isMine ? "mine" : ""} ${grouped ? "grouped" : ""}`}
+      >
+        {!isMine && isGroup && (
+          <div className="bubble-avatar-slot">
+            {!grouped && <Avatar user={message.sender} size={28} />}
+          </div>
+        )}
+        <div className="bubble deleted pending-delete">
+          <ClockIcon size={13} /> Deleting…
+        </div>
+      </div>
+    );
+  }
+
   function copyText() {
     if (!message.text) return;
     navigator.clipboard.writeText(message.text).then(() => showToast("Copied to clipboard"));
+  }
+
+  function confirmDelete(forEveryone) {
+    setShowDeleteSheet(false);
+    requestDeleteMessage(message._id, forEveryone);
+    showToast(
+      forEveryone ? "Message deleted for everyone" : "Message deleted",
+      "default",
+      {
+        actionLabel: "Undo",
+        onAction: () => undoDeleteMessage(message._id),
+        duration: 3000,
+      }
+    );
   }
 
   const menuItems = [
@@ -165,19 +199,11 @@ export default function MessageBubble({
         }
       : null,
     { divider: true },
-    isMine
-      ? {
-          label: "Delete for everyone",
-          danger: true,
-          icon: <TrashIcon size={15} />,
-          onClick: () => deleteMessage(message._id, true),
-        }
-      : null,
     {
-      label: "Delete for me",
+      label: "Delete",
       danger: true,
       icon: <TrashIcon size={15} />,
-      onClick: () => deleteMessage(message._id, false),
+      onClick: () => setShowDeleteSheet(true),
     },
   ].filter(Boolean);
 
@@ -255,7 +281,12 @@ export default function MessageBubble({
           )}
 
           {message.attachments?.length > 0 && (
-            <AttachmentView attachments={message.attachments} />
+            <AttachmentView
+              attachments={message.attachments}
+              onForward={() => setShowForward(true)}
+              onReply={() => onReply?.(message)}
+              onDeleteRequest={() => setShowDeleteSheet(true)}
+            />
           )}
 
           {message.text && <FormattedText text={message.text} />}
@@ -306,6 +337,17 @@ export default function MessageBubble({
             <SmileIcon size={14} />
           </button>
 
+          <button
+            className="bubble-forward-trigger"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowForward(true);
+            }}
+            title="Forward"
+          >
+            <ForwardIcon size={14} />
+          </button>
+
           {showQuickReact && (
             <div ref={reactPopRef}>
               <QuickReactions
@@ -340,6 +382,27 @@ export default function MessageBubble({
 
       {showForward && (
         <ForwardModal message={message} onClose={() => setShowForward(false)} />
+      )}
+
+      {showDeleteSheet && (
+        <ActionSheetModal
+          title="Delete message?"
+          actions={[
+            isMine && {
+              label: "Delete for everyone",
+              danger: true,
+              icon: <TrashIcon size={16} />,
+              onClick: () => confirmDelete(true),
+            },
+            {
+              label: "Delete for me",
+              danger: true,
+              icon: <TrashIcon size={16} />,
+              onClick: () => confirmDelete(false),
+            },
+          ].filter(Boolean)}
+          onCancel={() => setShowDeleteSheet(false)}
+        />
       )}
     </div>
   );

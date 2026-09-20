@@ -1,6 +1,6 @@
 .app-shell {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 72px 360px 1fr;
   height: 100%;
   background: var(--ink);
   position: relative;
@@ -9,7 +9,7 @@
 
 @media (min-width: 1280px) {
   .app-shell {
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: 72px 400px 1fr;
   }
 }
 

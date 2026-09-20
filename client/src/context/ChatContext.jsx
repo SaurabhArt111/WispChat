@@ -139,6 +139,75 @@ export function ChatProvider({ children }) {
     [applyMessagePatch]
   );
 
+  // Deleting a message doesn't hit the server immediately: it's marked
+  // `pendingDelete` locally and a 3s timer starts. MessageBubble renders a
+  // "Deleting…" placeholder in the meantime, and the Undo action on the
+  // toast (see requestDeleteMessage callers) cancels the timer and restores
+  // the message before it's ever actually deleted server-side.
+  const pendingDeleteTimers = useRef({});
+
+  const patchPendingDelete = useCallback((id, patch) => {
+    setMessagesByConv((prev) => {
+      const next = { ...prev };
+      for (const convId of Object.keys(next)) {
+        next[convId] = next[convId].map((m) => (m._id === id ? { ...m, ...patch } : m));
+      }
+      return next;
+    });
+  }, []);
+
+  const finalizeDelete = useCallback(async (id, forEveryone) => {
+    try {
+      await client.delete(`/messages/msg/${id}`, { data: { forEveryone } });
+    } catch {
+      // If the network call fails, leave the message visibly stuck in
+      // "Deleting…" would be confusing — just drop the pending flag so it
+      // reappears as normal and the user can retry.
+      patchPendingDelete(id, { pendingDelete: false });
+      return;
+    }
+    setMessagesByConv((prev) => {
+      const next = { ...prev };
+      for (const convId of Object.keys(next)) {
+        if (forEveryone) {
+          next[convId] = next[convId].map((m) =>
+            m._id === id
+              ? { ...m, deletedForEveryone: true, text: "", attachments: [], pendingDelete: false }
+              : m
+          );
+        } else {
+          next[convId] = next[convId].filter((m) => m._id !== id);
+        }
+      }
+      return next;
+    });
+  }, [patchPendingDelete]);
+
+  const requestDeleteMessage = useCallback(
+    (id, forEveryone) => {
+      patchPendingDelete(id, { pendingDelete: true, pendingDeleteForEveryone: forEveryone });
+      pendingDeleteTimers.current[id] = setTimeout(() => {
+        delete pendingDeleteTimers.current[id];
+        finalizeDelete(id, forEveryone);
+      }, 3000);
+    },
+    [patchPendingDelete, finalizeDelete]
+  );
+
+  const undoDeleteMessage = useCallback(
+    (id) => {
+      const timer = pendingDeleteTimers.current[id];
+      if (timer) {
+        clearTimeout(timer);
+        delete pendingDeleteTimers.current[id];
+      }
+      patchPendingDelete(id, { pendingDelete: false, pendingDeleteForEveryone: undefined });
+    },
+    [patchPendingDelete]
+  );
+
+  // Kept for any internal/programmatic use that wants an immediate,
+  // non-undoable delete (not exposed to the delete-confirmation UI).
   const deleteMessage = useCallback(async (id, forEveryone) => {
     await client.delete(`/messages/msg/${id}`, { data: { forEveryone } });
     setMessagesByConv((prev) => {
@@ -327,6 +396,8 @@ export function ChatProvider({ children }) {
     sendMessage,
     editMessage,
     deleteMessage,
+    requestDeleteMessage,
+    undoDeleteMessage,
     reactToMessage,
     forwardMessage,
     startDirectConversation,

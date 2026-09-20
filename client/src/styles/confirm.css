@@ -1,0 +1,137 @@
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(4, 6, 9, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 120ms var(--ease);
+  padding: 16px;
+}
+
+.confirm-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  animation: popIn 160ms var(--ease-spring);
+}
+
+.confirm-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.confirm-message {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --- Action sheet --- */
+.action-sheet-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px 20px 12px;
+  animation: popIn 160ms var(--ease-spring);
+}
+
+.action-sheet-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  margin-bottom: 10px;
+}
+
+.action-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  background: var(--surface-3);
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.action-sheet-item:last-child {
+  border-bottom: none;
+}
+
+.action-sheet-item:hover {
+  background: var(--surface-hover);
+}
+
+.action-sheet-item.danger {
+  color: var(--danger);
+}
+
+.action-sheet-icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.action-sheet-cancel {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.action-sheet-cancel:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

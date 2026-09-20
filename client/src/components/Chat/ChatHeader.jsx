@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
@@ -7,7 +6,6 @@ import Avatar from "../common/Avatar";
 import LiquidGlassPanel from "../common/LiquidGlassPanel";
 import { formatLastSeen } from "../../utils/time";
 import client from "../../api/client";
-import GroupInfoModal from "./GroupInfoModal";
 import TypingDots from "./TypingDots";
 import {
   BackIcon,
@@ -25,12 +23,13 @@ export default function ChatHeader({
   isSearching,
   searchQuery,
   onSearchChange,
+  onOpenInfo,
+  infoOpen,
 }) {
   const { user } = useAuth();
   const { presence, typing, upsertConversation, closeActiveChat } = useChat();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
-  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
@@ -70,7 +69,7 @@ export default function ChatHeader({
           {
             label: "Group info",
             icon: <InfoIcon size={15} />,
-            onClick: () => setShowGroupInfo(true),
+            onClick: () => onOpenInfo?.(),
           },
           {
             label: conversation.muted ? "Unmute notifications" : "Mute notifications",
@@ -101,7 +100,7 @@ export default function ChatHeader({
           {
             label: "Contact info",
             icon: <InfoIcon size={15} />,
-            onClick: () => showToast(`@${other?.username || "user"} · ${other?.about || "No bio yet"}`),
+            onClick: () => onOpenInfo?.(),
           },
           {
             label: conversation.muted ? "Unmute notifications" : "Mute notifications",
@@ -148,7 +147,7 @@ export default function ChatHeader({
 
       <button
         className="chat-header-identity"
-        onClick={() => conversation.isGroup && setShowGroupInfo(true)}
+        onClick={() => onOpenInfo?.()}
       >
         <Avatar user={avatarUser} size={42} showStatus={!conversation.isGroup} online={isOnline} />
         <div className="chat-header-text">
@@ -182,26 +181,17 @@ export default function ChatHeader({
         >
           <SearchIcon size={18} />
         </button>
-        {conversation.isGroup && (
-          <button
-            className="icon-btn"
-            title="Group info"
-            onClick={() => setShowGroupInfo(true)}
-          >
-            <InfoIcon size={18} />
-          </button>
-        )}
+        <button
+          className={`icon-btn ${infoOpen ? "active" : ""}`}
+          title={conversation.isGroup ? "Group info" : "Contact info"}
+          onClick={() => onOpenInfo?.()}
+        >
+          <InfoIcon size={18} />
+        </button>
         <button className="icon-btn" title="More options" onClick={openMenu2}>
           <MoreIcon size={18} />
         </button>
       </div>
-
-      {showGroupInfo && (
-        <GroupInfoModal
-          conversation={conversation}
-          onClose={() => setShowGroupInfo(false)}
-        />
-      )}
     </LiquidGlassPanel>
   );
 }

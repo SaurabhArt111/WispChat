@@ -3,7 +3,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import Avatar from "../common/Avatar";
-import LiquidGlassPanel from "../common/LiquidGlassPanel";
 import ConversationItem from "./ConversationItem";
 import NewChatModal from "./NewChatModal";
 import NewGroupModal from "./NewGroupModal";
@@ -42,9 +41,22 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
       .catch(() => {});
   }, []);
 
-  // Keyboard shortcut '/' to focus search
+  // Keyboard shortcuts for search:
+  //  - '/' focuses search, but only when not already typing somewhere else.
+  //  - Ctrl/Cmd+F always focuses the conversation list search — even while
+  //    a chat is open and its composer has focus — instead of letting the
+  //    browser's own page-find UI take over.
+  //  - Esc while the search input is focused blurs it and hands focus back
+  //    to the app (e.g. back to the open chat) rather than doing nothing.
   useEffect(() => {
     function onKeyDown(e) {
+      const isCtrlF = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f";
+      if (isCtrlF) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
       if (
         e.key === "/" &&
         document.activeElement?.tagName !== "INPUT" &&
@@ -52,6 +64,10 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
       ) {
         e.preventDefault();
         searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+        searchInputRef.current.blur();
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -108,11 +124,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
 
   return (
     <aside className="sidebar">
-      <LiquidGlassPanel
-        className="sidebar-topbar-lg"
-        panelClassName="sidebar-topbar"
-        config={{ blurAmount: 0.28, refraction: 0.3, edgeHighlight: 0.2, saturation: 0.1 }}
-      >
+      <div className="sidebar-topbar">
         <button className="sidebar-self" onClick={openSelfMenu} title="Your Profile & Settings">
           <Avatar user={user} size={38} showStatus online />
         </button>
@@ -144,7 +156,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
             <PlusIcon size={18} />
           </button>
         </div>
-      </LiquidGlassPanel>
+      </div>
 
       <div className="sidebar-search-wrap">
         <div className="sidebar-search">

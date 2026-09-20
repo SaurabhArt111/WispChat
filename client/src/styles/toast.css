@@ -53,6 +53,28 @@
   color: var(--cyan);
 }
 
+.toast-action {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-round);
+  border: none;
+  background: var(--wisp);
+  color: #04211a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+
+.toast-action:hover {
+  opacity: 0.88;
+}
+
+.toast-action:active {
+  transform: scale(0.94);
+}
+
 @keyframes toastIn {
   from {
     opacity: 0;

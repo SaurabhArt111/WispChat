@@ -5,12 +5,14 @@ import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { SocketProvider } from "./context/SocketContext.jsx";
 import { ChatProvider } from "./context/ChatContext.jsx";
+import { StatusProvider } from "./context/StatusContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { ContextMenuProvider } from "./context/ContextMenuContext.jsx";
 
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/toast.css";
+import "./styles/confirm.css";
 import "./styles/liquidglass.css";
 
 // Restore stored user accent theme
@@ -27,7 +29,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <ToastProvider>
             <ContextMenuProvider>
               <ChatProvider>
-                <App />
+                <StatusProvider>
+                  <App />
+                </StatusProvider>
               </ChatProvider>
             </ContextMenuProvider>
           </ToastProvider>

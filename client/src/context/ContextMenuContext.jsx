@@ -15,6 +15,18 @@ export function ContextMenuProvider({ children }) {
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
+  // This is the app's own context menu system — the native browser
+  // right-click menu is suppressed everywhere, not just on elements that
+  // wire up openMenu, so inspecting/reloading via right-click never
+  // accidentally surfaces browser chrome inside the app UI.
+  useEffect(() => {
+    function onNativeContextMenu(e) {
+      e.preventDefault();
+    }
+    window.addEventListener("contextmenu", onNativeContextMenu);
+    return () => window.removeEventListener("contextmenu", onNativeContextMenu);
+  }, []);
+
   useEffect(() => {
     if (!menu) return;
     const onDown = (e) => {

@@ -1,0 +1,362 @@
+/* --- Status list rows --- */
+.status-panel-scroll {
+  padding: 12px 8px;
+}
+
+.status-my-row-wrap {
+  position: relative;
+}
+
+.status-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--fast) var(--ease);
+}
+
+.status-row:hover {
+  background: var(--surface-hover);
+}
+
+.status-ring {
+  position: relative;
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 2.5px;
+  flex-shrink: 0;
+}
+
+.status-ring.unseen {
+  background: conic-gradient(var(--wisp), var(--cyan), var(--wisp));
+}
+
+.status-ring.seen {
+  background: var(--border);
+}
+
+.status-ring.has-status {
+  background: conic-gradient(var(--wisp), var(--cyan), var(--wisp));
+}
+
+.status-ring.empty {
+  background: transparent;
+}
+
+.status-add-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--wisp);
+  color: #04211a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+}
+
+.status-row-text {
+  min-width: 0;
+}
+
+.status-row-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-row-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.status-recent-title {
+  padding: 14px 10px 6px;
+}
+
+.status-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-add-menu {
+  position: absolute;
+  left: 62px;
+  top: 58px;
+  z-index: 30;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  min-width: 190px;
+}
+
+.status-add-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.status-add-menu button:hover {
+  background: var(--surface-hover);
+}
+
+/* --- Status editor (reuses .media-composer* from mediaComposer.css) --- */
+.status-text-stage {
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+}
+
+.status-text-input {
+  width: 100%;
+  max-width: 420px;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #0b1410;
+  padding: 24px;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.status-text-input::placeholder {
+  color: rgba(11, 20, 16, 0.45);
+}
+
+.status-color-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.status-color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.status-color-swatch.active {
+  border-color: var(--text);
+  transform: scale(1.15);
+}
+
+/* --- Full-screen viewer --- */
+.status-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: overlayFadeIn 150ms var(--ease);
+}
+
+.status-viewer-stage {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  height: 100%;
+  max-height: 860px;
+  background: #0b0e12;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 480px) {
+  .status-viewer-stage {
+    max-width: 100%;
+    max-height: 100%;
+  }
+}
+
+.status-progress-row {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+
+.status-progress-track {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-round);
+  overflow: hidden;
+}
+
+.status-progress-fill {
+  height: 100%;
+  background: #fff;
+  border-radius: var(--radius-round);
+}
+
+.status-viewer-header {
+  position: absolute;
+  top: 20px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 3;
+}
+
+.status-viewer-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-viewer-name {
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.status-viewer-time {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 11.5px;
+}
+
+.status-viewer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.status-viewer-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #000;
+}
+
+.status-media {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.status-text-view {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.status-text-view p {
+  color: #0b1410;
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  padding: 30px;
+  line-height: 1.4;
+  font-family: "Space Grotesk", sans-serif;
+  word-break: break-word;
+}
+
+.status-caption {
+  position: absolute;
+  bottom: 60px;
+  left: 16px;
+  right: 16px;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.status-tap-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  z-index: 2;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.status-tap-zone.left {
+  left: 0;
+}
+
+.status-tap-zone.right {
+  right: 0;
+}
+
+.status-viewer-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  padding: 7px 14px;
+  border-radius: var(--radius-round);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.status-viewers-list {
+  position: absolute;
+  bottom: 56px;
+  left: 16px;
+  right: 16px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: rgba(20, 24, 30, 0.95);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  z-index: 4;
+}
+
+.status-viewers-row {
+  padding: 6px 8px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}

@@ -1,23 +1,30 @@
 <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#12161d"/>
+      <stop offset="0" stop-color="#141a22"/>
       <stop offset="1" stop-color="#0b0e12"/>
     </linearGradient>
-    <linearGradient id="wisp" x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#5ef2c0"/>
+    <linearGradient id="wisp" x1="150" y1="140" x2="380" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7bffd6"/>
       <stop offset="1" stop-color="#3ddba7"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <path d="M32 15
-           c11 0 19 7 19 16
-           c0 9 -8 16 -19 16
-           c-2 0 -4 0 -6 -1
-           l-7 4
-           c-1 1 -2 0 -2 -1
-           l2 -6
-           c-4 -3 -7 -7 -7 -12
-           c0 -9 8 -16 19 -16 Z"
-        fill="url(#wisp)"/>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <g transform="scale(0.125)">
+    <path d="M256 126
+             c96 0 168 62 168 142
+             c0 80 -72 142 -168 142
+             c-14.5 0 -28.5 -1.4 -41.7 -4.1
+             c-4.6 -0.9 -9.4 -0.2 -13.5 2.1
+             l-44 24.6
+             c-9.6 5.4 -21.1 -2.9 -19 -13.7
+             l9.8 -50.4
+             c1.2 -6.1 -0.6 -12.4 -4.8 -17
+             c-30.3 -26 -48.8 -61 -48.8 -83.5
+             c0 -80 72 -142 168 -142 Z"
+          fill="url(#wisp)"/>
+    <circle cx="196" cy="268" r="19" fill="#04211a"/>
+    <circle cx="256" cy="268" r="19" fill="#04211a"/>
+    <circle cx="316" cy="268" r="19" fill="#04211a"/>
+  </g>
 </svg>

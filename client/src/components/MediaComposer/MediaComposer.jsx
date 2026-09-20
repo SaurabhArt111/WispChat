@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { kindFromMime } from "../../utils/fileKind";
 import ImageEditor from "./ImageEditor";
+import ConfirmModal from "../common/ConfirmModal";
 import {
   CloseIcon,
   SendIcon,
@@ -26,6 +27,7 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
   const [activeIndex, setActiveIndex] = useState(0);
   const [caption, setCaption] = useState("");
   const [sending, setSending] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const editorRefs = useRef({});
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -39,9 +41,21 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
     onClose();
   }
 
+  // Anything typed in the caption, or edits made to an image (crop/draw/
+  // rotate), counts as work the user could lose — so closing asks first.
+  // A bare "attached files, nothing touched yet" state closes immediately.
+  function requestClose() {
+    const hasEdits = Object.values(editorRefs.current).some((ref) => ref?.isEdited?.());
+    if (caption.trim() || hasEdits) {
+      setShowDiscardConfirm(true);
+    } else {
+      closeComposer();
+    }
+  }
+
   useEffect(() => {
     function onKey(e) {
-      if (e.key === "Escape") closeComposer();
+      if (e.key === "Escape") requestClose();
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend();
     }
     window.addEventListener("keydown", onKey);
@@ -99,11 +113,11 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
   return (
     <div
       className="media-composer-overlay"
-      onMouseDown={(e) => e.target === e.currentTarget && closeComposer()}
+      onMouseDown={(e) => e.target === e.currentTarget && requestClose()}
     >
       <div className="media-composer">
         <div className="media-composer-header">
-          <button className="icon-btn" onClick={closeComposer} title="Cancel (Esc)">
+          <button className="icon-btn" onClick={requestClose} title="Cancel (Esc)">
             <CloseIcon size={20} />
           </button>
           <div className="media-composer-title">
@@ -203,6 +217,18 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
           </button>
         </div>
       </div>
+
+      {showDiscardConfirm && (
+        <ConfirmModal
+          title="Discard this message?"
+          message="Your caption and any edits you made will be lost."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          danger
+          onConfirm={closeComposer}
+          onCancel={() => setShowDiscardConfirm(false)}
+        />
+      )}
     </div>
   );
 }
