@@ -25,7 +25,7 @@ const LIBRARY_ITEMS = [
   { id: "broadcast", label: "Broadcast Lists", icon: MegaphoneIcon },
 ];
 
-export default function AsideRail({ view, onChangeView, onOpenProfile, hasUnreadStatus }) {
+export default function AsideRail({ view, onChangeView, onOpenProfile, onOpenSettings, hasUnreadStatus }) {
   const { user } = useAuth();
 
   return (
@@ -61,9 +61,9 @@ export default function AsideRail({ view, onChangeView, onOpenProfile, hasUnread
         <RailButton
           item={{ id: "settings", label: "Settings", icon: SettingsIcon }}
           active={false}
-          onClick={onOpenProfile}
+          onClick={onOpenSettings}
         />
-        <button className="aside-rail-avatar-btn" onClick={onOpenProfile} title="Profile & Settings">
+        <button className="aside-rail-avatar-btn" onClick={onOpenProfile} title="Your profile">
           <Avatar user={user} size={34} />
         </button>
       </div>

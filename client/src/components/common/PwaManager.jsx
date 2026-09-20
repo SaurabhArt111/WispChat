@@ -38,6 +38,16 @@ export default function PwaManager() {
   // --- Service worker registration + update detection ---
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+
+    // Remove service workers created by older development builds. They can
+    // intercept /manifest.webmanifest and return the SPA HTML fallback.
+    if (import.meta.env.DEV) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister());
+      });
+      return;
+    }
+
     let cancelled = false;
 
     import("virtual:pwa-register")

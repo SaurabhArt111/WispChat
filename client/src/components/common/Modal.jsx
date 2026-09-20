@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { CloseIcon } from "./Icons";
 
 export default function Modal({ title, onClose, children, footer, width }) {
@@ -10,7 +11,13 @@ export default function Modal({ title, onClose, children, footer, width }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  return (
+  // Rendered into document.body via a portal rather than in place: if any
+  // ancestor in the component tree has a CSS transform/filter/contain
+  // (several of ours do, for animations), it becomes the containing block
+  // for position:fixed children per the CSS spec — which silently breaks
+  // "centered on the viewport" and centers the modal on that ancestor's
+  // box instead. A portal sidesteps that entirely.
+  return createPortal(
     <div
       className="modal-overlay"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -25,6 +32,7 @@ export default function Modal({ title, onClose, children, footer, width }) {
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

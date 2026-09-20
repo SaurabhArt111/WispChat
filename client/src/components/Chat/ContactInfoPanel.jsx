@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../context/ToastContext";
@@ -7,21 +7,18 @@ import Avatar from "../common/Avatar";
 import Lightbox from "./Lightbox";
 import GroupInfoModal from "./GroupInfoModal";
 import { formatLastSeen, formatBytes } from "../../utils/time";
-import {
-  CloseIcon,
-  MuteIcon,
-  PinIcon,
-  ArchiveIcon,
-  UsersIcon,
-  ImageIcon,
-  FileIcon,
-} from "../common/Icons";
+import { CloseIcon, MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon } from "../common/Icons";
+import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import "../../styles/contactInfo.css";
 
 const TABS = [
   { id: "media", label: "Media" },
   { id: "files", label: "Files" },
 ];
+
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 520;
+const DEFAULT_WIDTH = 320;
 
 export default function ContactInfoPanel({ conversation, onClose }) {
   const { user } = useAuth();
@@ -30,6 +27,43 @@ export default function ContactInfoPanel({ conversation, onClose }) {
   const [tab, setTab] = useState("media");
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [width, setWidth] = useState(
+    () => Number(localStorage.getItem("wisp_contact_panel_width")) || DEFAULT_WIDTH
+  );
+  const resizing = useRef(false);
+
+  const startResize = useCallback((e) => {
+    e.preventDefault();
+    resizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    function onMove(e) {
+      if (!resizing.current) return;
+      // Panel sits on the right edge, so dragging left grows it: width is
+      // measured from the cursor back to the window's right edge.
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - e.clientX));
+      setWidth(next);
+    }
+    function onUp() {
+      if (!resizing.current) return;
+      resizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setWidth((w) => {
+        localStorage.setItem("wisp_contact_panel_width", String(w));
+        return w;
+      });
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
 
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
@@ -57,6 +91,20 @@ export default function ContactInfoPanel({ conversation, onClose }) {
     [messages]
   );
 
+  // Scrolls the main message list to a message and briefly highlights it —
+  // reuses the exact class MessageList's own jump-to-reply uses, so the
+  // visual is identical whether you got here from a reply or from here.
+  function jumpToMessage(msgId) {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (!el) {
+      showToast("That message is further back — scroll up in the chat to find it");
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("highlighted-bubble");
+    setTimeout(() => el.classList.remove("highlighted-bubble"), 2000);
+  }
+
   async function flag(name) {
     try {
       const res = await client.post(`/conversations/${conversation._id}/flag`, { flag: name });
@@ -73,7 +121,8 @@ export default function ContactInfoPanel({ conversation, onClose }) {
   }
 
   return (
-    <aside className="contact-info-panel">
+    <aside className="contact-info-panel" style={{ width }}>
+      <div className="contact-info-resize-handle" onMouseDown={startResize} title="Drag to resize" />
       <div className="contact-info-header">
         <span>{conversation.isGroup ? "Group info" : "Contact info"}</span>
         <button className="icon-btn" onClick={onClose} title="Close">
@@ -155,16 +204,25 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             <div className="ci-media-grid">
               {media.map((a, i) =>
                 a.kind === "video" ? (
-                  <video key={a.url + i} src={a.url} className="ci-media-thumb" muted />
+                  <div className="ci-media-cell" key={a.url + i}>
+                    <SafeVideo src={a.url} className="ci-media-thumb" muted />
+                    <button className="ci-locate-btn" title="Go to message" onClick={() => jumpToMessage(a.messageId)}>
+                      <LocateIcon size={13} />
+                    </button>
+                  </div>
                 ) : (
-                  <img
-                    key={a.url + i}
-                    src={a.url}
-                    className="ci-media-thumb"
-                    onClick={() =>
-                      setLightboxIndex(media.filter((m) => m.kind === "image").findIndex((m) => m.url === a.url))
-                    }
-                  />
+                  <div className="ci-media-cell" key={a.url + i}>
+                    <SafeImage
+                      src={a.url}
+                      className="ci-media-thumb"
+                      onClick={() =>
+                        setLightboxIndex(media.filter((m) => m.kind === "image").findIndex((m) => m.url === a.url))
+                      }
+                    />
+                    <button className="ci-locate-btn" title="Go to message" onClick={() => jumpToMessage(a.messageId)}>
+                      <LocateIcon size={13} />
+                    </button>
+                  </div>
                 )
               )}
             </div>
@@ -177,15 +235,20 @@ export default function ContactInfoPanel({ conversation, onClose }) {
         ) : (
           <div className="ci-files-list">
             {files.map((a, i) => (
-              <a key={a.url + i} href={a.url} download={a.name} target="_blank" rel="noreferrer" className="ci-file-row">
-                <div className="ci-file-icon">
-                  <FileIcon size={16} />
-                </div>
-                <div className="ci-file-meta">
-                  <div className="ci-file-name">{a.name}</div>
-                  <div className="ci-file-size">{formatBytes(a.size)}</div>
-                </div>
-              </a>
+              <div key={a.url + i} className="ci-file-row">
+                <a href={a.url} download={a.name} target="_blank" rel="noreferrer" className="ci-file-link">
+                  <div className="ci-file-icon">
+                    <FileIcon size={16} />
+                  </div>
+                  <div className="ci-file-meta">
+                    <div className="ci-file-name">{a.name}</div>
+                    <div className="ci-file-size">{formatBytes(a.size)}</div>
+                  </div>
+                </a>
+                <button className="ci-locate-btn static" title="Go to message" onClick={() => jumpToMessage(a.messageId)}>
+                  <LocateIcon size={14} />
+                </button>
+              </div>
             ))}
           </div>
         )}

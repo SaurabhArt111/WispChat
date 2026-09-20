@@ -102,3 +102,11 @@ export async function toggleBlock(req, res) {
   await req.user.save();
   res.json({ blocked: req.user.blocked });
 }
+
+// Powers Settings > Privacy > Blocked contacts — the toggleBlock endpoint
+// above only ever returns raw ids, which isn't enough to render a list
+// with names/avatars/an unblock button.
+export async function getBlockedContacts(req, res) {
+  const populated = await req.user.populate("blocked", "username displayName avatar avatarColor");
+  res.json({ blocked: populated.blocked });
+}

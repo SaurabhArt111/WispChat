@@ -199,3 +199,62 @@ Headings use Space Grotesk, body text uses Inter. All tokens live in
 `client/src/styles/tokens.css` if you want to reskin it. The navigation rail, side panels, and
 Status viewer all reuse these same tokens rather than introducing new colors, so they read as
 part of the same product rather than bolted-on features.
+
+## Latest round of fixes
+
+**Robustness**
+- All overlays (`Modal`, `ConfirmModal`, `ActionSheetModal`, `Lightbox`, `StatusViewer`,
+  `MediaComposer`, `StatusEditor`, the context menu) now render via a React portal to
+  `document.body`. Previously, any ancestor with a CSS `transform` (several exist, for
+  animations) became the containing block for `position: fixed` per the CSS spec, which could
+  silently re-center a modal on that ancestor instead of the viewport. Portals sidestep this
+  entirely — it's the correct, permanent fix rather than a per-modal workaround.
+- Broken/missing media (e.g. a message pointing at a file that no longer exists on disk — this
+  happens on a fresh checkout, since uploaded files aren't shipped in the repo/zip, only the
+  folder structure is) now shows a clean "File unavailable" placeholder (`SafeImage`/`SafeVideo`
+  in `components/common/SafeMedia.jsx`) instead of a broken-image icon.
+- The emoji picker renders native OS emoji (`emojiStyle="native"`) instead of fetching PNGs from
+  a CDN — fixes both the "Tracking Prevention blocked" console errors in Edge/Safari/Brave and
+  makes it work offline in the installed PWA.
+
+**Settings vs. Profile, finally separated**
+`ProfileModal` is now just your photo/display name/about/username. A new `SettingsModal`
+(rail gear icon) holds everything else in a categorized list — General, Account, Privacy
+(with a real Blocked Contacts list + unblock), Chats (theme + enter-to-send, moved out of
+Profile), Video & voice, Notifications (a real browser-notification permission toggle),
+Keyboard shortcuts (an accurate list of everything implemented), and Help.
+
+**Profile photo cropping**
+Uploading a new avatar no longer applies it directly — `AvatarCropModal` opens a dedicated,
+crop-only tool (drag to pan, scroll/slider to zoom, circular preview but the exported file is
+always a 512×512 square) and nothing is saved until you hit "Save Profile Photo".
+
+**Confirmation everywhere destructive**
+"Leave group", "Block user", and "Clear chat" now open a `ConfirmModal` before doing anything,
+matching the confirm-then-undo-toast pattern already used for message deletion.
+
+**Media & Storage is now a real gallery**
+A new `GET /api/messages/media/list` endpoint (alongside the existing `/media/stats` counts)
+backs a tabbed Photos/Videos/Audio/Files gallery in the Media & Storage rail panel — showing
+everything you've sent *and* received across every conversation, each item click-through to
+jump back into that chat (also added to the contact-info panel's media/files, via a small
+locate button).
+
+**Contact info panel**
+Resizable — drag its left edge; the width is remembered.
+
+**Broadcast Lists, implemented**
+Pick several contacts, write one message, hit Broadcast — it's sent as an individual DM to
+each recipient (creating the conversation if needed). No shared thread, no group; recipients
+can't see who else got it, matching how broadcast lists work elsewhere.
+
+**Mobile**
+A bottom tab bar (Chats/Status/Groups/Calls/More) now appears on narrow viewports in place of
+the desktop rail, hidden while a chat is open. "More" opens a sheet for Archived, Media &
+Storage, Broadcast Lists, and Settings.
+
+**Archived chats**
+Dragging down from the very top of the conversation list (when it's already scrolled to the
+top) reveals an "Archived" pill that can be tapped, or dragged past a threshold and released,
+to open the Archived view — instead of Archived being reachable only from the rail.
+

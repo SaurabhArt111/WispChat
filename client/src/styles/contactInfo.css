@@ -6,7 +6,24 @@
   border-left: 1px solid var(--border-soft);
   display: flex;
   flex-direction: column;
+  position: relative;
   animation: slideInRight 180ms var(--ease);
+}
+
+.contact-info-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+}
+
+.contact-info-resize-handle:hover,
+.contact-info-resize-handle:active {
+  background: var(--wisp-glow);
 }
 
 @keyframes slideInRight {
@@ -195,12 +212,57 @@
   padding: 3px;
 }
 
+.ci-media-cell {
+  position: relative;
+}
+
 .ci-media-thumb {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
   cursor: pointer;
   background: var(--surface-2);
+  display: block;
+}
+
+.ci-locate-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(4, 6, 9, 0.6);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.ci-media-cell:hover .ci-locate-btn {
+  opacity: 1;
+}
+
+.ci-locate-btn:hover {
+  background: rgba(4, 6, 9, 0.85);
+}
+
+.ci-locate-btn.static {
+  position: static;
+  opacity: 1;
+  background: transparent;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.ci-locate-btn.static:hover {
+  color: var(--wisp);
+  background: var(--surface-hover);
 }
 
 .ci-files-list {
@@ -212,14 +274,21 @@
 .ci-file-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
   border-radius: var(--radius-md);
-  color: var(--text);
 }
 
 .ci-file-row:hover {
   background: var(--surface-hover);
+}
+
+.ci-file-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 6px 9px 10px;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
 }
 
 .ci-file-icon {
@@ -264,6 +333,9 @@
 
 @media (max-width: 768px) {
   .contact-info-panel {
-    width: 100%;
+    width: 100% !important;
+  }
+  .contact-info-resize-handle {
+    display: none;
   }
 }

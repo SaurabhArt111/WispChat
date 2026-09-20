@@ -11,6 +11,7 @@ import {
   CopyIcon,
   TrashIcon,
 } from "../common/Icons";
+import { SafeImage, SafeVideo } from "../common/SafeMedia";
 
 function getExtensionBadge(name = "") {
   const ext = name.split(".").pop()?.toUpperCase().slice(0, 4) || "FILE";
@@ -73,7 +74,7 @@ export default function AttachmentView({ attachments, onForward, onReply, onDele
               onClick={() => setLightbox({ list: images, index: i })}
               onContextMenu={(e) => imageContextMenu(e, a)}
             >
-              <img src={a.url} alt={a.name} loading="lazy" />
+              <SafeImage src={a.url} alt={a.name} loading="lazy" className="image-grid-img" />
               {i === 3 && images.length > 4 && (
                 <div className="image-grid-more">+{images.length - 4}</div>
               )}
@@ -85,7 +86,7 @@ export default function AttachmentView({ attachments, onForward, onReply, onDele
       {others.map((a, i) =>
         a.kind === "video" ? (
           <div key={a.url || i} className="attachment-video-wrap" onContextMenu={(e) => imageContextMenu(e, a)}>
-            <video src={a.url} controls className="attachment-video" />
+            <SafeVideo src={a.url} controls className="attachment-video" />
           </div>
         ) : a.kind === "audio" ? (
           <div key={a.url || i} className="attachment-audio-wrap">

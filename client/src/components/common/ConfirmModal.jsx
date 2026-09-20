@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Small, focused confirm dialog for destructive/discarding actions
@@ -26,7 +27,7 @@ export default function ConfirmModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel, onConfirm]);
 
-  return (
+  return createPortal(
     <div className="confirm-overlay" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="confirm-card" ref={cardRef} role="alertdialog" aria-modal="true">
         {title && <div className="confirm-title">{title}</div>}
@@ -40,6 +41,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

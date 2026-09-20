@@ -18,10 +18,14 @@ import {
   PlusIcon,
   EditIcon,
   SparklesIcon,
+  ArchiveIcon,
 } from "../common/Icons";
 import "../../styles/sidebar.css";
 
-export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
+const PULL_THRESHOLD = 64;
+const PULL_MAX = 96;
+
+export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived }) {
   const { user, logout } = useAuth();
   const { conversations, activeId, openConversation, loadingConversations } = useChat();
   const { openMenu } = useContextMenu();
@@ -32,7 +36,38 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
   const [showProfile, setShowProfile] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
+  const [pullDistance, setPullDistance] = useState(0);
   const searchInputRef = useRef(null);
+  const listRef = useRef(null);
+  const pullRef = useRef(null);
+
+  const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
+
+  // Pull-to-reveal-Archived: dragging down from the very top of the list
+  // (mirrors the classic "pull down to see archived chats" pattern) slides
+  // an "Archived" pill into view; releasing past the threshold opens it,
+  // releasing short of it just snaps back.
+  function pullStart(clientY) {
+    if (listRef.current?.scrollTop > 0) return;
+    pullRef.current = { startY: clientY, active: true };
+  }
+  function pullMove(clientY) {
+    if (!pullRef.current?.active) return;
+    const delta = clientY - pullRef.current.startY;
+    if (delta <= 0) {
+      setPullDistance(0);
+      return;
+    }
+    setPullDistance(Math.min(PULL_MAX, delta * 0.55));
+  }
+  function pullEnd() {
+    if (!pullRef.current?.active) return;
+    pullRef.current.active = false;
+    if (pullDistance >= PULL_THRESHOLD) {
+      onOpenArchived?.();
+    }
+    setPullDistance(0);
+  }
 
   useEffect(() => {
     client
@@ -204,7 +239,30 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup }) {
         </button>
       </div>
 
-      <div className="conversation-list">
+      <div
+        className="conversation-list"
+        ref={listRef}
+        onTouchStart={(e) => pullStart(e.touches[0].clientY)}
+        onTouchMove={(e) => pullMove(e.touches[0].clientY)}
+        onTouchEnd={pullEnd}
+        onMouseDown={(e) => pullStart(e.clientY)}
+        onMouseMove={(e) => pullMove(e.clientY)}
+        onMouseUp={pullEnd}
+        onMouseLeave={pullEnd}
+        style={{ transform: pullDistance ? `translateY(${pullDistance}px)` : undefined }}
+      >
+        {pullDistance > 0 && (
+          <button
+            className={`archived-pull-pill ${pullDistance >= PULL_THRESHOLD ? "ready" : ""}`}
+            style={{ top: -pullDistance }}
+            onClick={onOpenArchived}
+          >
+            <ArchiveIcon size={15} />
+            {pullDistance >= PULL_THRESHOLD
+              ? "Release for Archived"
+              : `Archived${archivedCount ? ` (${archivedCount})` : ""}`}
+          </button>
+        )}
         {loadingConversations && (
           <div className="sidebar-skeletons">
             {[1, 2, 3, 4, 5].map((i) => (

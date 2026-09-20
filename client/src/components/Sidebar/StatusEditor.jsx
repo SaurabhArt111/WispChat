@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useStatus } from "../../context/StatusContext";
 import { useToast } from "../../context/ToastContext";
 import ImageEditor from "../MediaComposer/ImageEditor";
@@ -53,7 +54,7 @@ export default function StatusEditor({ mode, file, onClose }) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="media-composer-overlay" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
       <div className="media-composer status-editor">
         <div className="media-composer-header">
@@ -129,6 +130,7 @@ export default function StatusEditor({ mode, file, onClose }) {
           onCancel={() => setShowDiscardConfirm(false)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

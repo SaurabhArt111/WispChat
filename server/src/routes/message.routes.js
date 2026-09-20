@@ -11,12 +11,14 @@ import {
   forwardMessage,
   markRead,
   getMediaStats,
+  getMediaList,
 } from "../controllers/messageController.js";
 
 const router = Router();
 router.use(requireAuth);
 
 router.get("/media/stats", getMediaStats);
+router.get("/media/list", getMediaList);
 router.get("/:conversationId", getMessages);
 router.post("/:conversationId", sendMessage);
 router.post("/:conversationId/read", markRead);

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * A short vertical list of mutually-exclusive actions plus Cancel — used
@@ -15,7 +16,7 @@ export default function ActionSheetModal({ title, message, actions, onCancel, ca
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  return (
+  return createPortal(
     <div className="confirm-overlay" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="action-sheet-card" role="alertdialog" aria-modal="true">
         {title && <div className="confirm-title">{title}</div>}
@@ -36,6 +37,7 @@ export default function ActionSheetModal({ title, message, actions, onCancel, ca
           {cancelLabel}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

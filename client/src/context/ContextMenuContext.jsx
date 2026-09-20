@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "../styles/contextmenu.css";
 
 const ContextMenuCtx = createContext(null);
@@ -73,7 +74,7 @@ function RenderedMenu({ menu, menuRef, closeMenu }) {
     setPos({ x, y, visible: true });
   }, [menu]);
 
-  return (
+  return createPortal(
     <div ref={menuRef} className="ctx-menu-group" style={{ left: pos.x, top: pos.y, opacity: pos.visible ? 1 : 0 }}>
       {menu.reactions && (
         <div className="ctx-reaction-strip">
@@ -115,7 +116,8 @@ function RenderedMenu({ menu, menuRef, closeMenu }) {
           )
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -21,41 +21,9 @@ export default defineConfig({
         "icons/apple-touch-icon.png",
         "icons/apple-splash-*.png",
       ],
-      manifest: {
-        id: "/",
-        name: "Wisp — Chat",
-        short_name: "Wisp",
-        description: "Fast, modern realtime chat — messages, media, groups and calls in one place.",
-        start_url: "/",
-        scope: "/",
-        display: "standalone",
-        display_override: ["window-controls-overlay", "standalone", "browser"],
-        orientation: "portrait-primary",
-        background_color: "#0b0e12",
-        theme_color: "#0b0e12",
-        categories: ["social", "communication", "productivity"],
-        icons: [
-          { src: "/icons/icon-48.png", sizes: "48x48", type: "image/png" },
-          { src: "/icons/icon-72.png", sizes: "72x72", type: "image/png" },
-          { src: "/icons/icon-96.png", sizes: "96x96", type: "image/png" },
-          { src: "/icons/icon-128.png", sizes: "128x128", type: "image/png" },
-          { src: "/icons/icon-144.png", sizes: "144x144", type: "image/png" },
-          { src: "/icons/icon-152.png", sizes: "152x152", type: "image/png" },
-          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/icons/icon-256.png", sizes: "256x256", type: "image/png" },
-          { src: "/icons/icon-384.png", sizes: "384x384", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/icons/maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
-          { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-        ],
-        shortcuts: [
-          {
-            name: "New conversation",
-            url: "/?action=new-chat",
-            icons: [{ src: "/icons/icon-96.png", sizes: "96x96", type: "image/png" }],
-          },
-        ],
-      },
+      // The manifest is kept in public/ so the same valid JSON is served by
+      // Vite in development and copied unchanged into production builds.
+      manifest: false,
       workbox: {
         // Precache the built app shell (JS/CSS/HTML/icons) for instant,
         // offline-capable loads.
@@ -112,9 +80,9 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        // Let the SW register in `vite dev` too, so installability and the
-        // update flow can be sanity-checked without a production build.
-        enabled: true,
+        // Development has no built app shell for Workbox to precache. Keep
+        // the service worker enabled for production builds only.
+        enabled: false,
         type: "module",
       },
     }),

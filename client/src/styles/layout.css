@@ -31,7 +31,8 @@
     grid-template-columns: 100%;
   }
 
-  .app-shell.has-active-chat .sidebar {
+  .app-shell.has-active-chat .sidebar,
+  .app-shell.has-active-chat .rail-panel {
     display: none;
   }
 

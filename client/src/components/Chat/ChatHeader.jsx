@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import LiquidGlassPanel from "../common/LiquidGlassPanel";
+import ConfirmModal from "../common/ConfirmModal";
 import { formatLastSeen } from "../../utils/time";
 import client from "../../api/client";
 import TypingDots from "./TypingDots";
@@ -30,6 +32,7 @@ export default function ChatHeader({
   const { presence, typing, upsertConversation, closeActiveChat } = useChat();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
+  const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'block' | null
 
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
@@ -63,6 +66,28 @@ export default function ChatHeader({
     }
   }
 
+  async function handleLeaveGroup() {
+    setConfirmAction(null);
+    try {
+      await client.post(`/conversations/group/${conversation._id}/leave`);
+      showToast("You left the group");
+      closeActiveChat();
+    } catch {
+      showToast("Could not leave group", "danger");
+    }
+  }
+
+  async function handleBlockUser() {
+    setConfirmAction(null);
+    try {
+      await client.post(`/users/block/${other._id}`);
+      showToast(`Blocked ${other?.displayName || "user"}`);
+      closeActiveChat();
+    } catch {
+      showToast("Could not block contact", "danger");
+    }
+  }
+
   function openMenu2(e) {
     const items = conversation.isGroup
       ? [
@@ -85,15 +110,7 @@ export default function ChatHeader({
           {
             label: "Leave group",
             danger: true,
-            onClick: async () => {
-              try {
-                await client.post(`/conversations/group/${conversation._id}/leave`);
-                showToast("You left the group");
-                closeActiveChat();
-              } catch (err) {
-                showToast("Could not leave group", "danger");
-              }
-            },
+            onClick: () => setConfirmAction("leave"),
           },
         ]
       : [
@@ -116,14 +133,7 @@ export default function ChatHeader({
           {
             label: "Block user",
             danger: true,
-            onClick: async () => {
-              try {
-                await client.post(`/users/block/${other._id}`);
-                showToast("Contact blocked");
-              } catch (err) {
-                showToast("Could not block contact", "danger");
-              }
-            },
+            onClick: () => setConfirmAction("block"),
           },
         ];
     openMenu(e, items, label);
@@ -192,6 +202,27 @@ export default function ChatHeader({
           <MoreIcon size={18} />
         </button>
       </div>
+
+      {confirmAction === "leave" && (
+        <ConfirmModal
+          title="Leave this group?"
+          message={`You'll stop receiving messages from "${conversation.name}" unless someone adds you back.`}
+          confirmLabel="Leave group"
+          danger
+          onConfirm={handleLeaveGroup}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+      {confirmAction === "block" && (
+        <ConfirmModal
+          title={`Block ${other?.displayName || "this contact"}?`}
+          message="They won't be able to message you or see your Status. You can unblock them anytime from Settings → Privacy."
+          confirmLabel="Block"
+          danger
+          onConfirm={handleBlockUser}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
     </LiquidGlassPanel>
   );
 }

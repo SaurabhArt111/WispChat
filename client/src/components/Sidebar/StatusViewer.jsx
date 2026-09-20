@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useStatus } from "../../context/StatusContext";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
@@ -100,7 +101,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     else goNext();
   }
 
-  return (
+  return createPortal(
     <div className="status-viewer-overlay">
       <div className="status-viewer-stage">
         <div className="status-progress-row">
@@ -193,6 +194,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
           onCancel={() => setConfirmDeleteId(null)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

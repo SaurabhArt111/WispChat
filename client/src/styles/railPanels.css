@@ -108,3 +108,177 @@
     width: 100%;
   }
 }
+
+/* --- Media & Storage gallery --- */
+.media-kind-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 14px 0 10px;
+  overflow-x: auto;
+}
+
+.media-kind-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: var(--radius-round);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.media-kind-tab:hover {
+  background: var(--surface-hover);
+}
+
+.media-kind-tab.active {
+  background: var(--surface-3);
+  color: var(--wisp);
+  border-color: var(--border-glow);
+}
+
+.media-storage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.media-storage-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  cursor: pointer;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.media-storage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.media-storage-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.media-storage-row:hover {
+  background: var(--surface-hover);
+}
+
+.media-storage-row-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.media-storage-row-meta {
+  min-width: 0;
+}
+
+.media-storage-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-storage-row-sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+/* --- Broadcast panel --- */
+.broadcast-contact-scroll {
+  padding-top: 10px;
+}
+
+.broadcast-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.broadcast-contact-row:hover {
+  background: var(--surface-hover);
+}
+
+.broadcast-checkbox {
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #04211a;
+  flex-shrink: 0;
+}
+
+.broadcast-checkbox.checked {
+  background: var(--wisp);
+  border-color: var(--wisp);
+}
+
+.broadcast-contact-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.broadcast-composer {
+  border-top: 1px solid var(--border-soft);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.broadcast-composer textarea {
+  width: 100%;
+  resize: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+
+.broadcast-send-btn {
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { kindFromMime } from "../../utils/fileKind";
 import ImageEditor from "./ImageEditor";
 import ConfirmModal from "../common/ConfirmModal";
@@ -110,7 +111,7 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
 
   if (!active) return null;
 
-  return (
+  return createPortal(
     <div
       className="media-composer-overlay"
       onMouseDown={(e) => e.target === e.currentTarget && requestClose()}
@@ -229,6 +230,7 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
           onCancel={() => setShowDiscardConfirm(false)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

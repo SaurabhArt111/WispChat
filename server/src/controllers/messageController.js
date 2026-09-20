@@ -133,6 +133,45 @@ export async function getMediaStats(req, res) {
   });
 }
 
+// Powers the actual media *gallery* in the Media & Storage rail panel —
+// getMediaStats above only returns counts, this returns the real
+// attachment items (most recent first), across every conversation the
+// user is in, regardless of who sent them — "shared" and "received" both.
+export async function getMediaList(req, res) {
+  const kind = ["image", "video", "audio", "file"].includes(req.query.kind) ? req.query.kind : "image";
+  const limit = Math.min(100, Number(req.query.limit) || 60);
+
+  const conversations = await Conversation.find({ participants: req.user._id }, "_id");
+  const conversationIds = conversations.map((c) => c._id);
+
+  const messages = await Message.find({
+    conversation: { $in: conversationIds },
+    deletedForEveryone: { $ne: true },
+    "attachments.kind": kind,
+  })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate("sender", "displayName username avatar avatarColor")
+    .select("attachments sender conversation createdAt")
+    .lean();
+
+  const items = [];
+  for (const m of messages) {
+    for (const a of m.attachments || []) {
+      if (a.kind !== kind) continue;
+      items.push({
+        ...a,
+        messageId: m._id,
+        conversationId: m.conversation,
+        sender: m.sender,
+        createdAt: m.createdAt,
+      });
+    }
+  }
+
+  res.json({ items: items.slice(0, limit) });
+}
+
 export async function editMessage(req, res) {
   const { id } = req.params;
   const { text } = req.body;

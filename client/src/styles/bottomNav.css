@@ -1,0 +1,125 @@
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: flex;
+    align-items: stretch;
+    height: 58px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface);
+    border-top: 1px solid var(--border-soft);
+    flex-shrink: 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+  }
+
+  .app-shell.has-active-chat .bottom-nav {
+    display: none;
+  }
+}
+
+.bottom-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.bottom-nav-btn.active {
+  color: var(--wisp);
+}
+
+.bottom-nav-icon {
+  position: relative;
+}
+
+.bottom-nav-dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--wisp);
+  border: 1.5px solid var(--surface);
+}
+
+.bottom-nav-label {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.bottom-nav-more-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(4, 6, 9, 0.5);
+  animation: fadeIn 120ms var(--ease);
+}
+
+.bottom-nav-more-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface-2);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  padding: 10px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  animation: slideUp 180ms var(--ease-spring);
+}
+
+.bottom-nav-more-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-round);
+  background: var(--border);
+  margin: 4px auto 12px;
+}
+
+.bottom-nav-more-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bottom-nav-more-item:hover {
+  background: var(--surface-hover);
+  border-radius: var(--radius-md);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .app-shell:not(.has-active-chat) .sidebar,
+  .app-shell:not(.has-active-chat) .rail-panel {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+}

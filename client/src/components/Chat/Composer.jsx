@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import EmojiPicker from "emoji-picker-react";
+import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import { useChat } from "../../context/ChatContext";
 import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
@@ -220,7 +220,7 @@ export default function Composer({
             placeholder={
               editingMessage
                 ? "Edit message…"
-                : `Message ${recipientName}… (${enterToSend ? "Enter to send" : "Ctrl+Enter to send"})`
+                : `Message ${recipientName}…`
             }
             value={text}
             onChange={handleChange}
@@ -254,6 +254,12 @@ export default function Composer({
         <div className="emoji-popover" ref={emojiPopRef}>
           <EmojiPicker
             theme="dark"
+            // "native" renders the OS/browser's own emoji glyphs instead of
+            // fetching PNGs from jsdelivr's CDN — avoids the picker being
+            // silently broken by browser tracking-prevention (which blocks
+            // that third-party CDN in Edge/Safari/Brave) and works offline
+            // in the PWA build, since there's nothing left to fetch.
+            emojiStyle={EmojiStyle.NATIVE}
             onEmojiClick={(e) => {
               setText((t) => t + e.emoji);
               textareaRef.current?.focus();
@@ -261,7 +267,6 @@ export default function Composer({
             width={340}
             height={390}
             previewConfig={{ showPreview: false }}
-            lazyLoadEmojis
           />
         </div>
       )}

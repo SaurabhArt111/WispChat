@@ -203,6 +203,33 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  position: relative;
+  transition: transform 120ms var(--ease);
+}
+
+.archived-pull-pill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 8px 16px;
+  border-radius: var(--radius-round);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.archived-pull-pill.ready {
+  background: var(--wisp);
+  color: #04211a;
+  border-color: var(--wisp);
 }
 
 .conv-group {

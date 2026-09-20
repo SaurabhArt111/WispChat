@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CloseIcon, DownloadIcon, ForwardIcon } from "../common/Icons";
 
 const MIN_ZOOM = 1;
@@ -68,7 +69,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, onForward })
   const img = images[index];
   if (!img) return null;
 
-  return (
+  return createPortal(
     <div className="lightbox" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="lightbox-topbar">
         <button className="lightbox-icon-btn" onClick={onClose} title="Close (Esc)">
@@ -136,6 +137,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, onForward })
       )}
 
       {zoom > 1 && <div className="lightbox-zoom-hint">{Math.round(zoom * 100)}%</div>}
-    </div>
+    </div>,
+    document.body
   );
 }

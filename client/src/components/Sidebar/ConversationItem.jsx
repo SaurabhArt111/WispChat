@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
+import ConfirmModal from "../common/ConfirmModal";
 import { formatListTime } from "../../utils/time";
 import client from "../../api/client";
 import {
@@ -64,6 +66,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
   const { presence, typing, upsertConversation } = useChat();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
@@ -91,6 +94,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
   }
 
   async function clearChat() {
+    setConfirmClear(false);
     try {
       await client.post(`/conversations/${conversation._id}/clear`);
       showToast("Chat history cleared");
@@ -119,7 +123,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
           onClick: () => flag("archive"),
         },
         { divider: true },
-        { label: "Clear chat", icon: <TrashIcon size={15} />, onClick: clearChat },
+        { label: "Clear chat", danger: true, icon: <TrashIcon size={15} />, onClick: () => setConfirmClear(true) },
       ],
       label
     );
@@ -128,6 +132,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
   const isMineLast = conversation.lastMessage && (conversation.lastMessage.sender?._id || conversation.lastMessage.sender) === user._id;
 
   return (
+    <>
     <button
       className={`conv-item ${active ? "active" : ""} ${conversation.pinned ? "is-pinned" : ""}`}
       onClick={onClick}
@@ -172,5 +177,16 @@ export default function ConversationItem({ conversation, active, onClick }) {
         </div>
       </div>
     </button>
+    {confirmClear && (
+      <ConfirmModal
+        title="Clear this chat?"
+        message="All messages in this chat will be removed for you. This can't be undone."
+        confirmLabel="Clear chat"
+        danger
+        onConfirm={clearChat}
+        onCancel={() => setConfirmClear(false)}
+      />
+    )}
+    </>
   );
 }
