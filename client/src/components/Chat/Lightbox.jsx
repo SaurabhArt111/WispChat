@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon, DownloadIcon, ForwardIcon } from "../common/Icons";
+import { mediaUrl } from "../../api/config";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
@@ -88,7 +89,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, onForward })
               <ForwardIcon size={18} />
             </button>
           )}
-          <a className="lightbox-icon-btn" href={img.url} download={img.name || "image.png"} title="Download">
+          <a className="lightbox-icon-btn" href={mediaUrl(img.url)} download={img.name || "image.png"} title="Download">
             <DownloadIcon size={18} />
           </a>
         </div>
@@ -114,7 +115,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, onForward })
         onMouseLeave={endDrag}
       >
         <img
-          src={img.url}
+          src={mediaUrl(img.url)}
           alt={img.name || "Photo"}
           className="lightbox-img"
           draggable={false}

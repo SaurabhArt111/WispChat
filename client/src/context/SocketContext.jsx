@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import { socketUrl } from "../api/config";
 
 const SocketContext = createContext(null);
 
@@ -17,7 +18,7 @@ export function SocketProvider({ children }) {
     }
 
     const token = localStorage.getItem("wisp_token");
-    const s = io("/", {
+    const s = io(socketUrl, {
       path: "/socket.io",
       auth: { token },
       transports: ["websocket", "polling"],

@@ -3,6 +3,7 @@ import http from "http";
 import cors from "cors";
 import path from "path";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 
@@ -21,14 +22,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = http.createServer(app);
 
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || CLIENT_ORIGINS.includes(origin)) return callback(null, true);
+    return callback(new Error("Origin is not allowed by CORS"));
+  },
+  credentials: true,
+};
 
 const io = new Server(server, {
-  cors: { origin: CLIENT_ORIGIN, credentials: true },
+  cors: corsOptions,
   maxHttpBufferSize: 1e8,
 });
 
-app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -38,6 +49,11 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get("/api/health/live", (req, res) => res.json({ ok: true }));
+app.get("/api/health/ready", (req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "disconnected" });
+});
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -66,12 +82,10 @@ app.use((err, req, res, next) => {
 initSockets(io);
 
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
 
-connectDB()
-  .then(() => {
-    server.listen(PORT, () => console.log(`[server] listening on :${PORT}`));
-  })
-  .catch((err) => {
-    console.error("[db] connection failed", err);
-    process.exit(1);
-  });
+server.listen(PORT, HOST, () => console.log(`[server] listening on ${HOST}:${PORT}`));
+
+connectDB().catch((err) => {
+  console.error("[db] connection failed", err);
+});

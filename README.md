@@ -147,6 +147,16 @@ cp .env.example .env      # edit MONGO_URI / JWT_SECRET if needed
 npm install
 npm run dev                # nodemon, http://localhost:5000
 ```
+The backend listens on all network interfaces by default (`0.0.0.0`). To use the app
+from another device on the same network, find this computer's IPv4 address with
+`ipconfig`, then start the frontend with:
+```bash
+cd client
+npm run dev -- --host 0.0.0.0
+```
+Open `http://<this-computer-ip>:5173` on the other device. If you call the backend
+directly instead of using the Vite proxy, add that frontend URL to the comma-separated
+`CLIENT_ORIGIN` value in `server/.env`.
 Requires a MongoDB instance — either local (`mongodb://127.0.0.1:27017/wispchat`) or a
 connection string from MongoDB Atlas, set in `server/.env`.
 
@@ -170,6 +180,34 @@ Register two accounts (in two browser windows/incognito tabs), add each other vi
 "New chat" search, and start messaging. Try right-clicking a message or an image, pasting a
 screenshot into the composer, posting a Status, opening the contact info panel, or deleting a
 message and hitting Undo before the 3-second window closes.
+
+## Production hosting
+
+For a single-domain deployment, build the frontend and run the backend separately:
+```bash
+cd client
+npm run build
+cd ../server
+npm start
+```
+Serve `client/dist` from your web server and proxy `/api`, `/uploads`, and `/socket.io`
+to the backend. The `/socket.io` proxy must allow WebSocket upgrades. Use
+`/api/health/live` for a liveness check and `/api/health/ready` for a readiness check.
+
+For separate frontend and backend domains, set the frontend variable before building:
+```env
+VITE_BACKEND_URL=https://api.example.com
+```
+Set the backend environment to allow the exact frontend origin:
+```env
+HOST=0.0.0.0
+PORT=5000
+CLIENT_ORIGIN=https://app.example.com
+MONGO_URI=mongodb://...
+JWT_SECRET=use-a-long-random-secret
+```
+The frontend build embeds `VITE_BACKEND_URL`, so rebuild after changing it. Do not expose
+the Vite development server as the production frontend.
 
 ## Project structure
 ```

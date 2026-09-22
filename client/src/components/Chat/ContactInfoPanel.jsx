@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../context/ToastContext";
 import client from "../../api/client";
+import { mediaUrl } from "../../api/config";
 import Avatar from "../common/Avatar";
 import Lightbox from "./Lightbox";
 import GroupInfoModal from "./GroupInfoModal";
@@ -205,7 +206,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
               {media.map((a, i) =>
                 a.kind === "video" ? (
                   <div className="ci-media-cell" key={a.url + i}>
-                    <SafeVideo src={a.url} className="ci-media-thumb" muted />
+                    <SafeVideo src={mediaUrl(a.url)} className="ci-media-thumb" muted />
                     <button className="ci-locate-btn" title="Go to message" onClick={() => jumpToMessage(a.messageId)}>
                       <LocateIcon size={13} />
                     </button>
@@ -213,7 +214,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
                 ) : (
                   <div className="ci-media-cell" key={a.url + i}>
                     <SafeImage
-                      src={a.url}
+                      src={mediaUrl(a.url)}
                       className="ci-media-thumb"
                       onClick={() =>
                         setLightboxIndex(media.filter((m) => m.kind === "image").findIndex((m) => m.url === a.url))
@@ -236,7 +237,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
           <div className="ci-files-list">
             {files.map((a, i) => (
               <div key={a.url + i} className="ci-file-row">
-                <a href={a.url} download={a.name} target="_blank" rel="noreferrer" className="ci-file-link">
+                <a href={mediaUrl(a.url)} download={a.name} target="_blank" rel="noreferrer" className="ci-file-link">
                   <div className="ci-file-icon">
                     <FileIcon size={16} />
                   </div>

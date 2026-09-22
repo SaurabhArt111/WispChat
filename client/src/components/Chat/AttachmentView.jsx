@@ -12,6 +12,7 @@ import {
   TrashIcon,
 } from "../common/Icons";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
+import { mediaUrl } from "../../api/config";
 
 function getExtensionBadge(name = "") {
   const ext = name.split(".").pop()?.toUpperCase().slice(0, 4) || "FILE";
@@ -27,7 +28,7 @@ function getExtensionBadge(name = "") {
 
 async function copyImageToClipboard(url, showToast) {
   try {
-    const res = await fetch(url);
+    const res = await fetch(mediaUrl(url));
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
     showToast?.("Image copied to clipboard");
@@ -53,7 +54,7 @@ export default function AttachmentView({ attachments, onForward, onReply, onDele
         icon: <DownloadIcon size={15} />,
         onClick: () => {
           const link = document.createElement("a");
-          link.href = a.url;
+          link.href = mediaUrl(a.url);
           link.download = a.name || "image.png";
           link.click();
         },
@@ -74,7 +75,7 @@ export default function AttachmentView({ attachments, onForward, onReply, onDele
               onClick={() => setLightbox({ list: images, index: i })}
               onContextMenu={(e) => imageContextMenu(e, a)}
             >
-              <SafeImage src={a.url} alt={a.name} loading="lazy" className="image-grid-img" />
+              <SafeImage src={mediaUrl(a.url)} alt={a.name} loading="lazy" className="image-grid-img" />
               {i === 3 && images.length > 4 && (
                 <div className="image-grid-more">+{images.length - 4}</div>
               )}
@@ -86,16 +87,16 @@ export default function AttachmentView({ attachments, onForward, onReply, onDele
       {others.map((a, i) =>
         a.kind === "video" ? (
           <div key={a.url || i} className="attachment-video-wrap" onContextMenu={(e) => imageContextMenu(e, a)}>
-            <SafeVideo src={a.url} controls className="attachment-video" />
+            <SafeVideo src={mediaUrl(a.url)} controls className="attachment-video" />
           </div>
         ) : a.kind === "audio" ? (
           <div key={a.url || i} className="attachment-audio-wrap">
-            <audio src={a.url} controls className="attachment-audio" />
+            <audio src={mediaUrl(a.url)} controls className="attachment-audio" />
           </div>
         ) : (
           <a
             key={a.url || i}
-            href={a.url}
+            href={mediaUrl(a.url)}
             download={a.name}
             target="_blank"
             rel="noreferrer"

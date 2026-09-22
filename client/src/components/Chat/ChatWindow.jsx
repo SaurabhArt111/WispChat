@@ -5,12 +5,11 @@ import { uploadFiles } from "../../api/upload";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import Composer from "./Composer";
-import ContactInfoPanel from "./ContactInfoPanel";
 import MediaComposer from "../MediaComposer/MediaComposer";
 import { DownloadIcon } from "../common/Icons";
 import "../../styles/chat.css";
 
-export default function ChatWindow() {
+export default function ChatWindow({ onOpenContactInfo, contactInfoOpen }) {
   const { activeConversation, sendMessage } = useChat();
   const { showToast } = useToast();
   const [replyTo, setReplyTo] = useState(null);
@@ -19,14 +18,7 @@ export default function ChatWindow() {
   const [dragActive, setDragActive] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showContactInfo, setShowContactInfo] = useState(false);
   const dragCounter = useRef(0);
-
-  // Closing/reopening a different chat should reset the info panel rather
-  // than leave it open pointed at the wrong conversation.
-  useEffect(() => {
-    setShowContactInfo(false);
-  }, [activeConversation?._id]);
 
   const openMediaComposer = useCallback((files) => {
     if (!files || files.length === 0) return;
@@ -114,8 +106,8 @@ export default function ChatWindow() {
           setIsSearching((s) => !s);
           setSearchQuery("");
         }}
-        onOpenInfo={() => setShowContactInfo((s) => !s)}
-        infoOpen={showContactInfo}
+        onOpenInfo={onOpenContactInfo}
+        infoOpen={contactInfoOpen}
       />
       <div className="chat-window-body">
         <div className="chat-window-main">
@@ -135,9 +127,6 @@ export default function ChatWindow() {
             onAttachFiles={openMediaComposer}
           />
         </div>
-        {showContactInfo && (
-          <ContactInfoPanel conversation={activeConversation} onClose={() => setShowContactInfo(false)} />
-        )}
       </div>
 
       {dragActive && (

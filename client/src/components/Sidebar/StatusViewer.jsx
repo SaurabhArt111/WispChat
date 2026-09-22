@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStatus } from "../../context/StatusContext";
+import { mediaUrl } from "../../api/config";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
 import { CloseIcon, TrashIcon, EyeIcon } from "../common/Icons";
@@ -150,7 +151,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
           ) : item.kind === "video" ? (
             <video
               ref={videoRef}
-              src={item.url}
+              src={mediaUrl(item.url)}
               className="status-media"
               autoPlay
               playsInline
@@ -158,7 +159,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
               onEnded={goNext}
             />
           ) : (
-            <img src={item.url} alt="" className="status-media" />
+            <img src={mediaUrl(item.url)} alt="" className="status-media" />
           )}
           {item.caption && <div className="status-caption">{item.caption}</div>}
         </div>

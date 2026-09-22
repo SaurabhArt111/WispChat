@@ -146,18 +146,23 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--surface-4) transparent;
+  -webkit-tap-highlight-color: transparent;
 }
+
 *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 *::-webkit-scrollbar-thumb {
   background: var(--surface-4);
   border-radius: var(--radius-round);
 }
+
 *::-webkit-scrollbar-thumb:hover {
   background: var(--text-faint);
 }
+
 *::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -182,6 +187,7 @@ a {
   color: var(--wisp);
   text-decoration: none;
 }
+
 a:hover {
   text-decoration: underline;
 }
@@ -193,6 +199,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {

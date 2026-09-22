@@ -1,6 +1,7 @@
 import axios from "axios";
+import { apiBaseUrl } from "./config";
 
-const client = axios.create({ baseURL: "/api" });
+const client = axios.create({ baseURL: apiBaseUrl });
 
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem("wisp_token");

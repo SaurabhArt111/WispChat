@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import client from "../../api/client";
+import { mediaUrl } from "../../api/config";
 import { useChat } from "../../context/ChatContext";
 import Lightbox from "../Chat/Lightbox";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
@@ -87,11 +88,11 @@ export default function MediaStoragePanel() {
           <div className="media-storage-grid">
             {items.map((item, i) =>
               item.kind === "video" ? (
-                <SafeVideo key={item.url + i} src={item.url} className="media-storage-thumb" muted onClick={() => openInChat(item)} />
+                <SafeVideo key={item.url + i} src={mediaUrl(item.url)} className="media-storage-thumb" muted onClick={() => openInChat(item)} />
               ) : (
                 <SafeImage
                   key={item.url + i}
-                  src={item.url}
+                  src={mediaUrl(item.url)}
                   className="media-storage-thumb"
                   onClick={() => setLightboxIndex(imageItems.findIndex((m) => m.url === item.url))}
                 />

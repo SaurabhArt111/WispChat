@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useChat } from "../context/ChatContext";
 import { useStatus } from "../context/StatusContext";
 import AsideRail from "../components/Sidebar/AsideRail";
@@ -16,20 +16,26 @@ import ChatWindow from "../components/Chat/ChatWindow";
 import ConnectionBanner from "../components/common/ConnectionBanner";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
+import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
 import { SparklesIcon, PlusIcon, UsersIcon, PhoneIcon } from "../components/common/Icons";
 import "../styles/layout.css";
 
 export default function ChatApp() {
-  const { activeId } = useChat();
+  const { activeId, activeConversation } = useChat();
   const { hasUnread } = useStatus();
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showContactInfo, setShowContactInfo] = useState(false);
   const [view, setView] = useState("chats");
 
+  useEffect(() => {
+    setShowContactInfo(false);
+  }, [activeId]);
+
   return (
-    <div className={`app-shell ${activeId ? "has-active-chat" : ""}`}>
+    <div className={`app-shell ${activeId ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""}`}>
       <ConnectionBanner />
       <AsideRail
         view={view}
@@ -61,7 +67,11 @@ export default function ChatApp() {
 
       <div className="app-main">
         {activeId ? (
-          <ChatWindow key={activeId} />
+          <ChatWindow
+            key={activeId}
+            onOpenContactInfo={() => setShowContactInfo((open) => !open)}
+            contactInfoOpen={showContactInfo}
+          />
         ) : (
           <div className="welcome-screen">
             <div className="welcome-logo-badge">
@@ -97,6 +107,9 @@ export default function ChatApp() {
           </div>
         )}
       </div>
+      {showContactInfo && activeConversation && (
+        <ContactInfoPanel conversation={activeConversation} onClose={() => setShowContactInfo(false)} />
+      )}
 
       <MobileBottomNav
         view={view}
