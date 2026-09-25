@@ -82,6 +82,27 @@
   color: var(--text-secondary, #9aa0ac);
 }
 
+.e2ee-intro-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+  margin: 10px auto 18px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(94, 242, 192, 0.08);
+  border: 1px solid rgba(94, 242, 192, 0.18);
+  color: var(--text-secondary, #9aa0ac);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.e2ee-intro-banner svg {
+  flex-shrink: 0;
+  color: #5ef2c0;
+}
+
 .encrypted-locked-text {
   font-style: italic;
   opacity: 0.7;

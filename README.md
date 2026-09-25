@@ -215,7 +215,12 @@ npm run dev -- --host 0.0.0.0
 ```
 Open `http://<this-computer-ip>:5173` on the other device. If you call the backend
 directly instead of using the Vite proxy, add that frontend URL to the comma-separated
-`CLIENT_ORIGIN` value in `server/.env`.
+`CLIENT_ORIGIN` value in `server/.env` — though outside production this usually isn't
+necessary: the server automatically allows any `localhost`/`127.0.0.1`/private-LAN origin
+(the `192.168.x.x`/`10.x.x.x`/`172.16-31.x.x` ranges) on any port, specifically so testing
+calling or multi-device chat between two tabs or two devices on the same network doesn't
+require touching `.env` at all. Set `NODE_ENV=production` to turn that off and require
+every allowed origin to be listed explicitly.
 Requires a MongoDB instance — either local (`mongodb://127.0.0.1:27017/wispchat`) or a
 connection string from MongoDB Atlas, set in `server/.env`.
 

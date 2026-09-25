@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import MessageBubble from "./MessageBubble";
 import TypingDots from "./TypingDots";
 import { formatDayLabel } from "../../utils/time";
-import { ChevronDownIcon } from "../common/Icons";
+import { ChevronDownIcon, LockIcon } from "../common/Icons";
 
 export default function MessageList({
   conversation,
@@ -20,32 +20,24 @@ export default function MessageList({
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
-  const [virtualRange, setVirtualRange] = useState({ start: 0, end: 40 });
   const prevScrollHeight = useRef(0);
   const isFirstLoad = useRef(true);
   const shouldStickToBottomRef = useRef(true);
-  const ROW_ESTIMATE = 94;
-  const OVERSCAN = 12;
+
+  // NOTE: this used to be windowed/virtualized with a fixed per-row
+  // height estimate. Real message rows vary enormously in height (a
+  // one-line text bubble vs. a photo grid vs. a video) so a fixed
+  // estimate constantly mismatched real layout — that mismatch was
+  // exactly what caused scroll position to jump/glitch on every render,
+  // and could even make some rows compute as "outside the visible
+  // window" and not render at all, which is why media sometimes
+  // appeared to vanish even though it was still in `messages`. Loaded
+  // history is already bounded by pagination (loadMoreMessages fetches a
+  // page at a time), so just rendering every loaded message directly is
+  // both simpler and correct.
 
   const isNearBottom = (el, threshold = 220) =>
     el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
-
-  const updateVirtualRange = (el) => {
-    if (!el || !displayedMessages.length) {
-      setVirtualRange({ start: 0, end: 0 });
-      return;
-    }
-
-    const scrollTop = el.scrollTop || 0;
-    const viewportHeight = el.clientHeight || 0;
-    const start = Math.max(0, Math.floor(scrollTop / ROW_ESTIMATE) - OVERSCAN);
-    const end = Math.min(
-      displayedMessages.length,
-      Math.ceil((scrollTop + viewportHeight) / ROW_ESTIMATE) + OVERSCAN
-    );
-
-    setVirtualRange({ start, end });
-  };
 
   useEffect(() => {
     isFirstLoad.current = true;
@@ -60,7 +52,6 @@ export default function MessageList({
       el.scrollTop = el.scrollHeight;
       isFirstLoad.current = false;
       shouldStickToBottomRef.current = true;
-      updateVirtualRange(el);
       return;
     }
 
@@ -71,8 +62,6 @@ export default function MessageList({
         node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
       });
     }
-
-    updateVirtualRange(el);
   }, [messages.length, typingUsers.length]);
 
   function handleScroll() {
@@ -81,10 +70,7 @@ export default function MessageList({
 
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     shouldStickToBottomRef.current = distanceFromBottom <= 220;
-
-    // Show scroll to bottom button if scrolled up > 250px
     setShowScrollBottom(distanceFromBottom > 250);
-    updateVirtualRange(el);
 
     // Infinite scroll earlier messages
     if (loadingMore || !hasMore) return;
@@ -126,28 +112,13 @@ export default function MessageList({
     const q = searchQuery.toLowerCase();
     return messages.filter(
       (m) =>
-        m.text?.toLowerCase().includes(q) ||
+        (!m.encrypted && m.text?.toLowerCase().includes(q)) ||
         m.sender?.displayName?.toLowerCase().includes(q) ||
         m.attachments?.some((a) => a.name?.toLowerCase().includes(q))
     );
   }, [messages, searchQuery]);
 
-  const visibleMessages = useMemo(() => {
-    if (!displayedMessages.length) return [];
-    const { start, end } = virtualRange;
-    return displayedMessages.slice(start, end);
-  }, [displayedMessages, virtualRange]);
-
-  const totalVirtualHeight = displayedMessages.length * ROW_ESTIMATE;
-  const topSpacerHeight = virtualRange.start * ROW_ESTIMATE;
-  const bottomSpacerHeight = Math.max(0, displayedMessages.length - virtualRange.end) * ROW_ESTIMATE;
-
   let lastDay = null;
-  if (virtualRange.start > 0) {
-    for (let i = 0; i < virtualRange.start; i += 1) {
-      lastDay = formatDayLabel(displayedMessages[i].createdAt);
-    }
-  }
 
   return (
     <div className="message-list-wrap">
@@ -160,11 +131,18 @@ export default function MessageList({
           </div>
         )}
 
-        <div className="message-list-inner" style={{ height: totalVirtualHeight }}>
-          {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
+        {!searchQuery && !hasMore && displayedMessages.length > 0 && (
+          <div className="e2ee-intro-banner">
+            <LockIcon size={13} />
+            <span>
+              Messages and calls in this chat are end-to-end encrypted. Only people in this chat
+              can read, listen to, or share them.
+            </span>
+          </div>
+        )}
 
-          {visibleMessages.map((msg, i) => {
-            const actualIndex = virtualRange.start + i;
+        <div className="message-list-inner">
+          {displayedMessages.map((msg, actualIndex) => {
             const day = formatDayLabel(msg.createdAt);
             const showDay = day !== lastDay;
             lastDay = day;
@@ -196,8 +174,6 @@ export default function MessageList({
               </div>
             );
           })}
-
-          {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} />}
         </div>
 
         {typingUsers.length > 0 && (

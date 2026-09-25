@@ -48,23 +48,39 @@ async function computeSafetyCode(pc) {
   }
 }
 
-function playTone(freqs, durationMs, gain = 0.05) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const master = ctx.createGain();
-    master.gain.value = gain;
-    master.connect(ctx.destination);
-    freqs.forEach((f) => {
-      const osc = ctx.createOscillator();
-      osc.frequency.value = f;
-      osc.connect(master);
-      osc.start();
-      osc.stop(ctx.currentTime + durationMs / 1000);
-    });
-    setTimeout(() => ctx.close().catch(() => {}), durationMs + 100);
-  } catch {
-    /* AudioContext unavailable (e.g. no user gesture yet) — silently skip */
+// A single shared AudioContext, reused for every ring/ringback tone
+// instead of a fresh `new AudioContext()` per tone. Browsers block audio
+// from starting until the page has had *some* user gesture; creating a
+// context on every incoming-call socket event (which isn't a gesture)
+// just produced a console warning and often no sound at all. Instead,
+// this context is created lazily and resumed the moment the person
+// interacts with the page at all (see the click/keydown listener in
+// CallProvider below) — after that one-time resume, the same context
+// can be reused freely for calls that arrive later with no gesture
+// needed at that point, satisfying the autoplay policy correctly.
+let sharedAudioCtx = null;
+function getAudioCtx() {
+  if (!sharedAudioCtx) {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    sharedAudioCtx = new Ctor();
   }
+  return sharedAudioCtx;
+}
+
+function playTone(freqs, durationMs, gain = 0.05) {
+  const ctx = getAudioCtx();
+  if (!ctx || ctx.state !== "running") return; // not resumed yet — silently skip rather than warn
+  const master = ctx.createGain();
+  master.gain.value = gain;
+  master.connect(ctx.destination);
+  freqs.forEach((f) => {
+    const osc = ctx.createOscillator();
+    osc.frequency.value = f;
+    osc.connect(master);
+    osc.start();
+    osc.stop(ctx.currentTime + durationMs / 1000);
+  });
 }
 
 export function CallProvider({ children }) {
@@ -79,6 +95,7 @@ export function CallProvider({ children }) {
   const ringIntervalRef = useRef(null);
   const ringTimeoutRef = useRef(null);
   const incomingOfferRef = useRef(null); // { callId, conversationId, kind, offer, from }
+  const startingRef = useRef(false); // guards against a double-click firing startCall twice
 
   useEffect(() => {
     if (Notification?.permission === "default") {
@@ -89,6 +106,25 @@ export function CallProvider({ children }) {
     }
   }, []);
 
+  // Resume (or lazily create) the shared ring/ringback AudioContext the
+  // very first time the person interacts with the page at all — this is
+  // what makes a *later*, gesture-less incoming-call ringtone actually
+  // audible instead of silently blocked by the browser's autoplay policy.
+  useEffect(() => {
+    function resumeOnce() {
+      const ctx = getAudioCtx();
+      ctx?.resume().catch(() => {});
+      window.removeEventListener("pointerdown", resumeOnce);
+      window.removeEventListener("keydown", resumeOnce);
+    }
+    window.addEventListener("pointerdown", resumeOnce);
+    window.addEventListener("keydown", resumeOnce);
+    return () => {
+      window.removeEventListener("pointerdown", resumeOnce);
+      window.removeEventListener("keydown", resumeOnce);
+    };
+  }, []);
+
   const cleanup = useCallback(() => {
     clearInterval(ringIntervalRef.current);
     clearTimeout(ringTimeoutRef.current);
@@ -96,6 +132,7 @@ export function CallProvider({ children }) {
     ringTimeoutRef.current = null;
     pendingCandidatesRef.current = [];
     incomingOfferRef.current = null;
+    startingRef.current = false;
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
@@ -155,9 +192,13 @@ export function CallProvider({ children }) {
 
   const startCall = useCallback(
     async (conversation, kind) => {
-      if (call) return; // already on/starting a call
+      if (call || startingRef.current) return; // already on/starting a call
+      startingRef.current = true;
       const other = conversation.participants.find((p) => p._id !== user._id);
-      if (!other) return;
+      if (!other) {
+        startingRef.current = false;
+        return;
+      }
 
       const callId = uid();
       try {
@@ -184,6 +225,7 @@ export function CallProvider({ children }) {
           cameraOff: false,
           safetyCode: null,
         });
+        startingRef.current = false;
         startRingback();
 
         const offer = await pc.createOffer();
@@ -281,6 +323,10 @@ export function CallProvider({ children }) {
     if (!socket) return;
 
     function onIncoming({ callId, conversationId, kind, offer, from }) {
+      // Already ringing/on this exact call (a duplicate delivery of the
+      // same invite, e.g. from a brief reconnect) — ignore rather than
+      // re-processing it as if it were a second call.
+      if (incomingOfferRef.current?.callId === callId || call?.callId === callId) return;
       // Already on a call ourselves — let the caller know rather than
       // silently dropping their invite.
       if (call || incomingOfferRef.current) {

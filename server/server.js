@@ -26,9 +26,28 @@ const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+// Testing chat/calling for real needs *two* browser sessions at once, and
+// the easiest way to get that on one machine is two tabs — but
+// `http://localhost:5173` and `http://127.0.0.1:5173` (or a phone hitting
+// the dev machine's LAN IP to test calling across two actual devices)
+// are different origins as far as CORS/cookies are concerned, even
+// though they're the same server. Requiring the person to hand-configure
+// CLIENT_ORIGIN for every hostname they happen to test from is exactly
+// the kind of friction that turns into "why is CORS rejecting my own
+// laptop" — so outside production, any localhost/127.0.0.1/private-LAN
+// origin is allowed automatically, on any port, in addition to whatever
+// CLIENT_ORIGIN lists explicitly. In production (NODE_ENV=production)
+// this stays strict and only CLIENT_ORIGIN is honored.
+const isProd = process.env.NODE_ENV === "production";
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:192\.168\.\d{1,3}\.\d{1,3})|(?:172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}))(:\d+)?$/i;
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || CLIENT_ORIGINS.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true); // same-origin / non-browser requests (curl, server-to-server)
+    if (CLIENT_ORIGINS.includes(origin)) return callback(null, true);
+    if (!isProd && LOCAL_ORIGIN_RE.test(origin)) return callback(null, true);
+    console.warn(`[cors] rejected origin "${origin}" — add it to CLIENT_ORIGIN in server/.env if this is expected`);
     return callback(new Error("Origin is not allowed by CORS"));
   },
   credentials: true,

@@ -155,7 +155,7 @@ export default function MessageBubble({
     );
   }
 
-  if (message.callInfo) {
+  if (message.callInfo?.kind && message.callInfo?.status) {
     const { kind, status, durationSec } = message.callInfo;
     const icon = kind === "video" ? <VideoIcon size={13} /> : <PhoneIcon size={13} />;
     const label =

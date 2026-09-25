@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
@@ -79,6 +79,43 @@ export default function ConversationItem({ conversation, active, onClick }) {
   const { showToast } = useToast();
   const [confirmClear, setConfirmClear] = useState(false);
 
+  // Swipe-to-reveal-archive (mouse + touch, via Pointer Events so both
+  // work through one code path). Dragging left slides the row over to
+  // reveal an Archive button docked behind it; releasing past halfway
+  // snaps it fully open, releasing before that snaps it back closed —
+  // the same interaction Telegram/WhatsApp mobile use.
+  const REVEAL_WIDTH = 84;
+  const [dragX, setDragX] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef(null); // { startX, baseX }
+
+  function onPointerDown(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    dragStartRef.current = { startX: e.clientX, baseX: revealed ? -REVEAL_WIDTH : 0 };
+    setDragging(true);
+  }
+  function onPointerMove(e) {
+    if (!dragStartRef.current) return;
+    const delta = e.clientX - dragStartRef.current.startX;
+    const next = Math.min(0, Math.max(-REVEAL_WIDTH, dragStartRef.current.baseX + delta));
+    setDragX(next);
+  }
+  function endDrag() {
+    if (!dragStartRef.current) return;
+    dragStartRef.current = null;
+    setDragging(false);
+    setDragX((x) => {
+      const open = x < -REVEAL_WIDTH / 2;
+      setRevealed(open);
+      return open ? -REVEAL_WIDTH : 0;
+    });
+  }
+  function closeSwipe() {
+    setRevealed(false);
+    setDragX(0);
+  }
+
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
     : null;
@@ -102,6 +139,22 @@ export default function ConversationItem({ conversation, active, onClick }) {
     } catch (err) {
       showToast("Action failed", "danger");
     }
+  }
+
+  function handleSwipeArchive() {
+    closeSwipe();
+    flag("archive");
+  }
+
+  function handleRowClick(e) {
+    // First tap while the archive action is revealed just closes it
+    // again, matching the swipe-row convention elsewhere — it shouldn't
+    // also navigate into the chat in the same tap.
+    if (revealed) {
+      closeSwipe();
+      return;
+    }
+    onClick?.(e);
   }
 
   async function clearChat() {
@@ -144,50 +197,70 @@ export default function ConversationItem({ conversation, active, onClick }) {
 
   return (
     <>
-    <button
-      className={`conv-item ${active ? "active" : ""} ${conversation.pinned ? "is-pinned" : ""}`}
-      onClick={onClick}
-      onContextMenu={handleContextMenu}
-    >
-      <Avatar user={avatarUser} size={46} showStatus={!conversation.isGroup} online={isOnline} />
-      <div className="conv-item-main">
-        <div className="conv-item-row">
-          <span className="conv-item-name">
-            {label}
-            {conversation.pinned && (
-              <span className="pin-badge" title="Pinned">
-                <PinIcon size={12} filled />
-              </span>
-            )}
-          </span>
-          <span className="conv-item-time">{formatListTime(conversation.lastMessageAt)}</span>
-        </div>
-        <div className="conv-item-row">
-          <span className={`conv-item-preview ${conversation.unreadCount ? "unread" : ""}`}>
-            {isMineLast && !conversation.unreadCount && (
-              <span className="preview-ticks">
-                {conversation.lastMessage?.readBy?.length > 1 ? (
-                  <DoubleCheckIcon size={13} read />
-                ) : (
-                  <CheckIcon size={12} />
-                )}
-              </span>
-            )}
-            <ConversationPreview conv={conversation} selfId={user._id} isTyping={isTyping} />
-          </span>
-          <div className="conv-item-badges">
-            {conversation.muted && (
-              <span className="mute-badge" title="Muted">
-                <MuteIcon size={13} />
-              </span>
-            )}
-            {conversation.unreadCount > 0 && (
-              <span className="unread-badge">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>
-            )}
+    <div className="conv-swipe-wrap">
+      <button
+        className="conv-swipe-archive-btn"
+        style={{ width: REVEAL_WIDTH }}
+        onClick={handleSwipeArchive}
+        title={conversation.archived ? "Unarchive" : "Archive"}
+      >
+        <ArchiveIcon size={20} />
+        <span>{conversation.archived ? "Unarchive" : "Archive"}</span>
+      </button>
+      <button
+        className={`conv-item ${active ? "active" : ""} ${conversation.pinned ? "is-pinned" : ""}`}
+        onClick={handleRowClick}
+        onContextMenu={handleContextMenu}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        style={{
+          transform: `translateX(${dragX}px)`,
+          transition: dragging ? "none" : "transform 220ms var(--ease, ease)",
+          touchAction: "pan-y",
+        }}
+      >
+        <Avatar user={avatarUser} size={46} showStatus={!conversation.isGroup} online={isOnline} />
+        <div className="conv-item-main">
+          <div className="conv-item-row">
+            <span className="conv-item-name">
+              {label}
+              {conversation.pinned && (
+                <span className="pin-badge" title="Pinned">
+                  <PinIcon size={12} filled />
+                </span>
+              )}
+            </span>
+            <span className="conv-item-time">{formatListTime(conversation.lastMessageAt)}</span>
+          </div>
+          <div className="conv-item-row">
+            <span className={`conv-item-preview ${conversation.unreadCount ? "unread" : ""}`}>
+              {isMineLast && !conversation.unreadCount && (
+                <span className="preview-ticks">
+                  {conversation.lastMessage?.readBy?.length > 1 ? (
+                    <DoubleCheckIcon size={13} read />
+                  ) : (
+                    <CheckIcon size={12} />
+                  )}
+                </span>
+              )}
+              <ConversationPreview conv={conversation} selfId={user._id} isTyping={isTyping} />
+            </span>
+            <div className="conv-item-badges">
+              {conversation.muted && (
+                <span className="mute-badge" title="Muted">
+                  <MuteIcon size={13} />
+                </span>
+              )}
+              {conversation.unreadCount > 0 && (
+                <span className="unread-badge">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+    </div>
     {confirmClear && (
       <ConfirmModal
         title="Clear this chat?"

@@ -1,5 +1,14 @@
 import mongoose from "mongoose";
 
+const callInfoSchema = new mongoose.Schema(
+  {
+    kind: { type: String, enum: ["audio", "video"] },
+    status: { type: String, enum: ["completed", "missed", "declined"] },
+    durationSec: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const attachmentSchema = new mongoose.Schema(
   {
     url: String,
@@ -58,11 +67,7 @@ const messageSchema = new mongoose.Schema(
     // this is just the "Voice call · 2m 14s" / "Missed video call" line
     // left behind afterward, the same way WhatsApp leaves a call entry
     // in the chat).
-    callInfo: {
-      kind: { type: String, enum: ["audio", "video"] },
-      status: { type: String, enum: ["completed", "missed", "declined"] },
-      durationSec: { type: Number, default: 0 },
-    },
+    callInfo: { type: callInfoSchema, default: undefined },
 
     reactions: [
       {
