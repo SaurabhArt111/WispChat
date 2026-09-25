@@ -10,7 +10,7 @@ function pickColor() {
 
 export async function register(req, res) {
   try {
-    const { username, displayName, email, password } = req.body;
+    const { username, displayName, email, password, e2ee } = req.body;
     if (!username || !displayName || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -34,10 +34,24 @@ export async function register(req, res) {
       email: email.toLowerCase(),
       password: hashed,
       avatarColor: pickColor(),
+      // The client generates the end-to-end encryption keypair *before*
+      // registering and only ever sends us the public key plus the
+      // password-wrapped private key blob — we store that bundle against
+      // the account (not a device) so any device the person logs into can
+      // fetch it and unlock it locally with their password.
+      e2ee: e2ee?.publicKeyJwk
+        ? {
+            publicKeyJwk: e2ee.publicKeyJwk,
+            wrappedPrivateKey: e2ee.wrappedPrivateKey,
+            wrapIv: e2ee.wrapIv,
+            kdfSalt: e2ee.kdfSalt,
+            kdfIterations: e2ee.kdfIterations,
+          }
+        : undefined,
     });
 
     const token = signToken(user._id);
-    res.status(201).json({ token, user: user.toSafeJSON() });
+    res.status(201).json({ token, user: user.toPrivateJSON() });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Registration failed" });
@@ -51,7 +65,7 @@ export async function login(req, res) {
 
     const user = await User.findOne({
       $or: [{ email: identifier.toLowerCase() }, { username: identifier.toLowerCase() }],
-    }).select("+password");
+    }).select("+password +e2ee.wrappedPrivateKey +e2ee.wrapIv +e2ee.kdfSalt +e2ee.kdfIterations");
 
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
@@ -62,7 +76,7 @@ export async function login(req, res) {
     await user.save();
 
     const token = signToken(user._id);
-    res.json({ token, user: user.toSafeJSON() });
+    res.json({ token, user: user.toPrivateJSON(), needsE2EESetup: !user.e2ee?.publicKeyJwk });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Login failed" });
@@ -70,7 +84,33 @@ export async function login(req, res) {
 }
 
 export async function me(req, res) {
-  res.json({ user: req.user.toSafeJSON() });
+  const user = await User.findById(req.user._id).select(
+    "+e2ee.wrappedPrivateKey +e2ee.wrapIv +e2ee.kdfSalt +e2ee.kdfIterations"
+  );
+  res.json({ user: user.toPrivateJSON(), needsE2EESetup: !user.e2ee?.publicKeyJwk });
+}
+
+// First login after this feature shipped (or any account created before
+// E2EE existed) has no keypair yet. The client generates one locally,
+// wraps the private key with a key derived from the password the person
+// is already holding, and hands us only the public key + wrapped bundle.
+export async function setupE2EE(req, res) {
+  try {
+    const { publicKeyJwk, wrappedPrivateKey, wrapIv, kdfSalt, kdfIterations } = req.body;
+    if (!publicKeyJwk || !wrappedPrivateKey || !wrapIv || !kdfSalt || !kdfIterations) {
+      return res.status(400).json({ message: "Incomplete encryption bundle" });
+    }
+    const user = await User.findById(req.user._id).select("+e2ee.wrappedPrivateKey");
+    if (user.e2ee?.publicKeyJwk) {
+      return res.status(409).json({ message: "Encryption keys already set up for this account" });
+    }
+    user.e2ee = { publicKeyJwk, wrappedPrivateKey, wrapIv, kdfSalt, kdfIterations };
+    await user.save();
+    res.json({ user: user.toPrivateJSON() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Couldn't set up encryption" });
+  }
 }
 
 export async function logout(req, res) {

@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
+import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
 import { formatListTime } from "../../utils/time";
@@ -18,9 +19,16 @@ import {
   VideoIcon,
   AudioIcon,
   FileIcon,
+  LockIcon,
 } from "../common/Icons";
 
-function renderPreview(conv, selfId, isTyping) {
+// A component (not a plain function) specifically so it can decrypt the
+// last message's text via a hook before showing it — an encrypted
+// conversation's preview must never render raw ciphertext.
+function ConversationPreview({ conv, selfId, isTyping }) {
+  const msg = conv.lastMessage;
+  const { text: decryptedText, locked } = useDecryptedText(msg);
+
   if (isTyping) {
     return (
       <span className="typing-preview">
@@ -32,23 +40,25 @@ function renderPreview(conv, selfId, isTyping) {
     );
   }
 
-  const msg = conv.lastMessage;
   if (!msg) return <span className="preview-muted">Say hello 👋</span>;
   if (msg.deletedForEveryone) return <span className="preview-deleted">🚫 Message was deleted</span>;
 
   const isMine = (msg.sender?._id || msg.sender) === selfId;
   const prefix = isMine ? "You: " : conv.isGroup ? `${msg.sender?.displayName?.split(" ")[0] || "Someone"}: ` : "";
 
+  const bodyText = msg.encrypted ? (locked ? "Encrypted message" : decryptedText) : msg.text;
+
   if (msg.attachments?.length) {
     const kind = msg.attachments[0].kind;
     return (
       <span className="attachment-preview-text">
         {prefix}
+        {msg.encrypted && <LockIcon size={12} className="preview-icon" />}
         {kind === "image" && <ImageIcon size={14} className="preview-icon" />}
         {kind === "video" && <VideoIcon size={14} className="preview-icon" />}
         {kind === "audio" && <AudioIcon size={14} className="preview-icon" />}
         {kind !== "image" && kind !== "video" && kind !== "audio" && <FileIcon size={14} className="preview-icon" />}
-        <span>{msg.text || (kind === "image" ? "Photo" : kind === "video" ? "Video" : kind === "audio" ? "Voice message" : "Attachment")}</span>
+        <span>{bodyText || (kind === "image" ? "Photo" : kind === "video" ? "Video" : kind === "audio" ? "Voice message" : "Attachment")}</span>
       </span>
     );
   }
@@ -56,7 +66,8 @@ function renderPreview(conv, selfId, isTyping) {
   return (
     <span>
       {prefix}
-      {msg.text}
+      {msg.encrypted && <LockIcon size={11} className="preview-icon" />}
+      {bodyText}
     </span>
   );
 }
@@ -162,7 +173,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
                 )}
               </span>
             )}
-            {renderPreview(conversation, user._id, isTyping)}
+            <ConversationPreview conv={conversation} selfId={user._id} isTyping={isTyping} />
           </span>
           <div className="conv-item-badges">
             {conversation.muted && (

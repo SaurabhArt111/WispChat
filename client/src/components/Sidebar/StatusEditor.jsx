@@ -5,9 +5,11 @@ import { useToast } from "../../context/ToastContext";
 import ImageEditor from "../MediaComposer/ImageEditor";
 import ConfirmModal from "../common/ConfirmModal";
 import { kindFromMime } from "../../utils/fileKind";
+import { compressMedia, needsCompression } from "../../utils/mediaCompressor";
 import { CloseIcon, SendIcon } from "../common/Icons";
 import "../../styles/mediaComposer.css";
 import "../../styles/status.css";
+import "../../styles/e2ee.css";
 
 const BG_COLORS = ["#5ef2c0", "#38bdf8", "#a78bfa", "#f5a65b", "#ff5c5c", "#111318"];
 
@@ -18,6 +20,7 @@ export default function StatusEditor({ mode, file, onClose }) {
   const [bgColor, setBgColor] = useState(BG_COLORS[0]);
   const [caption, setCaption] = useState("");
   const [posting, setPosting] = useState(false);
+  const [compressState, setCompressState] = useState(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const editorRef = useRef(null);
 
@@ -39,17 +42,29 @@ export default function StatusEditor({ mode, file, onClose }) {
       if (mode === "text") {
         if (!text.trim()) return;
         await postTextStatus(text.trim(), bgColor);
-      } else if (fileKind === "image" && editorRef.current?.isEdited()) {
-        const blob = await editorRef.current.getFinalBlob();
-        await postMediaStatus(blob, "status.png", caption.trim());
       } else {
-        await postMediaStatus(file, file.name, caption.trim());
+        let blob = file;
+        let name = file.name;
+        if (fileKind === "image" && editorRef.current?.isEdited()) {
+          blob = await editorRef.current.getFinalBlob();
+          name = "status.png";
+        }
+        // Same compressor used for chat media — statuses get the same
+        // "always compress, target ~1MB for photos" treatment before
+        // upload.
+        if (needsCompression(blob)) {
+          setCompressState({ progress: 0, label: fileKind === "video" ? "Compressing video" : "Optimizing photo" });
+          blob = await compressMedia(blob, { onProgress: (p) => setCompressState((s) => ({ ...s, progress: p })) });
+        }
+        setCompressState(null);
+        await postMediaStatus(blob, name, caption.trim());
       }
       showToast("Status posted");
       onClose();
-    } catch {
-      showToast("Couldn't post your status — try again", "danger");
+    } catch (err) {
+      showToast(err?.response?.data?.message || "Couldn't post your status — try again", "danger");
     } finally {
+      setCompressState(null);
       setPosting(false);
     }
   }
@@ -68,6 +83,15 @@ export default function StatusEditor({ mode, file, onClose }) {
         </div>
 
         <div className="media-composer-stage">
+          {compressState && (
+            <div className="compress-overlay">
+              <div className="compress-spinner" />
+              <div className="compress-label">{compressState.label}…</div>
+              <div className="compress-bar-track">
+                <div className="compress-bar-fill" style={{ width: `${Math.round(compressState.progress * 100)}%` }} />
+              </div>
+            </div>
+          )}
           {mode === "text" ? (
             <div className="status-text-stage" style={{ background: bgColor }}>
               <textarea
@@ -114,7 +138,7 @@ export default function StatusEditor({ mode, file, onClose }) {
             onClick={handlePost}
           >
             <SendIcon size={16} />
-            <span>{posting ? "Posting…" : "Share status"}</span>
+            <span>{posting ? (compressState ? "Optimizing…" : "Posting…") : "Share status"}</span>
           </button>
         </div>
       </div>

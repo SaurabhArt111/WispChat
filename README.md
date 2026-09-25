@@ -72,15 +72,74 @@ bar.
 **Pre-send media composer**
 Attaching, pasting or dropping media never sends immediately. It opens a dedicated full-screen
 composer where you can crop, rotate, and free-hand draw on images (canvas-based, with undo), add
-a caption, remove/add more files, then hit Send — and closing it with unsaved edits/caption now
-asks first instead of silently discarding your work.
+a caption, remove/add more files, then hit Send. Compression/encryption/upload all happen *after*
+the composer closes, in the background — hitting Send is instant, and the message shows up in the
+chat right away with its own progress indicator (see below), the same way WhatsApp/Telegram never
+make you sit and watch a spinner before a video starts sending.
+
+**Automatic media compression (chat + status)**
+Images, GIFs and videos are compressed client-side before upload — adaptively, not with one fixed
+quality number. Photos are iteratively re-encoded on a `<canvas>` (which also strips all EXIF
+metadata for free) down toward ~1MB. GIFs and video are transcoded through a self-hosted, single-
+threaded `ffmpeg.wasm`; video specifically picks its resolution/CRF/preset based on the *source*
+file's size (a 150MB+ clip gets downscaled hard and encoded on `ultrafast`; a small clip gets a
+much lighter touch) so a huge file doesn't take unreasonably long. (An earlier attempt to
+opportunistically upgrade to ffmpeg's multi-threaded core for extra speed was reverted — its
+worker-loading turned out to be unreliable across dev/build environments and could crash-loop
+instead of falling back cleanly; single-threaded is slower but actually dependable.) Each pending
+attachment shows its own compress→upload progress ring right on the message bubble; the original
+file is kept in memory until the compressed version has actually finished uploading, and if the
+upload fails, the message bubble shows a retryable failed state rather than silently losing the
+file. A **"Send without compression (as document)"** toggle in the composer bypasses all of this
+and uploads the original bytes untouched. The Status composer uses the same pipeline, and posting
+is capped at **5 active statuses** at a time (enforced both client- and server-side).
+
+**End-to-end encryption (chat) — on by default**
+Built entirely on the browser's native WebCrypto API (ECDH P-256 + AES-GCM + HKDF/PBKDF2, no
+third-party crypto library), and applied uniformly to 1:1 *and* group chats — there's no separate
+"group mode." Every account gets an identity keypair automatically at signup/first login, no
+opt-in step. The private key is wrapped with a key derived from your password and stored — as
+ciphertext the server can't read — against your account rather than a device, so logging into
+Wisp on a new device unlocks it with the same password (the same password that device already
+needed for login in the first place — there's no *extra* prompt there). On top of that, once a
+browser has unlocked a key it caches it locally (wrapped with a key derived from that session's
+own login token, not the password) so a plain page refresh never asks again; only a genuinely new
+browser/device does, once. Every message gets a fresh random AES key, wrapped individually per
+participant (including yourself, so your own history stays readable) via an ECDH-derived shared
+secret — the server only ever stores and relays ciphertext, for both message text and file
+attachments, including in the Media & Storage gallery view. See `client/src/utils/crypto.js` for
+the implementation and its scope/limitations (it's a simplified envelope scheme, not a full
+Signal-style double ratchet). A conversation shows a lock badge in the header; the one case it can
+still fall back to plaintext is a contact who has literally never logged in since this feature
+shipped (no public key on file yet) — surfaced honestly as "Not encrypted yet" rather than hidden.
+
+**Voice & video calling (WebRTC) — 1:1, peer-to-peer, end-to-end encrypted**
+Call buttons live in the chat header for direct conversations (not groups — that would need an
+SFU/media server to fan out streams, out of scope here). Signaling (who's calling whom, SDP
+offer/answer, ICE candidates) goes over the existing Socket.IO connection — `server/src/sockets/
+index.js` just relays that metadata between the two participants' rooms and tracks who's already
+on a call so a second incoming call gets an automatic "busy" instead of ringing into a call that's
+already connected. The media itself (audio/video) never touches the server at all: it's a direct
+browser-to-browser `RTCPeerConnection`, and WebRTC's DTLS-SRTP encryption on that connection is
+*mandatory*, not a setting — so the call is end-to-end encrypted by construction, the same
+property the chat messages get deliberately, calls get for free from the protocol. As a defense
+against a compromised signaling server trying to sit in the middle of call setup, once connected
+both sides show a short "safety code" derived from each other's DTLS certificate fingerprint
+(`CallContext.jsx` → `computeSafetyCode`) that can be read out loud to confirm, the same idea as
+Signal's call safety numbers. Incoming calls ring in-app and, if the tab isn't focused, also raise
+a browser `Notification`. Calls leave a system-style summary message in the conversation when they
+end ("Voice call · 2m 14s" / "Missed video call"), the same way WhatsApp does. STUN-only (Google's
+public STUN servers) means most home/office networks connect fine; a small number of restrictive
+networks (symmetric NAT, some corporate firewalls) would need a TURN relay to connect at all, which
+isn't included — that's a real server you'd have to run, not a code change.
 
 ## Not included (flagged as follow-up work)
 
-Voice/video calling (WebRTC), end-to-end encryption, and broadcast lists existed as ideas but
-were out of scope to build here — the rail nav has honest placeholders for Calls and Broadcast
-Lists rather than pretending they work. The architecture (sockets, message model, Status model)
-leaves room to add these later.
+Group calls and broadcast lists existed as ideas but were out of scope to build here — the rail
+nav still has an honest placeholder for Broadcast Lists. A TURN server for calling across
+restrictive networks isn't included either (see above). Otherwise this round closed out the gaps
+from the previous one: the media gallery, sidebar previews, and reply previews all decrypt
+properly now instead of occasionally leaking ciphertext or going stale.
 
 ## PWA (installable app)
 

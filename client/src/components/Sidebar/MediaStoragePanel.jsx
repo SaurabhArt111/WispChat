@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import client from "../../api/client";
-import { mediaUrl } from "../../api/config";
 import { useChat } from "../../context/ChatContext";
+import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
 import Lightbox from "../Chat/Lightbox";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
+import { LockIcon } from "../common/Icons";
 import MediaStatsChart from "./MediaStatsChart";
 import { LayersIcon, ImageIcon, VideoIcon, AudioIcon, FileIcon as DocIcon } from "../common/Icons";
 import { formatBytes, formatListTime } from "../../utils/time";
 import "../../styles/railPanels.css";
 import "../../styles/mediastats.css";
+import "../../styles/e2ee.css";
 
 const KIND_TABS = [
   { id: "image", label: "Photos", icon: ImageIcon },
@@ -16,6 +18,41 @@ const KIND_TABS = [
   { id: "audio", label: "Audio", icon: AudioIcon },
   { id: "file", label: "Files", icon: DocIcon },
 ];
+
+// The gallery is just another view over the same messages shown in a
+// chat, not a separate unencrypted copy of anything — so an encrypted
+// item here still needs decrypting exactly the same way. Each list item
+// carries its owning message's encrypted/iv/keys/sender fields (see
+// getMediaList) specifically so this reconstruction is possible without
+// a second round trip.
+function itemAsMessage(item) {
+  return {
+    _id: item.messageId,
+    sender: item.sender,
+    encrypted: item.messageEncrypted,
+    iv: item.messageIv,
+    keys: item.messageKeys,
+  };
+}
+
+function GridThumb({ item, onClick }) {
+  const { url, loading, error } = useDecryptedMediaUrl(itemAsMessage(item), item);
+  if (loading) {
+    return (
+      <div className="media-storage-thumb attachment-decrypting">
+        <LockIcon size={16} />
+      </div>
+    );
+  }
+  if (error || !url) {
+    return <div className="media-storage-thumb attachment-decrypt-error">Unavailable</div>;
+  }
+  return item.kind === "video" ? (
+    <SafeVideo src={url} className="media-storage-thumb" muted onClick={onClick} />
+  ) : (
+    <SafeImage src={url} className="media-storage-thumb" onClick={onClick} />
+  );
+}
 
 export default function MediaStoragePanel() {
   const { openConversation } = useChat();
@@ -48,7 +85,7 @@ export default function MediaStoragePanel() {
     }, 250);
   }
 
-  const imageItems = kind === "image" && items ? items : [];
+  const imageItems = kind === "image" && items ? items.map((it) => ({ ...it, _message: itemAsMessage(it) })) : [];
 
   return (
     <aside className="rail-panel">
@@ -86,18 +123,15 @@ export default function MediaStoragePanel() {
           </div>
         ) : kind === "image" || kind === "video" ? (
           <div className="media-storage-grid">
-            {items.map((item, i) =>
-              item.kind === "video" ? (
-                <SafeVideo key={item.url + i} src={mediaUrl(item.url)} className="media-storage-thumb" muted onClick={() => openInChat(item)} />
-              ) : (
-                <SafeImage
-                  key={item.url + i}
-                  src={mediaUrl(item.url)}
-                  className="media-storage-thumb"
-                  onClick={() => setLightboxIndex(imageItems.findIndex((m) => m.url === item.url))}
-                />
-              )
-            )}
+            {items.map((item, i) => (
+              <GridThumb
+                key={item.url + i}
+                item={item}
+                onClick={() =>
+                  item.kind === "video" ? openInChat(item) : setLightboxIndex(imageItems.findIndex((m) => m.url === item.url))
+                }
+              />
+            ))}
           </div>
         ) : (
           <div className="media-storage-list">

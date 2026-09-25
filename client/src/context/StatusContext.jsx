@@ -4,6 +4,11 @@ import { useAuth } from "./AuthContext";
 
 const StatusContext = createContext(null);
 
+// Mirrors the server-side cap in statusController.js — surfaced here so
+// the UI can disable/guard the "add status" affordance proactively instead
+// of only finding out after a failed POST.
+export const MAX_STATUSES = 5;
+
 export function StatusProvider({ children }) {
   const { user } = useAuth();
   const [feed, setFeed] = useState([]); // [{ user, items: [...] }]

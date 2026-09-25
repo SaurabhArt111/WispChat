@@ -3,6 +3,7 @@ import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import { useChat } from "../../context/ChatContext";
 import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
+import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import {
   SmileIcon,
   PaperclipIcon,
@@ -33,6 +34,7 @@ export default function Composer({
   const { editMessage } = useChat();
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { text: replyPreviewText, locked: replyLocked } = useDecryptedText(replyTo);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPopRef = useRef(null);
@@ -159,7 +161,9 @@ export default function Composer({
               Replying to {replyTo.sender?.displayName || "message"}
             </div>
             <div className="composer-context-text">
-              {replyTo.text || (replyTo.attachments?.length ? "📎 Attachment" : "")}
+              {replyLocked
+                ? "🔒 Encrypted message"
+                : replyPreviewText || (replyTo.attachments?.length ? "📎 Attachment" : "")}
             </div>
           </div>
           <button className="icon-btn btn-sm" onClick={onCancelReply} title="Cancel reply (Esc)">

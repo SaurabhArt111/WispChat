@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { useStatus } from "../../context/StatusContext";
+import { useStatus, MAX_STATUSES } from "../../context/StatusContext";
+import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import StatusEditor from "./StatusEditor";
 import StatusViewer from "./StatusViewer";
@@ -12,11 +13,23 @@ import "../../styles/status.css";
 export default function StatusPanel() {
   const { user } = useAuth();
   const { myEntry, contactEntries, loading } = useStatus();
+  const { showToast } = useToast();
   const [editorMode, setEditorMode] = useState(null); // null | 'text' | 'file'
   const [pickedFile, setPickedFile] = useState(null);
   const [viewing, setViewing] = useState(null); // entry object to view
   const [showAddMenu, setShowAddMenu] = useState(false);
   const fileInputRef = useRef(null);
+
+  const myCount = myEntry?.items?.length || 0;
+  const atLimit = myCount >= MAX_STATUSES;
+
+  function toggleAddMenu() {
+    if (atLimit) {
+      showToast(`You can only have ${MAX_STATUSES} active status updates at once`);
+      return;
+    }
+    setShowAddMenu((s) => !s);
+  }
 
   function openFilePicker() {
     setShowAddMenu(false);
@@ -41,7 +54,7 @@ export default function StatusPanel() {
         <div className="status-my-row-wrap">
           <button
             className="status-row"
-            onClick={() => (myEntry ? setViewing(myEntry) : setShowAddMenu((s) => !s))}
+            onClick={() => (myEntry ? setViewing(myEntry) : toggleAddMenu())}
           >
             <span className={`status-ring ${myEntry ? "has-status" : "empty"}`}>
               <Avatar user={user} size={50} />
@@ -55,13 +68,23 @@ export default function StatusPanel() {
               <div className="status-row-name">My Status</div>
               <div className="status-row-sub">
                 {myEntry
-                  ? `${myEntry.items.length} update${myEntry.items.length > 1 ? "s" : ""} · ${formatListTime(
+                  ? `${myCount}/${MAX_STATUSES} update${myCount > 1 ? "s" : ""} · ${formatListTime(
                       myEntry.items[myEntry.items.length - 1].createdAt
                     )}`
                   : "Tap to add a status update"}
               </div>
             </div>
           </button>
+
+          {myEntry && (
+            <button
+              className={`icon-btn status-add-more-btn ${atLimit ? "disabled" : ""}`}
+              title={atLimit ? `Maximum ${MAX_STATUSES} statuses` : "Add another status"}
+              onClick={toggleAddMenu}
+            >
+              <PlusIcon size={16} />
+            </button>
+          )}
 
           {showAddMenu && (
             <div className="status-add-menu">

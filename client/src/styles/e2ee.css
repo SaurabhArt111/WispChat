@@ -1,0 +1,209 @@
+.e2ee-unlock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+  backdrop-filter: blur(6px);
+  padding: 16px;
+}
+
+.e2ee-unlock-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface-2, #17191f);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 28px 24px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.e2ee-unlock-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(94, 242, 192, 0.12);
+  color: #5ef2c0;
+}
+
+.e2ee-unlock-card h2 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+
+.e2ee-unlock-card p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary, #9aa0ac);
+  margin: 0 0 18px;
+}
+
+.e2ee-unlock-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.e2ee-unlock-card input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: var(--surface-1, #0f1115);
+  color: inherit;
+  font-size: 14px;
+}
+
+.e2ee-unlock-error {
+  color: #ff6b6b;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+/* Small inline badge used in the chat header / composer to show whether a
+   conversation's messages are end-to-end encrypted. */
+.e2ee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #5ef2c0;
+  opacity: 0.85;
+}
+
+.e2ee-badge.unavailable {
+  color: var(--text-secondary, #9aa0ac);
+}
+
+.encrypted-locked-text {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* Compression progress overlay inside the media composer */
+.compress-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(10, 11, 15, 0.82);
+  backdrop-filter: blur(3px);
+  border-radius: inherit;
+}
+
+.compress-spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #5ef2c0;
+  animation: compress-spin 0.8s linear infinite;
+}
+
+@keyframes compress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.compress-label {
+  font-size: 13.5px;
+  color: #e9ecf1;
+}
+
+.compress-bar-track {
+  width: 200px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.compress-bar-fill {
+  height: 100%;
+  background: #5ef2c0;
+  transition: width 0.15s ease;
+}
+
+.attachment-decrypting,
+.attachment-decrypt-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px;
+  font-size: 12.5px;
+  color: var(--text-secondary, #9aa0ac);
+}
+
+.attachment-decrypt-error {
+  color: #ff6b6b;
+}
+
+.attachment-file-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.document-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary, #9aa0ac);
+  padding: 0 4px 6px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.document-mode-toggle input {
+  accent-color: #5ef2c0;
+}
+
+/* Pending (compressing/uploading) attachment previews */
+.attachment-pending {
+  position: relative;
+}
+
+.attachment-pending-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(8, 10, 14, 0.45);
+  color: #fff;
+  font-size: 11.5px;
+}
+
+.attachment-pending-row {
+  gap: 12px;
+}
+
+.progress-ring {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s linear;
+}
+
+.progress-ring-hole {
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  background: var(--surface-2, #17191f);
+}

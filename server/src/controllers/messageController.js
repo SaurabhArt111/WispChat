@@ -2,7 +2,12 @@ import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import { kindFromMime } from "../middleware/upload.js";
 
-const SENDER_FIELDS = "username displayName avatar avatarColor";
+// Recipients need the sender's public key to unwrap the per-message
+// encryption key from a message's `keys` envelope, so it rides along
+// with every populated sender the same way an avatar does.
+const SENDER_FIELDS = "username displayName avatar avatarColor e2ee.publicKeyJwk";
+
+const REPLY_SELECT = "text attachments sender deletedForEveryone encrypted iv keys";
 
 async function populateMessage(msg) {
   return msg.populate([
@@ -10,7 +15,7 @@ async function populateMessage(msg) {
     { path: "forwardedFrom", select: SENDER_FIELDS },
     {
       path: "replyTo",
-      select: "text attachments sender deletedForEveryone",
+      select: REPLY_SELECT,
       populate: { path: "sender", select: SENDER_FIELDS },
     },
     { path: "reactions.user", select: "username displayName" },
@@ -37,7 +42,7 @@ export async function getMessages(req, res) {
       { path: "forwardedFrom", select: SENDER_FIELDS },
       {
         path: "replyTo",
-        select: "text attachments sender deletedForEveryone",
+        select: REPLY_SELECT,
         populate: { path: "sender", select: SENDER_FIELDS },
       },
       { path: "reactions.user", select: "username displayName" },
@@ -48,21 +53,31 @@ export async function getMessages(req, res) {
 
 export async function sendMessage(req, res) {
   const { conversationId } = req.params;
-  const { text = "", replyTo = null, clientId, attachments = [] } = req.body;
+  const { text = "", replyTo = null, clientId, attachments = [], encrypted = false, iv = null, keys = [] } = req.body;
 
   const conv = await Conversation.findById(conversationId);
   if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) {
     return res.status(403).json({ message: "Not a participant" });
   }
-  if (!text.trim() && attachments.length === 0) {
+  // Ciphertext isn't ".trim()"-empty-checkable the way plaintext is, so an
+  // encrypted send is considered non-empty as long as it carries a key
+  // envelope (the client already refused to build one for a truly empty
+  // message).
+  if (!encrypted && !text.trim() && attachments.length === 0) {
+    return res.status(400).json({ message: "Empty message" });
+  }
+  if (encrypted && !text && attachments.length === 0) {
     return res.status(400).json({ message: "Empty message" });
   }
 
   let msg = await Message.create({
     conversation: conversationId,
     sender: req.user._id,
-    text: text.trim(),
+    text: encrypted ? text : text.trim(),
     attachments,
+    encrypted,
+    iv,
+    keys,
     replyTo: replyTo || null,
     clientId,
     deliveredTo: [req.user._id],
@@ -82,16 +97,42 @@ export async function sendMessage(req, res) {
 
 export async function uploadMedia(req, res) {
   const files = req.files || [];
-  const attachments = files.map((f) => ({
-    // f.mediaFolder is set by the upload middleware's diskStorage.destination
-    // so the URL always matches the folder the file actually landed in
-    // (images/, videos/, audio/, documents/, gifs/, stickers/).
-    url: `/uploads/${f.mediaFolder}/${f.filename}`,
-    name: f.originalname,
-    mimeType: f.mimetype,
-    size: f.size,
-    kind: kindFromMime(f.mimetype),
-  }));
+
+  // "Send as document" bypasses compression client-side and asks us to
+  // keep every file as a plain downloadable attachment instead of an
+  // inline image/video/audio bubble, regardless of its real mimetype.
+  const asDocument = req.body.asDocument === "true" || req.body.asDocument === true;
+
+  // Per-file encryption metadata rides alongside the files as a JSON array
+  // (aligned by upload order) — each entry is either null (not encrypted)
+  // or { iv } for a file whose bytes are AES-GCM ciphertext. The mimetype
+  // on the multipart part itself is deliberately left as the *original*
+  // mimetype (image/jpeg, video/mp4, ...) even when encrypted, purely so
+  // folderForFile/kindFromMime keep sorting things sensibly on disk — the
+  // server never decrypts or inspects the actual bytes either way.
+  let encMeta = [];
+  try {
+    encMeta = req.body.encMeta ? JSON.parse(req.body.encMeta) : [];
+  } catch {
+    encMeta = [];
+  }
+
+  const attachments = files.map((f, i) => {
+    const meta = encMeta[i] || null;
+    return {
+      // f.mediaFolder is set by the upload middleware's diskStorage.destination
+      // so the URL always matches the folder the file actually landed in
+      // (images/, videos/, audio/, documents/, gifs/, stickers/).
+      url: `/uploads/${f.mediaFolder}/${f.filename}`,
+      name: f.originalname,
+      mimeType: f.mimetype,
+      size: f.size,
+      kind: asDocument ? "file" : kindFromMime(f.mimetype),
+      asDocument,
+      encrypted: !!meta,
+      iv: meta?.iv || null,
+    };
+  });
   res.json({ attachments });
 }
 
@@ -151,8 +192,8 @@ export async function getMediaList(req, res) {
   })
     .sort({ createdAt: -1 })
     .limit(limit)
-    .populate("sender", "displayName username avatar avatarColor")
-    .select("attachments sender conversation createdAt")
+    .populate("sender", "displayName username avatar avatarColor e2ee.publicKeyJwk")
+    .select("attachments sender conversation createdAt encrypted iv keys")
     .lean();
 
   const items = [];
@@ -163,6 +204,13 @@ export async function getMediaList(req, res) {
         ...a,
         messageId: m._id,
         conversationId: m.conversation,
+        // Carried along so the client can decrypt this attachment the
+        // same way it would inside the chat itself — the gallery isn't a
+        // separate, unencrypted copy of anything, it's just a different
+        // view over the same messages.
+        messageEncrypted: m.encrypted,
+        messageIv: m.iv,
+        messageKeys: m.keys,
         sender: m.sender,
         createdAt: m.createdAt,
       });
@@ -174,7 +222,7 @@ export async function getMediaList(req, res) {
 
 export async function editMessage(req, res) {
   const { id } = req.params;
-  const { text } = req.body;
+  const { text, encrypted, iv, keys } = req.body;
 
   const msg = await Message.findById(id);
   if (!msg) return res.status(404).json({ message: "Message not found" });
@@ -182,6 +230,12 @@ export async function editMessage(req, res) {
   if (msg.deletedForEveryone) return res.status(400).json({ message: "Message was deleted" });
 
   msg.text = text;
+  // An edit to an encrypted message is re-encrypted client-side with a
+  // fresh per-message key and a brand new envelope, same as an original
+  // send — the old envelope is simply replaced.
+  if (encrypted !== undefined) msg.encrypted = encrypted;
+  if (iv !== undefined) msg.iv = iv;
+  if (keys !== undefined) msg.keys = keys;
   msg.edited = true;
   msg.editedAt = new Date();
   await msg.save();
@@ -248,15 +302,50 @@ export async function reactToMessage(req, res) {
 
 export async function forwardMessage(req, res) {
   const { id } = req.params;
-  const { conversationIds } = req.body;
+  const { conversationIds = [], items = [] } = req.body;
 
   const original = await Message.findById(id);
   if (!original) return res.status(404).json({ message: "Message not found" });
 
+  // Because an encrypted message's key envelope is scoped to its original
+  // conversation's participants, the server can't just copy its ciphertext
+  // into a different conversation. So when forwarding an *encrypted*
+  // message, the client decrypts it locally first and re-encrypts a fresh
+  // copy per destination (via `items`), the same way a brand new message
+  // is composed. Plain (unencrypted) messages can still take the simple
+  // `conversationIds` shortcut below.
   const results = [];
+
+  for (const item of items) {
+    const conv = await Conversation.findById(item.conversationId);
+    if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) continue;
+
+    let msg = await Message.create({
+      conversation: item.conversationId,
+      sender: req.user._id,
+      text: item.text ?? "",
+      attachments: item.attachments || [],
+      encrypted: !!item.encrypted,
+      iv: item.iv || null,
+      keys: item.keys || [],
+      forwardedFrom: original.sender,
+      deliveredTo: [req.user._id],
+      readBy: [req.user._id],
+    });
+    msg = await populateMessage(msg);
+
+    conv.lastMessage = msg._id;
+    conv.lastMessageAt = new Date();
+    await conv.save();
+
+    conv.participants.forEach((uid) => req.io?.to(`user:${uid}`).emit("message:new", msg));
+    results.push(msg);
+  }
+
   for (const convId of conversationIds) {
     const conv = await Conversation.findById(convId);
     if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) continue;
+    if (original.encrypted) continue; // must go through `items` above
 
     let msg = await Message.create({
       conversation: convId,

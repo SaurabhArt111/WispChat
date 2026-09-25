@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useChat } from "../../context/ChatContext";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import Avatar from "../common/Avatar";
 import Modal from "../common/Modal";
 import { ForwardIcon } from "../common/Icons";
@@ -12,6 +13,7 @@ export default function ForwardModal({ message, onClose }) {
   const { showToast } = useToast();
   const [selected, setSelected] = useState([]);
   const [busy, setBusy] = useState(false);
+  const { text: snippetText, locked } = useDecryptedText(message);
 
   function toggle(id) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -21,11 +23,11 @@ export default function ForwardModal({ message, onClose }) {
     if (selected.length === 0) return;
     setBusy(true);
     try {
-      await forwardMessage(message._id, selected);
+      await forwardMessage(message, selected);
       showToast(`Message forwarded to ${selected.length} conversation${selected.length > 1 ? "s" : ""}`);
       onClose();
     } catch (err) {
-      showToast("Could not forward message", "danger");
+      showToast(err?.message || "Could not forward message", "danger");
     } finally {
       setBusy(false);
     }
@@ -49,7 +51,9 @@ export default function ForwardModal({ message, onClose }) {
       <div className="forward-message-snippet">
         <span className="snippet-label">Message to forward:</span>
         <div className="snippet-body">
-          {message.text || (message.attachments?.length ? "📎 Media attachment" : "Message")}
+          {locked
+            ? "🔒 Encrypted message"
+            : snippetText || (message.attachments?.length ? "📎 Media attachment" : "Message")}
         </div>
       </div>
 

@@ -19,7 +19,12 @@
 }
 
 .sidebar-self {
-  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50px;
   transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
   position: relative;
 }

@@ -87,6 +87,13 @@ export default defineConfig({
       },
     }),
   ],
+  // ffmpeg.wasm (used for GIF/video compression, see utils/mediaCompressor.js)
+  // ships its own worker + wasm loading that Vite's dependency
+  // pre-bundling tends to mangle — excluding it is the documented
+  // workaround so both dev and build load the real files untouched.
+  optimizeDeps: {
+    exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],
+  },
   server: {
     host: true,
     port: 5173,

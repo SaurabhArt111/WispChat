@@ -2,11 +2,15 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import client from "../api/client";
 import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
+import { uploadFiles, uploadPreparedFiles } from "../api/upload";
+import { decryptBytesWithKey, encryptBytesWithKey } from "../utils/crypto";
+import { compressItems } from "../utils/mediaCompressor";
+import { mediaUrl } from "../api/config";
 
 const ChatContext = createContext(null);
 
 export function ChatProvider({ children }) {
-  const { user } = useAuth();
+  const { user, e2ee } = useAuth();
   const { socket } = useSocket();
 
   const [conversations, setConversations] = useState([]);
@@ -76,48 +80,182 @@ export function ChatProvider({ children }) {
     [loadMessages, messagesByConv, socket]
   );
 
-  const sendMessage = useCallback(async (conversationId, payload) => {
-    const clientId = payload.clientId || `c${Date.now()}${Math.random().toString(36).slice(2)}`;
-    const optimistic = {
-      _id: `optimistic-${clientId}`,
-      conversation: conversationId,
-      sender: { _id: "me", ...payload.selfPreview },
-      text: payload.text || "",
-      attachments: payload.attachments || [],
-      replyTo: payload.replyToMessage || null,
-      reactions: [],
-      createdAt: new Date().toISOString(),
-      pending: true,
-      clientId,
-    };
-    setMessagesByConv((prev) => ({
-      ...prev,
-      [conversationId]: [...(prev[conversationId] || []), optimistic],
-    }));
+  const sendMessage = useCallback(
+    async (conversationId, payload) => {
+      const clientId = payload.clientId || `c${Date.now()}${Math.random().toString(36).slice(2)}`;
+      // When called from sendMediaMessage below, an optimistic bubble
+      // already exists (it was shown the instant Send was tapped, before
+      // compression/upload even started) — reuse it instead of creating a
+      // second one.
+      let optimisticId = payload._optimisticId;
+      if (!optimisticId) {
+        const optimistic = {
+          _id: `optimistic-${clientId}`,
+          conversation: conversationId,
+          sender: { _id: "me", ...payload.selfPreview },
+          text: payload.text || "",
+          attachments: payload.attachments || [],
+          replyTo: payload.replyToMessage || null,
+          reactions: [],
+          createdAt: new Date().toISOString(),
+          pending: true,
+          clientId,
+        };
+        optimisticId = optimistic._id;
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [conversationId]: [...(prev[conversationId] || []), optimistic],
+        }));
+      }
 
-    try {
-      const res = await client.post(`/messages/${conversationId}`, {
-        text: payload.text,
-        attachments: payload.attachments,
-        replyTo: payload.replyTo,
+      try {
+        // Media sends build their own envelope earlier (so the same key can
+        // encrypt the attachment bytes before upload); a text-only send
+        // builds one here.
+        const conversation = conversations.find((c) => c._id === conversationId);
+        const envelope = payload.envelope || (await e2ee.prepareEnvelope(conversation));
+        const { text, encrypted, iv, keys } = await e2ee.encryptOutgoingText(envelope, payload.text || "");
+
+        const res = await client.post(`/messages/${conversationId}`, {
+          text,
+          attachments: payload.attachments,
+          replyTo: payload.replyTo,
+          clientId,
+          encrypted,
+          iv,
+          keys,
+        });
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).map((m) => (m._id === optimisticId ? res.data.message : m)),
+        }));
+        upsertConversation({
+          ...conversations.find((c) => c._id === conversationId),
+          lastMessage: res.data.message,
+          lastMessageAt: res.data.message.createdAt,
+        });
+      } catch (err) {
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).map((m) =>
+            m._id === optimisticId ? { ...m, pending: false, failed: true } : m
+          ),
+        }));
+        throw err;
+      }
+    },
+    [conversations, upsertConversation, e2ee]
+  );
+
+  // Used by the media composer/status editor. Unlike sendMessage, this
+  // shows the pending bubble *immediately* — with local (uncompressed)
+  // thumbnails and a per-attachment progress indicator — and only then
+  // compresses, encrypts and uploads in the background. Compression of a
+  // large video can take a while; nothing about that should block the UI
+  // or make sending feel stuck, so the composer closes and the message
+  // shows up as "sending" right away, the same way WhatsApp/Telegram do
+  // it.
+  const sendMediaMessage = useCallback(
+    async (conversationId, { items, caption, replyTo, replyToMessage, asDocument }) => {
+      const clientId = `c${Date.now()}${Math.random().toString(36).slice(2)}`;
+      const localItems = items.map((it, i) => ({
+        localId: `${clientId}-${i}`,
+        blob: it.blob,
+        name: it.name,
+        kind: it.kind,
+        localUrl: URL.createObjectURL(it.blob),
+      }));
+
+      const optimistic = {
+        _id: `optimistic-${clientId}`,
+        conversation: conversationId,
+        sender: { _id: "me", ...user },
+        text: caption || "",
+        attachments: localItems.map((it) => ({
+          _local: true,
+          localId: it.localId,
+          localUrl: it.localUrl,
+          kind: it.kind,
+          name: it.name,
+          mimeType: it.blob.type,
+          size: it.blob.size,
+          progress: 0,
+          stage: asDocument ? "uploading" : "compressing",
+        })),
+        replyTo: replyToMessage || null,
+        reactions: [],
+        createdAt: new Date().toISOString(),
+        pending: true,
         clientId,
-      });
+      };
+
       setMessagesByConv((prev) => ({
         ...prev,
-        [conversationId]: (prev[conversationId] || []).map((m) =>
-          m._id === optimistic._id ? res.data.message : m
-        ),
+        [conversationId]: [...(prev[conversationId] || []), optimistic],
       }));
-      upsertConversation({ ...conversations.find((c) => c._id === conversationId), lastMessage: res.data.message, lastMessageAt: res.data.message.createdAt });
-    } catch (err) {
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [conversationId]: (prev[conversationId] || []).map((m) =>
-          m._id === optimistic._id ? { ...m, pending: false, failed: true } : m
-        ),
-      }));
-    }
-  }, [conversations, upsertConversation]);
+
+      function patchAttachment(localId, patch) {
+        setMessagesByConv((prev) => {
+          const list = prev[conversationId];
+          if (!list) return prev;
+          return {
+            ...prev,
+            [conversationId]: list.map((m) =>
+              m._id !== optimistic._id
+                ? m
+                : { ...m, attachments: m.attachments.map((a) => (a.localId === localId ? { ...a, ...patch } : a)) }
+            ),
+          };
+        });
+      }
+
+      try {
+        let finalBlobs = localItems.map((it) => it.blob);
+        if (!asDocument) {
+          finalBlobs = await compressItems(
+            localItems.map((it) => ({ id: it.localId, blob: it.blob })),
+            (localId, p) => patchAttachment(localId, { progress: p * 0.7, stage: "compressing" })
+          );
+        }
+
+        localItems.forEach((it) => patchAttachment(it.localId, { progress: asDocument ? 0 : 0.7, stage: "uploading" }));
+
+        const conversation = conversations.find((c) => c._id === conversationId);
+        const envelope = await e2ee.prepareEnvelope(conversation);
+
+        const attachments = await uploadFiles(
+          localItems.map((it, i) => ({ blob: finalBlobs[i], name: it.name, kind: it.kind })),
+          {
+            envelope,
+            asDocument,
+            onUploadProgress: (fraction) =>
+              localItems.forEach((it) => patchAttachment(it.localId, { progress: 0.7 + fraction * 0.3 })),
+          }
+        );
+
+        localItems.forEach((it) => URL.revokeObjectURL(it.localUrl));
+
+        await sendMessage(conversationId, {
+          text: caption,
+          attachments,
+          replyTo,
+          replyToMessage,
+          envelope,
+          clientId,
+          _optimisticId: optimistic._id,
+        });
+      } catch (err) {
+        localItems.forEach((it) => URL.revokeObjectURL(it.localUrl));
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).map((m) =>
+            m._id === optimistic._id ? { ...m, pending: false, failed: true } : m
+          ),
+        }));
+      }
+    },
+    [conversations, e2ee, sendMessage, user]
+  );
 
   // Patch a single message into local state wherever it lives, by id. Used so the
   // person taking an action (editing, reacting, forwarding) sees it applied instantly
@@ -133,10 +271,24 @@ export function ChatProvider({ children }) {
 
   const editMessage = useCallback(
     async (id, text) => {
-      const res = await client.patch(`/messages/msg/${id}`, { text });
+      // Find which conversation this message lives in so we know who to
+      // (re-)encrypt for — edits get a brand new per-message key/envelope,
+      // same as an original send.
+      let conversationId = null;
+      for (const [convId, list] of Object.entries(messagesByConv)) {
+        if (list.some((m) => m._id === id)) {
+          conversationId = convId;
+          break;
+        }
+      }
+      const conversation = conversations.find((c) => c._id === conversationId);
+      const envelope = await e2ee.prepareEnvelope(conversation);
+      const encoded = await e2ee.encryptOutgoingText(envelope, text);
+
+      const res = await client.patch(`/messages/msg/${id}`, encoded);
       applyMessagePatch(res.data.message);
     },
-    [applyMessagePatch]
+    [applyMessagePatch, conversations, messagesByConv, e2ee]
   );
 
   // Deleting a message doesn't hit the server immediately: it's marked
@@ -233,25 +385,96 @@ export function ChatProvider({ children }) {
     [applyMessagePatch]
   );
 
-  const forwardMessage = useCallback(async (id, conversationIds) => {
-    const res = await client.post(`/messages/msg/${id}/forward`, { conversationIds });
-    res.data.messages.forEach((msg) => {
-      setMessagesByConv((prev) => {
-        const list = prev[msg.conversation];
-        if (!list) return prev; // target conversation isn't loaded — fine, it'll load fresh when opened
-        if (list.some((m) => m._id === msg._id)) return prev;
-        return { ...prev, [msg.conversation]: [...list, msg] };
-      });
-      setConversations((prev) => {
-        const idx = prev.findIndex((c) => c._id === msg.conversation);
-        if (idx === -1) return prev; // don't fabricate a partial conversation entry
-        const next = [...prev];
-        next[idx] = { ...next[idx], lastMessage: msg, lastMessageAt: msg.createdAt };
-        next.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
-        return next;
-      });
-    });
-  }, []);
+  // `message` is the full message object (not just an id) because an
+  // encrypted message's ciphertext is scoped to its *original*
+  // conversation's participants — forwarding it means decrypting it here
+  // and building a brand new envelope per destination, the same as
+  // composing a fresh message. Plain, unencrypted messages still take the
+  // cheap "just copy it" path server-side.
+  const forwardMessage = useCallback(
+    async (message, conversationIds) => {
+      function applyResults(messages) {
+        messages.forEach((msg) => {
+          setMessagesByConv((prev) => {
+            const list = prev[msg.conversation];
+            if (!list) return prev;
+            if (list.some((m) => m._id === msg._id)) return prev;
+            return { ...prev, [msg.conversation]: [...list, msg] };
+          });
+          setConversations((prev) => {
+            const idx = prev.findIndex((c) => c._id === msg.conversation);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = { ...next[idx], lastMessage: msg, lastMessageAt: msg.createdAt };
+            next.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+            return next;
+          });
+        });
+      }
+
+      if (!message.encrypted) {
+        const res = await client.post(`/messages/msg/${message._id}/forward`, { conversationIds });
+        applyResults(res.data.messages);
+        return;
+      }
+
+      const { text: plainText, mk, locked } = await e2ee.decryptMessageText(message);
+      if (locked) throw new Error("This message is locked and can't be forwarded on this device yet.");
+
+      // Decrypt each attachment's bytes once up front; they get
+      // re-encrypted fresh per destination below.
+      const plainAttachments = await Promise.all(
+        (message.attachments || []).map(async (a) => {
+          if (!a.encrypted) return { meta: a, buffer: null };
+          const res = await fetch(mediaUrl(a.url));
+          const cipherBuffer = await res.arrayBuffer();
+          const buffer = await decryptBytesWithKey(mk, cipherBuffer, a.iv);
+          return { meta: a, buffer };
+        })
+      );
+
+      const items = await Promise.all(
+        conversationIds.map(async (convId) => {
+          const conv = conversations.find((c) => c._id === convId);
+          const envelope = await e2ee.prepareEnvelope(conv);
+          const encodedText = await e2ee.encryptOutgoingText(envelope, plainText);
+
+          let attachments = [];
+          if (plainAttachments.length) {
+            const prepared = await Promise.all(
+              plainAttachments.map(async ({ meta, buffer }) => {
+                const mimeType = meta.mimeType || "application/octet-stream";
+                if (buffer && envelope.canEncrypt) {
+                  const { ciphertext, iv } = await encryptBytesWithKey(envelope.mk, buffer);
+                  return { blob: new Blob([ciphertext], { type: mimeType }), name: meta.name, mimeType, encrypted: true, iv };
+                }
+                if (buffer) {
+                  return { blob: new Blob([buffer], { type: mimeType }), name: meta.name, mimeType, encrypted: false, iv: null };
+                }
+                const res = await fetch(mediaUrl(meta.url));
+                const blob = await res.blob();
+                return { blob, name: meta.name, mimeType, encrypted: false, iv: null };
+              })
+            );
+            attachments = await uploadPreparedFiles(prepared, { asDocument: !!message.attachments?.[0]?.asDocument });
+          }
+
+          return {
+            conversationId: convId,
+            text: encodedText.text,
+            encrypted: encodedText.encrypted,
+            iv: encodedText.iv,
+            keys: encodedText.keys,
+            attachments,
+          };
+        })
+      );
+
+      const res = await client.post(`/messages/msg/${message._id}/forward`, { items });
+      applyResults(res.data.messages);
+    },
+    [conversations, e2ee]
+  );
 
   const startDirectConversation = useCallback(
     async (userId) => {
@@ -394,6 +617,7 @@ export function ChatProvider({ children }) {
     closeActiveChat: () => setActiveId(null),
     loadMoreMessages: (before) => loadMessages(activeId, before),
     sendMessage,
+    sendMediaMessage,
     editMessage,
     deleteMessage,
     requestDeleteMessage,

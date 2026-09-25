@@ -1106,6 +1106,8 @@
   align-items: center;
   justify-content: center;
   animation: overlayFadeIn 160ms var(--ease);
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .lightbox-stage {

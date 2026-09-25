@@ -14,7 +14,7 @@ export async function searchUsers(req, res) {
     ],
   })
     .limit(20)
-    .select("username displayName avatar avatarColor about isOnline lastSeen");
+    .select("username displayName avatar avatarColor about isOnline lastSeen e2ee.publicKeyJwk");
 
   res.json({ users });
 }
@@ -30,7 +30,10 @@ export async function updateProfile(req, res) {
 }
 
 export async function getContacts(req, res) {
-  const user = await req.user.populate("contacts", "username displayName avatar avatarColor about isOnline lastSeen");
+  const user = await req.user.populate(
+    "contacts",
+    "username displayName avatar avatarColor about isOnline lastSeen e2ee.publicKeyJwk"
+  );
   res.json({ contacts: user.contacts });
 }
 

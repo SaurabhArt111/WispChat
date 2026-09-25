@@ -13,6 +13,7 @@ import {
   FileIcon as DocIcon,
 } from "../common/Icons";
 import "../../styles/mediaComposer.css";
+import "../../styles/e2ee.css";
 
 function buildItem(file) {
   return {
@@ -29,6 +30,10 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
   const [caption, setCaption] = useState("");
   const [sending, setSending] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  // "Send as document" bypasses compression entirely and delivers the
+  // original file bytes untouched — the WhatsApp-style escape hatch for
+  // when you actually need the source quality/resolution to survive.
+  const [asDocument, setAsDocument] = useState(false);
   const editorRefs = useRef({});
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -87,18 +92,30 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
     if (!active || sending) return;
     setSending(true);
     try {
-      const finalItems = await Promise.all(
+      // Only bake in crop/rotate/draw edits here (fast, synchronous
+      // canvas work). Compression/encryption/upload all happen in the
+      // background after the composer closes — see ChatContext.
+      // sendMediaMessage — so hitting Send feels instant, the same way
+      // WhatsApp's send button doesn't wait around for a video to finish
+      // transcoding before the message shows up as "sending" in the chat.
+      const editedItems = await Promise.all(
         items.map(async (item) => {
           const editorRef = editorRefs.current[item.id];
           if (item.kind === "image" && editorRef?.isEdited()) {
             const blob = await editorRef.getFinalBlob();
-            return { blob, name: item.file.name.replace(/\.\w+$/, "") + ".png", kind: "image" };
+            return {
+              blob,
+              name: item.file.name.replace(/\.\w+$/, "") + ".png",
+              kind: "image",
+            };
           }
           return { blob: item.file, name: item.file.name, kind: item.kind };
         })
       );
+
       revokeAll();
-      await onSend({ items: finalItems, caption: caption.trim() });
+      onSend({ items: editedItems, caption: caption.trim(), asDocument });
+      onClose();
     } finally {
       setSending(false);
     }
@@ -198,24 +215,34 @@ export default function MediaComposer({ files, conversationLabel, onClose, onSen
         )}
 
         <div className="media-composer-footer">
-          <input
-            className="media-composer-caption"
-            placeholder="Add a caption… (Ctrl + Enter to send)"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend();
-            }}
-            autoFocus
-          />
-          <button
-            className="btn btn-primary media-composer-send"
-            disabled={sending}
-            onClick={handleSend}
-          >
-            <SendIcon size={16} />
-            <span>{sending ? "Sending…" : `Send${items.length > 1 ? ` (${items.length})` : ""}`}</span>
-          </button>
+          <label className="document-mode-toggle">
+            <input
+              type="checkbox"
+              checked={asDocument}
+              onChange={(e) => setAsDocument(e.target.checked)}
+            />
+            Send without compression (as document)
+          </label>
+          <div className="media-composer-footer-row">
+            <input
+              className="media-composer-caption"
+              placeholder="Add a caption… (Ctrl + Enter to send)"
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend();
+              }}
+              autoFocus
+            />
+            <button
+              className="btn btn-primary media-composer-send"
+              disabled={sending}
+              onClick={handleSend}
+            >
+              <SendIcon size={16} />
+              <span>{sending ? "Sending…" : `Send${items.length > 1 ? ` (${items.length})` : ""}`}</span>
+            </button>
+          </div>
         </div>
       </div>
 

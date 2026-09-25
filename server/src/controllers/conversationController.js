@@ -2,7 +2,11 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 
-const PARTICIPANT_FIELDS = "username displayName avatar avatarColor about isOnline lastSeen";
+// e2ee.publicKeyJwk rides along with every participant so the client can
+// build/refresh a conversation's encryption envelope (who to wrap the
+// per-message key for) straight from the conversation object, with no
+// extra round trip.
+const PARTICIPANT_FIELDS = "username displayName avatar avatarColor about isOnline lastSeen e2ee.publicKeyJwk";
 
 async function serializeConversation(conv, userId) {
   const unreadCount = await Message.countDocuments({
@@ -35,7 +39,8 @@ export async function listConversations(req, res) {
     .populate("participants", PARTICIPANT_FIELDS)
     .populate({
       path: "lastMessage",
-      populate: { path: "sender", select: "displayName username" },
+      select: "text attachments sender createdAt encrypted iv keys deletedForEveryone",
+      populate: { path: "sender", select: "displayName username e2ee.publicKeyJwk" },
     })
     .sort({ lastMessageAt: -1 });
 

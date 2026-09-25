@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
+import { useCall } from "../../context/CallContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
@@ -17,7 +18,11 @@ import {
   MuteIcon,
   PinIcon,
   CloseIcon,
+  LockIcon,
+  PhoneIcon,
+  VideoIcon,
 } from "../common/Icons";
+import "../../styles/e2ee.css";
 
 export default function ChatHeader({
   conversation,
@@ -30,6 +35,7 @@ export default function ChatHeader({
 }) {
   const { user } = useAuth();
   const { presence, typing, upsertConversation, closeActiveChat } = useChat();
+  const { call: activeCall, startCall } = useCall();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'block' | null
@@ -37,6 +43,8 @@ export default function ChatHeader({
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
     : null;
+
+  const canEncrypt = (conversation.participants || []).every((p) => !!p?.e2ee?.publicKeyJwk) && !!user?.e2ee?.publicKeyJwk;
 
   const label = conversation.isGroup ? conversation.name : other?.displayName || "Unknown";
   const avatarUser = conversation.isGroup
@@ -166,6 +174,10 @@ export default function ChatHeader({
             {typingUsers.length > 0 && <TypingDots />}
             <span>{subtitle}</span>
           </div>
+          <div className={`e2ee-badge ${canEncrypt ? "" : "unavailable"}`}>
+            <LockIcon size={11} />
+            <span>{canEncrypt ? "End-to-end encrypted" : "Not encrypted yet"}</span>
+          </div>
         </div>
       </button>
 
@@ -184,6 +196,16 @@ export default function ChatHeader({
       )}
 
       <div className="chat-header-actions">
+        {!conversation.isGroup && (
+          <>
+            <button className="icon-btn" title="Voice call" onClick={() => startCall(conversation, "audio")} disabled={!!activeCall}>
+              <PhoneIcon size={19} />
+            </button>
+            <button className="icon-btn" title="Video call" onClick={() => startCall(conversation, "video")} disabled={!!activeCall}>
+              <VideoIcon size={19} />
+            </button>
+          </>
+        )}
         <button
           className={`icon-btn ${isSearching ? "active" : ""}`}
           title="Search in chat"

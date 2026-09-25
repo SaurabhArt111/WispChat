@@ -3,7 +3,9 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
+import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import { formatClock } from "../../utils/time";
+import { LockIcon } from "../common/Icons";
 import Avatar from "../common/Avatar";
 import ActionSheetModal from "../common/ActionSheetModal";
 import AttachmentView from "./AttachmentView";
@@ -20,6 +22,8 @@ import {
   ClockIcon,
   AlertIcon,
   SmileIcon,
+  PhoneIcon,
+  VideoIcon,
 } from "../common/Icons";
 
 const QUICK_EMOJI = ["❤️", "😂", "👍", "🔥", "😮", "🙏"];
@@ -119,6 +123,8 @@ export default function MessageBubble({
   const [showQuickReact, setShowQuickReact] = useState(false);
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const reactPopRef = useRef(null);
+  const { text: decryptedText, locked: textLocked } = useDecryptedText(message);
+  const { text: replyDecryptedText, locked: replyLocked } = useDecryptedText(message.replyTo);
 
   useEffect(() => {
     if (!showQuickReact) return;
@@ -149,6 +155,25 @@ export default function MessageBubble({
     );
   }
 
+  if (message.callInfo) {
+    const { kind, status, durationSec } = message.callInfo;
+    const icon = kind === "video" ? <VideoIcon size={13} /> : <PhoneIcon size={13} />;
+    const label =
+      status === "completed"
+        ? `${kind === "video" ? "Video" : "Voice"} call · ${Math.floor(durationSec / 60)}:${String(durationSec % 60).padStart(2, "0")}`
+        : status === "missed"
+        ? `Missed ${kind === "video" ? "video" : "voice"} call`
+        : `${kind === "video" ? "Video" : "Voice"} call declined`;
+    return (
+      <div className="call-summary-row">
+        <span className={`call-summary-pill ${status}`}>
+          {icon}
+          {label}
+        </span>
+      </div>
+    );
+  }
+
   if (message.pendingDelete) {
     return (
       <div
@@ -168,8 +193,8 @@ export default function MessageBubble({
   }
 
   function copyText() {
-    if (!message.text) return;
-    navigator.clipboard.writeText(message.text).then(() => showToast("Copied to clipboard"));
+    if (!decryptedText) return;
+    navigator.clipboard.writeText(decryptedText).then(() => showToast("Copied to clipboard"));
   }
 
   function confirmDelete(forEveryone) {
@@ -188,14 +213,14 @@ export default function MessageBubble({
 
   const menuItems = [
     { label: "Reply", icon: <ReplyIcon size={15} />, onClick: () => onReply?.(message) },
-    { label: "Copy", icon: <CopyIcon size={15} />, onClick: copyText, disabled: !message.text },
+    { label: "Copy", icon: <CopyIcon size={15} />, onClick: copyText, disabled: !decryptedText },
     { label: "Forward", icon: <ForwardIcon size={15} />, onClick: () => setShowForward(true) },
     isMine && !message.pending
       ? {
           label: "Edit",
           icon: <EditIcon size={15} />,
-          onClick: () => onEdit?.(message),
-          disabled: !!message.attachments?.length,
+          onClick: () => onEdit?.(message, decryptedText),
+          disabled: !!message.attachments?.length || textLocked,
         }
       : null,
     { divider: true },
@@ -273,7 +298,9 @@ export default function MessageBubble({
                 <span className="bubble-reply-text">
                   {message.replyTo.deletedForEveryone
                     ? "Message deleted"
-                    : message.replyTo.text ||
+                    : replyLocked
+                    ? "🔒 Encrypted message"
+                    : replyDecryptedText ||
                       (message.replyTo.attachments?.length ? "📎 Attachment" : "")}
                 </span>
               </div>
@@ -282,6 +309,7 @@ export default function MessageBubble({
 
           {message.attachments?.length > 0 && (
             <AttachmentView
+              message={message}
               attachments={message.attachments}
               onForward={() => setShowForward(true)}
               onReply={() => onReply?.(message)}
@@ -289,9 +317,20 @@ export default function MessageBubble({
             />
           )}
 
-          {message.text && <FormattedText text={message.text} />}
+          {textLocked ? (
+            <div className="bubble-text encrypted-locked-text">
+              <LockIcon size={12} /> Encrypted message — unlock to view
+            </div>
+          ) : (
+            decryptedText && <FormattedText text={decryptedText} />
+          )}
 
           <div className="bubble-meta">
+            {message.encrypted && (
+              <span className="e2ee-badge" title="End-to-end encrypted">
+                <LockIcon size={11} />
+              </span>
+            )}
             {message.edited && <span className="bubble-edited">edited</span>}
             <span className="bubble-time">{formatClock(message.createdAt)}</span>
             {isMine && !message.pending && (

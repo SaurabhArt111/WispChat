@@ -1,6 +1,11 @@
 import Status from "../models/Status.js";
 import { kindFromMime } from "../middleware/upload.js";
 
+// WhatsApp-style cap: at most 5 active (non-expired) slides on your status
+// at once. Older ones still expire on their own via the TTL index; this
+// just stops the count from growing unbounded before that happens.
+const MAX_ACTIVE_STATUSES = 5;
+
 // Statuses are visible to your mutual contacts and yourself — same audience
 // the rest of the app already uses for "who can see/add you".
 export async function getFeed(req, res) {
@@ -38,6 +43,13 @@ export async function getFeed(req, res) {
 
 export async function createStatus(req, res) {
   const { kind, text, bgColor, caption } = req.body;
+
+  const activeCount = await Status.countDocuments({ user: req.user._id, expiresAt: { $gt: new Date() } });
+  if (activeCount >= MAX_ACTIVE_STATUSES) {
+    return res.status(400).json({
+      message: `You can only have ${MAX_ACTIVE_STATUSES} active status updates at once. Delete an old one to post a new one.`,
+    });
+  }
 
   if (kind === "text") {
     if (!text?.trim()) return res.status(400).json({ message: "Status text is required" });

@@ -7,6 +7,18 @@
   position: relative;
 }
 
+.status-add-more-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.status-add-more-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .status-row {
   width: 100%;
   display: flex;

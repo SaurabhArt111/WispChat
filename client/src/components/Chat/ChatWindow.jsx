@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../context/ToastContext";
-import { uploadFiles } from "../../api/upload";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import Composer from "./Composer";
@@ -10,7 +9,7 @@ import { DownloadIcon } from "../common/Icons";
 import "../../styles/chat.css";
 
 export default function ChatWindow({ onOpenContactInfo, contactInfoOpen }) {
-  const { activeConversation, sendMessage } = useChat();
+  const { activeConversation, sendMessage, sendMediaMessage } = useChat();
   const { showToast } = useToast();
   const [replyTo, setReplyTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
@@ -114,7 +113,9 @@ export default function ChatWindow({ onOpenContactInfo, contactInfoOpen }) {
           <MessageList
             conversation={activeConversation}
             onReply={setReplyTo}
-            onEdit={setEditingMessage}
+            onEdit={(message, decryptedText) =>
+              setEditingMessage({ ...message, text: decryptedText ?? message.text })
+            }
             searchQuery={isSearching ? searchQuery : ""}
           />
           <Composer
@@ -143,13 +144,13 @@ export default function ChatWindow({ onOpenContactInfo, contactInfoOpen }) {
           files={pendingFiles}
           conversationLabel={activeConversation.isGroup ? activeConversation.name : "chat"}
           onClose={() => setPendingFiles(null)}
-          onSend={async ({ items, caption }) => {
+          onSend={async ({ items, caption, asDocument }) => {
             setPendingFiles(null);
             try {
-              const attachments = await uploadFiles(items);
-              await sendMessage(activeConversation._id, {
-                text: caption,
-                attachments,
+              await sendMediaMessage(activeConversation._id, {
+                items,
+                caption,
+                asDocument,
                 replyTo: replyTo?._id,
                 replyToMessage: replyTo,
               });
