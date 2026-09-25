@@ -120,6 +120,14 @@
   gap: 4px;
 }
 
+@media (max-width: 768px) {
+  .chat-header-actions .icon-btn[title="Search in chat"],
+  .chat-header-actions .icon-btn[title="Contact info"],
+  .chat-header-actions .icon-btn[title="Group info"] {
+    display: none;
+  }
+}
+
 /* --- Typing Dots --- */
 .typing-dots {
   display: inline-flex;
@@ -313,13 +321,13 @@
 .bubble-stack {
   display: flex;
   flex-direction: column;
-  max-width: 68%;
+  max-width: 78%;
   position: relative;
 }
 
 @media (max-width: 768px) {
   .bubble-stack {
-    max-width: 84%;
+    max-width: 74%;
   }
 }
 

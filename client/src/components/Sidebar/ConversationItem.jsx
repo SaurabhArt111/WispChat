@@ -53,7 +53,7 @@ function ConversationPreview({ conv, selfId, isTyping }) {
     return (
       <span className="attachment-preview-text">
         {prefix}
-        {msg.encrypted && <LockIcon size={12} className="preview-icon" />}
+        {/* {msg.encrypted && <LockIcon size={12} className="preview-icon" />} */}
         {kind === "image" && <ImageIcon size={14} className="preview-icon" />}
         {kind === "video" && <VideoIcon size={14} className="preview-icon" />}
         {kind === "audio" && <AudioIcon size={14} className="preview-icon" />}
@@ -66,7 +66,7 @@ function ConversationPreview({ conv, selfId, isTyping }) {
   return (
     <span>
       {prefix}
-      {msg.encrypted && <LockIcon size={11} className="preview-icon" />}
+      {/* {msg.encrypted && <LockIcon size={11} className="preview-icon" />} */}
       {bodyText}
     </span>
   );

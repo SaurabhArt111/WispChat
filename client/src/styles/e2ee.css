@@ -228,3 +228,15 @@
   border-radius: 50%;
   background: var(--surface-2, #17191f);
 }
+
+
+@media (max-width: 480px) {
+
+  .e2ee-badge {
+    display: none;
+  }
+
+  .e2ee-unlock-card {
+    max-width: 100%;
+  }
+}

@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 import {
   getMessages,
+  getCallLogs,
   sendMessage,
   uploadMedia,
   editMessage,
@@ -19,6 +20,7 @@ router.use(requireAuth);
 
 router.get("/media/stats", getMediaStats);
 router.get("/media/list", getMediaList);
+router.get("/calls", getCallLogs);
 router.get("/:conversationId", getMessages);
 router.post("/:conversationId", sendMessage);
 router.post("/:conversationId/read", markRead);

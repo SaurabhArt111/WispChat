@@ -8,8 +8,8 @@ import ArchivedPanel from "../components/Sidebar/ArchivedPanel";
 import GroupsPanel from "../components/Sidebar/GroupsPanel";
 import StatusPanel from "../components/Sidebar/StatusPanel";
 import MediaStoragePanel from "../components/Sidebar/MediaStoragePanel";
-import PlaceholderPanel from "../components/Sidebar/PlaceholderPanel";
 import BroadcastPanel from "../components/Sidebar/BroadcastPanel";
+import CallsPanel from "../components/Sidebar/CallsPanel";
 import ProfileModal from "../components/Sidebar/ProfileModal";
 import SettingsModal from "../components/Sidebar/SettingsModal";
 import ChatWindow from "../components/Chat/ChatWindow";
@@ -17,7 +17,7 @@ import ConnectionBanner from "../components/common/ConnectionBanner";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
 import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
-import { SparklesIcon, PlusIcon, UsersIcon, PhoneIcon } from "../components/common/Icons";
+import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
 import "../styles/layout.css";
 
 export default function ChatApp() {
@@ -56,13 +56,7 @@ export default function ChatApp() {
       {view === "groups" && <GroupsPanel />}
       {view === "status" && <StatusPanel />}
       {view === "media" && <MediaStoragePanel />}
-      {view === "calls" && (
-        <PlaceholderPanel
-          title="Calls"
-          icon={PhoneIcon}
-          description="Voice & video calling isn't built yet — it's on the roadmap. For now, calls happen wherever you already talk outside Wisp."
-        />
-      )}
+      {view === "calls" && <CallsPanel />}
       {view === "broadcast" && <BroadcastPanel />}
 
       <div className="app-main">

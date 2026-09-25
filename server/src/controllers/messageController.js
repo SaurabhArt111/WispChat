@@ -51,6 +51,29 @@ export async function getMessages(req, res) {
   res.json({ messages: messages.reverse(), hasMore: messages.length === Number(limit) });
 }
 
+export async function getCallLogs(req, res) {
+  const conversations = await Conversation.find({ participants: req.user._id }).select("_id");
+  const conversationIds = conversations.map((conversation) => conversation._id);
+
+  const calls = await Message.find({
+    conversation: { $in: conversationIds },
+    callInfo: { $exists: true },
+    deletedFor: { $ne: req.user._id },
+  })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .populate([
+      { path: "sender", select: SENDER_FIELDS },
+      {
+        path: "conversation",
+        select: "name isGroup participants",
+        populate: { path: "participants", select: SENDER_FIELDS },
+      },
+    ]);
+
+  res.json({ calls });
+}
+
 export async function sendMessage(req, res) {
   const { conversationId } = req.params;
   const { text = "", replyTo = null, clientId, attachments = [], encrypted = false, iv = null, keys = [] } = req.body;
