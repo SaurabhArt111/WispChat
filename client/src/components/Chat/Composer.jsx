@@ -195,64 +195,75 @@ export default function Composer({
         </div>
       )}
 
-      <form className="composer" onSubmit={handleSubmit}>
+      <div className="composer-layout">
+        <form className="composer" id={`composer-form-${conversation._id}`} onSubmit={handleSubmit}>
 
-        <div className="composer-input-container">
-          <button
-            type="button"
-            className={`icon-btn ${showEmoji ? "active" : ""}`}
-            title="Emoji picker"
-            onClick={() => setShowEmoji((s) => !s)}
-          >
-            <SmileIcon size={20} />
-          </button>
+          <div className="composer-input-container">
+            <button
+              type="button"
+              className={`icon-btn ${showEmoji ? "active" : ""}`}
+              title="Emoji picker"
+              onClick={() => setShowEmoji((s) => !s)}
+            >
+              <SmileIcon size={20} />
+            </button>
 
-          <button
-            type="button"
-            className="icon-btn"
-            title="Attach files (images, videos, docs)"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <PaperclipIcon size={20} />
-          </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Attach files (images, videos, docs)"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <PaperclipIcon size={20} />
+            </button>
 
-          <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
+            <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
 
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            placeholder={
-              editingMessage
-                ? "Edit message…"
-                : `Message ${recipientName}…`
-            }
-            value={text}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-          />
-          <button
-            type="button"
-            className={`enter-send-toggle ${enterToSend ? "active" : ""}`}
-            onClick={toggleEnterToSend}
-            title={
-              enterToSend
-                ? "Press Enter to send (Shift+Enter for new line). Click to change."
-                : "Press Ctrl+Enter to send (Enter for new line). Click to change."
-            }
-          >
-            {enterToSend ? "↵ Send" : "Ctrl+↵"}
-          </button>
-        </div>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder={
+                editingMessage
+                  ? "Edit message…"
+                  : `Message ${recipientName}…`
+              }
+              value={text}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+            />
+            <button
+              type="button"
+              className={`enter-send-toggle ${enterToSend ? "active" : ""}`}
+              onClick={toggleEnterToSend}
+              title={
+                enterToSend
+                  ? "Press Enter to send (Shift+Enter for new line). Click to change."
+                  : "Press Ctrl+Enter to send (Enter for new line). Click to change."
+              }
+            >
+              {enterToSend ? "↵ Send" : "Ctrl+↵"}
+            </button>
+            <button
+              type="submit"
+              className="composer-send composer-send-mobile"
+              disabled={!text.trim()}
+              title={`Send message (${enterToSend ? "Enter" : "Ctrl+Enter"})`}
+            >
+              <SendIcon size={17} />
+            </button>
+          </div>
+        </form>
 
         <button
           type="submit"
-          className="composer-send"
+          form={`composer-form-${conversation._id}`}
+          className="composer-send composer-send-desktop"
           disabled={!text.trim()}
           title={`Send message (${enterToSend ? "Enter" : "Ctrl+Enter"})`}
         >
           <SendIcon size={17} />
         </button>
-      </form>
+      </div>
 
       {showEmoji && (
         <div className="emoji-popover" ref={emojiPopRef}>

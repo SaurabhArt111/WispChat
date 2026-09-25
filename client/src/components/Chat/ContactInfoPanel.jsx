@@ -8,7 +8,7 @@ import Avatar from "../common/Avatar";
 import Lightbox from "./Lightbox";
 import GroupInfoModal from "./GroupInfoModal";
 import { formatLastSeen, formatBytes } from "../../utils/time";
-import { CloseIcon, MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon } from "../common/Icons";
+import { BackIcon, CloseIcon, MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon } from "../common/Icons";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import "../../styles/contactInfo.css";
 
@@ -125,6 +125,14 @@ export default function ContactInfoPanel({ conversation, onClose }) {
     <aside className="contact-info-panel" style={{ width }}>
       <div className="contact-info-resize-handle" onMouseDown={startResize} title="Drag to resize" />
       <div className="contact-info-header">
+        {/* Back button for mobile view */}
+        <button
+          className="icon-btn chat-header-back"
+          onClick={onClose}
+          title="Back to chat"
+        >
+          <BackIcon size={20} />
+        </button>
         <span>{conversation.isGroup ? "Group info" : "Contact info"}</span>
         <button className="icon-btn" onClick={onClose} title="Close">
           <CloseIcon size={18} />
@@ -139,8 +147,8 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             {conversation.isGroup
               ? `${conversation.participants?.length || 0} members`
               : other?.username
-              ? `@${other.username}`
-              : ""}
+                ? `@${other.username}`
+                : ""}
           </div>
           {!conversation.isGroup && (
             <div className="contact-info-status">{formatLastSeen(lastSeen, isOnline)}</div>
@@ -172,14 +180,14 @@ export default function ContactInfoPanel({ conversation, onClose }) {
         </div>
 
         {conversation.isGroup && (
-          <div className="contact-info-members-preview">
+          <button className="contact-info-members-preview" onClick={() => setShowGroupSettings(true)}>
             {conversation.participants?.slice(0, 6).map((p) => (
               <Avatar key={p._id} user={p} size={30} />
             ))}
             {conversation.participants?.length > 6 && (
               <div className="ci-member-more">+{conversation.participants.length - 6}</div>
             )}
-          </div>
+          </button>
         )}
 
         <div className="contact-info-tabs">

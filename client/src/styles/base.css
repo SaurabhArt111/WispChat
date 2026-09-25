@@ -92,7 +92,7 @@
 .icon-btn {
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-sm);
+  border-radius: 50px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

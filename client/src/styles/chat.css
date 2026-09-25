@@ -121,6 +121,7 @@
 }
 
 @media (max-width: 768px) {
+
   .chat-header-actions .icon-btn[title="Search in chat"],
   .chat-header-actions .icon-btn[title="Contact info"],
   .chat-header-actions .icon-btn[title="Group info"] {
@@ -150,14 +151,20 @@
   height: 6px;
 }
 
-.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
-.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
 
 @keyframes typingBounce {
   0%, 60%, 100% {
     opacity: 0.35;
     transform: translateY(0);
   }
+
   30% {
     opacity: 1;
     transform: translateY(-3px);
@@ -307,6 +314,7 @@
   0%, 30% {
     box-shadow: 0 0 0 4px var(--wisp), 0 0 20px var(--wisp-glow);
   }
+
   100% {
     box-shadow: none;
   }
@@ -734,11 +742,25 @@
   max-width: 320px;
 }
 
-.image-grid.count-1 { grid-template-columns: 1fr; }
-.image-grid.count-2 { grid-template-columns: 1fr 1fr; }
-.image-grid.count-3 { grid-template-columns: 1fr 1fr; }
-.image-grid.count-3 .image-grid-item:first-child { grid-column: span 2; }
-.image-grid.count-4 { grid-template-columns: 1fr 1fr; }
+.image-grid.count-1 {
+  grid-template-columns: 1fr;
+}
+
+.image-grid.count-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.image-grid.count-3 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.image-grid.count-3 .image-grid-item:first-child {
+  grid-column: span 2;
+}
+
+.image-grid.count-4 {
+  grid-template-columns: 1fr 1fr;
+}
 
 .image-grid-item {
   position: relative;
@@ -834,12 +856,35 @@
   flex-shrink: 0;
 }
 
-.ext-default { background: var(--wisp-dim); color: var(--wisp); }
-.ext-pdf { background: rgba(248, 113, 113, 0.16); color: #f87171; }
-.ext-zip { background: rgba(245, 166, 91, 0.16); color: #f5a65b; }
-.ext-doc { background: rgba(56, 189, 248, 0.16); color: #38bdf8; }
-.ext-code { background: rgba(167, 139, 250, 0.16); color: #a78bfa; }
-.ext-sheet { background: rgba(16, 185, 129, 0.16); color: #10b981; }
+.ext-default {
+  background: var(--wisp-dim);
+  color: var(--wisp);
+}
+
+.ext-pdf {
+  background: rgba(248, 113, 113, 0.16);
+  color: #f87171;
+}
+
+.ext-zip {
+  background: rgba(245, 166, 91, 0.16);
+  color: #f5a65b;
+}
+
+.ext-doc {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+}
+
+.ext-code {
+  background: rgba(167, 139, 250, 0.16);
+  color: #a78bfa;
+}
+
+.ext-sheet {
+  background: rgba(16, 185, 129, 0.16);
+  color: #10b981;
+}
 
 .attachment-file-info {
   min-width: 0;
@@ -963,18 +1008,26 @@
 .composer {
   display: flex;
   align-items: flex-end;
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-layout {
+  display: flex;
+  align-items: flex-end;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 14px 16px;
 }
 
 .composer-input-container {
   flex: 1;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   position: relative;
   background: var(--surface-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 50px;
+  padding: 0 4px;
   transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
 
@@ -990,7 +1043,7 @@
   background: transparent;
   border: none;
   padding: 10px 72px 10px 14px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text);
   max-height: 160px;
   line-height: 1.4;
@@ -1037,6 +1090,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.composer-send-mobile {
+  display: none;
+}
+
 .composer-send:hover:not(:disabled) {
   transform: scale(1.06);
   box-shadow: 0 0 16px var(--wisp-glow);
@@ -1063,6 +1120,20 @@
   overflow: hidden;
   border: 1px solid var(--border-glass);
   animation: modalSlideUp 160ms var(--ease-spring);
+}
+
+@media (max-width: 768px) {
+  .composer-layout {
+    padding: 14px 12px;
+  }
+
+  .composer-send-desktop {
+    display: none;
+  }
+
+  .composer-send-mobile {
+    display: flex;
+  }
 }
 
 /* --- Preference toggle in modal --- */
@@ -1201,8 +1272,13 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-.lightbox-nav.left { left: 20px; }
-.lightbox-nav.right { right: 20px; }
+.lightbox-nav.left {
+  left: 20px;
+}
+
+.lightbox-nav.right {
+  right: 20px;
+}
 
 .lightbox-zoom-hint {
   position: absolute;
@@ -1218,3 +1294,8 @@
   pointer-events: none;
 }
 
+@media (max-width: 768px) {
+  .enter-send-toggle {
+    display: none;
+  }
+}
