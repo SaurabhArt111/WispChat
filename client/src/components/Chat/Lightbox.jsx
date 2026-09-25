@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon, DownloadIcon, ForwardIcon, ExternalLinkIcon, CopyIcon } from "../common/Icons";
+import { copyImageToClipboard } from "../../utils/copyImage";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
@@ -151,14 +152,7 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   }
 
   async function handleCopyImage(url) {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-      showToast("Image copied to clipboard");
-    } catch {
-      showToast("Couldn't copy image — your browser may not allow it", "danger");
-    }
+    await copyImageToClipboard(url, showToast);
   }
 
   function handleStageContextMenu(e) {

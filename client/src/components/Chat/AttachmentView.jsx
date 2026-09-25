@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatBytes } from "../../utils/time";
+import { copyImageToClipboard } from "../../utils/copyImage";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
@@ -80,17 +81,6 @@ function PendingGeneric({ a }) {
       </div>
     </div>
   );
-}
-
-async function copyImageToClipboard(resolvedUrl, showToast) {
-  try {
-    const res = await fetch(resolvedUrl);
-    const blob = await res.blob();
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-    showToast?.("Image copied to clipboard");
-  } catch {
-    showToast?.("Couldn't copy image — your browser may not allow it", "danger");
-  }
 }
 
 // Encrypted attachments need their bytes decrypted before they can be

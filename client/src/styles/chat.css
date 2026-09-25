@@ -1042,7 +1042,7 @@
   resize: none;
   background: transparent;
   border: none;
-  padding: 10px 72px 10px 14px;
+  padding: 10px 92px 10px 14px;
   font-size: 16px;
   color: var(--text);
   max-height: 160px;
@@ -1052,7 +1052,7 @@
 
 .enter-send-toggle {
   position: absolute;
-  right: 8px;
+  right: 56px;
   bottom: 8px;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1062,6 +1062,10 @@
   border: 1px solid var(--border);
   padding: 3px 6px;
   border-radius: var(--radius-xs);
+  max-width: 52px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   transition: all var(--fast) var(--ease);
 }
 
@@ -1127,12 +1131,31 @@
     padding: 14px 12px;
   }
 
+  .composer-input-container {
+    padding-right: 8px;
+  }
+
+  .composer-input-container textarea {
+    padding-right: 0;
+  }
+
+  .enter-send-toggle {
+    right: 52px;
+    max-width: 42px;
+    font-size: 9px;
+    padding: 3px 5px;
+  }
+
   .composer-send-desktop {
     display: none;
   }
 
   .composer-send-mobile {
     display: flex;
+    width: 42px;
+    height: 42px;
+    margin-left: 2px;
+    margin-right: 2px;
   }
 }
 

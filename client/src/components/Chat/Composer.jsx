@@ -235,19 +235,20 @@ export default function Composer({
               type="button"
               className={`enter-send-toggle ${enterToSend ? "active" : ""}`}
               onClick={toggleEnterToSend}
-              title={
+              aria-label={
                 enterToSend
                   ? "Press Enter to send (Shift+Enter for new line). Click to change."
                   : "Press Ctrl+Enter to send (Enter for new line). Click to change."
               }
             >
-              {enterToSend ? "↵ Send" : "Ctrl+↵"}
+              {enterToSend ? "↵" : "Ctrl+↵"}
             </button>
+
             <button
               type="submit"
               className="composer-send composer-send-mobile"
               disabled={!text.trim()}
-              title={`Send message (${enterToSend ? "Enter" : "Ctrl+Enter"})`}
+              aria-label={`Send message (${enterToSend ? "Enter" : "Ctrl+Enter"})`}
             >
               <SendIcon size={17} />
             </button>
@@ -259,7 +260,7 @@ export default function Composer({
           form={`composer-form-${conversation._id}`}
           className="composer-send composer-send-desktop"
           disabled={!text.trim()}
-          title={`Send message (${enterToSend ? "Enter" : "Ctrl+Enter"})`}
+          aria-label={`Send message (${enterToSend ? "Enter" : "Ctrl+Enter"})`}
         >
           <SendIcon size={17} />
         </button>
