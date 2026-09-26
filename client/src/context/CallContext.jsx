@@ -94,6 +94,7 @@ export function CallProvider({ children }) {
   const pendingCandidatesRef = useRef([]);
   const ringIntervalRef = useRef(null);
   const ringTimeoutRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
   const incomingOfferRef = useRef(null); // { callId, conversationId, kind, offer, from }
   const startingRef = useRef(false); // guards against a double-click firing startCall twice
 
@@ -128,8 +129,10 @@ export function CallProvider({ children }) {
   const cleanup = useCallback(() => {
     clearInterval(ringIntervalRef.current);
     clearTimeout(ringTimeoutRef.current);
+    clearTimeout(reconnectTimeoutRef.current);
     ringIntervalRef.current = null;
     ringTimeoutRef.current = null;
+    reconnectTimeoutRef.current = null;
     pendingCandidatesRef.current = [];
     incomingOfferRef.current = null;
     startingRef.current = false;
@@ -173,6 +176,8 @@ export function CallProvider({ children }) {
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "connected") {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
           setCall((c) => {
             if (!c || c.callId !== callId) return c;
             computeSafetyCode(pc).then((safetyCode) =>
@@ -180,7 +185,28 @@ export function CallProvider({ children }) {
             );
             return { ...c, status: "connected", connectedAt: c.connectedAt || Date.now() };
           });
-        } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
+        } else if (["failed", "disconnected"].includes(pc.connectionState)) {
+          // A network blip (wifi handoff, brief packet loss) reports as
+          // "disconnected" and often self-heals in a few seconds; "failed"
+          // means ICE gave up entirely. Either way, try an ICE restart
+          // (renegotiating fresh candidates without tearing down the whole
+          // call) rather than immediately hanging up on a call that might
+          // still recover.
+          setCall((c) => (c && c.callId === callId && c.status !== "ended" ? { ...c, status: "reconnecting" } : c));
+          try {
+            pc.restartIce();
+          } catch {
+            // restartIce isn't supported in every browser — the
+            // reconnectTimeout below still covers cleanup either way.
+          }
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (["failed", "disconnected"].includes(pc.connectionState)) {
+              showToast("Call connection lost");
+              cleanup();
+            }
+          }, 15000);
+        } else if (pc.connectionState === "closed") {
           setCall((c) => (c && c.callId === callId && c.status !== "ended" ? { ...c, status: "reconnecting" } : c));
         }
       };

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useChat } from "../context/ChatContext";
 import { useStatus } from "../context/StatusContext";
 import AsideRail from "../components/Sidebar/AsideRail";
@@ -20,15 +21,46 @@ import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
 import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
 import "../styles/layout.css";
 
+// Views that get their own URL. "chats" (the default sidebar + chat window)
+// covers both "/" and "/chat/:id", and isn't listed here since it's the
+// fallback for any path that doesn't match one of these. "Archived" is
+// deliberately left out — it stays a local panel toggle rather than a
+// route, reached only from the link inside the chat list itself.
+const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast"];
+
 export default function ChatApp() {
   const { activeId, activeConversation } = useChat();
   const { hasUnread } = useStatus();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
-  const [view, setView] = useState("chats");
+  const settingsReturnRef = useRef("/");
+
+  const routeSegment = location.pathname.split("/")[1] || "";
+  const view = ROUTED_VIEWS.includes(routeSegment) ? routeSegment : "chats";
+  const showSettings = location.pathname === "/settings";
+
+  function changeView(id) {
+    if (id === "archived") {
+      setShowArchived(true);
+      return;
+    }
+    setShowArchived(false);
+    navigate(id === "chats" ? "/" : `/${id}`);
+  }
+
+  function openSettings() {
+    if (!showSettings) settingsReturnRef.current = location.pathname;
+    navigate("/settings");
+  }
+
+  function closeSettings() {
+    navigate(settingsReturnRef.current || "/");
+  }
 
   useEffect(() => {
     setShowContactInfo(false);
@@ -38,21 +70,21 @@ export default function ChatApp() {
     <div className={`app-shell ${activeId ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""}`}>
       <ConnectionBanner />
       <AsideRail
-        view={view}
-        onChangeView={setView}
+        view={showArchived ? "archived" : view}
+        onChangeView={changeView}
         onOpenProfile={() => setShowProfile(true)}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={openSettings}
         hasUnreadStatus={hasUnread}
       />
 
-      {view === "chats" && (
+      {view === "chats" && !showArchived && (
         <Sidebar
           onOpenNewChat={() => setShowNewChat(true)}
           onOpenNewGroup={() => setShowNewGroup(true)}
-          onOpenArchived={() => setView("archived")}
+          onOpenArchived={() => setShowArchived(true)}
         />
       )}
-      {view === "archived" && <ArchivedPanel />}
+      {showArchived && <ArchivedPanel onBack={() => setShowArchived(false)} />}
       {view === "groups" && <GroupsPanel />}
       {view === "status" && <StatusPanel />}
       {view === "media" && <MediaStoragePanel />}
@@ -106,9 +138,9 @@ export default function ChatApp() {
       )}
 
       <MobileBottomNav
-        view={view}
-        onChangeView={setView}
-        onOpenSettings={() => setShowSettings(true)}
+        view={showArchived ? "archived" : view}
+        onChangeView={changeView}
+        onOpenSettings={openSettings}
         hasUnreadStatus={hasUnread}
       />
 
@@ -117,9 +149,9 @@ export default function ChatApp() {
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {showSettings && (
         <SettingsModal
-          onClose={() => setShowSettings(false)}
+          onClose={closeSettings}
           onOpenProfile={() => {
-            setShowSettings(false);
+            closeSettings();
             setShowProfile(true);
           }}
         />

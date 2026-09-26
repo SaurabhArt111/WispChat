@@ -5,6 +5,7 @@ import MessageBubble from "./MessageBubble";
 import TypingDots from "./TypingDots";
 import { formatDayLabel } from "../../utils/time";
 import { ChevronDownIcon, LockIcon } from "../common/Icons";
+import { onWallpaperChange, resolveWallpaperStyle } from "../../utils/wallpaper";
 
 export default function MessageList({
   conversation,
@@ -23,6 +24,16 @@ export default function MessageList({
   const prevScrollHeight = useRef(0);
   const isFirstLoad = useRef(true);
   const shouldStickToBottomRef = useRef(true);
+  const [wallpaperStyle, setWallpaperStyle] = useState(() => resolveWallpaperStyle(conversation._id));
+
+  // Re-resolve the wallpaper whenever it changes (Settings → Chats default,
+  // or this chat's own "More → Chat wallpaper" override) or when the person
+  // switches to a different chat.
+  useEffect(() => {
+    setWallpaperStyle(resolveWallpaperStyle(conversation._id));
+    return onWallpaperChange(() => setWallpaperStyle(resolveWallpaperStyle(conversation._id)));
+  }, [conversation._id]);
+
 
   // NOTE: this used to be windowed/virtualized with a fixed per-row
   // height estimate. Real message rows vary enormously in height (a
@@ -121,7 +132,7 @@ export default function MessageList({
   let lastDay = null;
 
   return (
-    <div className="message-list-wrap">
+    <div className="message-list-wrap" style={wallpaperStyle}>
       <div className="message-list" ref={scrollRef} onScroll={handleScroll}>
         {loadingMore && <div className="messages-loading">Loading earlier messages…</div>}
 

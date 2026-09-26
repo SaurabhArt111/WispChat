@@ -7,6 +7,8 @@ import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import LiquidGlassPanel from "../common/LiquidGlassPanel";
 import ConfirmModal from "../common/ConfirmModal";
+import WallpaperPicker from "../common/WallpaperPicker";
+import { getChatWallpaper, setChatWallpaper } from "../../utils/wallpaper";
 import { formatLastSeen } from "../../utils/time";
 import client from "../../api/client";
 import TypingDots from "./TypingDots";
@@ -21,6 +23,7 @@ import {
   LockIcon,
   PhoneIcon,
   VideoIcon,
+  ImageIcon,
 } from "../common/Icons";
 import "../../styles/e2ee.css";
 
@@ -39,6 +42,7 @@ export default function ChatHeader({
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'block' | null
+  const [showWallpaper, setShowWallpaper] = useState(false);
 
   const other = !conversation.isGroup
     ? conversation.participants?.find((p) => p._id !== user._id)
@@ -105,6 +109,11 @@ export default function ChatHeader({
             onClick: () => onOpenInfo?.(),
           },
           {
+            label: "Chat wallpaper",
+            icon: <ImageIcon size={15} />,
+            onClick: () => setShowWallpaper(true),
+          },
+          {
             label: conversation.muted ? "Unmute notifications" : "Mute notifications",
             icon: <MuteIcon size={15} />,
             onClick: () => flag("mute"),
@@ -126,6 +135,11 @@ export default function ChatHeader({
             label: "Contact info",
             icon: <InfoIcon size={15} />,
             onClick: () => onOpenInfo?.(),
+          },
+          {
+            label: "Chat wallpaper",
+            icon: <ImageIcon size={15} />,
+            onClick: () => setShowWallpaper(true),
           },
           {
             label: conversation.muted ? "Unmute notifications" : "Mute notifications",
@@ -243,6 +257,15 @@ export default function ChatHeader({
           danger
           onConfirm={handleBlockUser}
           onCancel={() => setConfirmAction(null)}
+        />
+      )}
+      {showWallpaper && (
+        <WallpaperPicker
+          asModal
+          allowInherit
+          value={getChatWallpaper(conversation._id)}
+          onChange={(v) => setChatWallpaper(conversation._id, v)}
+          onClose={() => setShowWallpaper(false)}
         />
       )}
     </LiquidGlassPanel>

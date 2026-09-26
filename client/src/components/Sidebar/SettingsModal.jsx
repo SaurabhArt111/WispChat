@@ -5,6 +5,8 @@ import { useToast } from "../../context/ToastContext";
 import client from "../../api/client";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
+import WallpaperPicker from "../common/WallpaperPicker";
+import { getGlobalWallpaper, setGlobalWallpaper } from "../../utils/wallpaper";
 import {
   CloseIcon,
   SettingsIcon,
@@ -118,9 +120,7 @@ export default function SettingsModal({ onClose, onOpenProfile }) {
             {active === "account" && <AccountPanel user={user} onOpenProfile={onOpenProfile} />}
             {active === "privacy" && <PrivacyPanel />}
             {active === "chats" && <ChatsPanel />}
-            {active === "calls" && (
-              <EmptyPanel text="Voice & video calling isn't built yet — it's on the roadmap." />
-            )}
+            {active === "calls" && <CallsSettingsPanel />}
             {active === "notifications" && <NotificationsPanel />}
             {active === "shortcuts" && <ShortcutsPanel />}
             {active === "help" && <HelpPanel />}
@@ -251,10 +251,16 @@ function PrivacyPanel() {
 
 function ChatsPanel() {
   const [currentAccent, setCurrentAccent] = useState(() => localStorage.getItem("wisp_accent") || "default");
+  const [currentWallpaper, setCurrentWallpaper] = useState(() => getGlobalWallpaper());
   const [enterToSend, setEnterToSend] = useState(() => {
     const saved = localStorage.getItem("wisp_enter_send");
     return saved !== null ? saved === "true" : true;
   });
+
+  function handleSetWallpaper(value) {
+    setCurrentWallpaper(value || "none");
+    setGlobalWallpaper(value || "none");
+  }
 
   function handleSetAccent(id) {
     setCurrentAccent(id);
@@ -303,7 +309,11 @@ function ChatsPanel() {
       <div className="settings-section-title" style={{ marginTop: 20 }}>
         Wallpaper
       </div>
-      <p className="settings-hint">Custom chat wallpapers aren't available yet.</p>
+      <p className="settings-hint">
+        Sets the default background for every chat. Any individual chat can still override this
+        from its "More" menu.
+      </p>
+      <WallpaperPicker value={currentWallpaper} onChange={handleSetWallpaper} />
     </div>
   );
 }
@@ -343,6 +353,47 @@ function NotificationsPanel() {
         Message & group sounds
       </div>
       <p className="settings-hint">Sound customization isn't available yet.</p>
+    </div>
+  );
+}
+
+function CallsSettingsPanel() {
+  const [micPermission, setMicPermission] = useState("unknown");
+
+  useEffect(() => {
+    if (!navigator.permissions?.query) return;
+    navigator.permissions
+      .query({ name: "microphone" })
+      .then((status) => setMicPermission(status.state))
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">Voice & video calls</div>
+      <p className="settings-hint">
+        1-to-1 voice and video calling is built in — look for the phone and camera icons at the
+        top of any direct chat. Calls connect peer-to-peer over WebRTC with mandatory DTLS-SRTP
+        encryption, so media never passes through the server; once connected, tap the lock/safety
+        code shown in the call to verify it end-to-end.
+      </p>
+      <div className="settings-kv">
+        <span>Microphone access</span>
+        <strong>
+          {micPermission === "granted"
+            ? "Allowed"
+            : micPermission === "denied"
+            ? "Blocked — enable in browser settings"
+            : "Requested per call"}
+        </strong>
+      </div>
+      <p className="settings-hint" style={{ marginTop: 14 }}>
+        Calls use public STUN servers to establish a connection, which works on most home and
+        office networks. A small number of strict corporate/symmetric-NAT networks need a TURN
+        relay to connect at all — if a call consistently fails to connect between two specific
+        networks, that's usually why.
+      </p>
+      <p className="settings-hint">Group calling isn't available yet — it's on the roadmap.</p>
     </div>
   );
 }

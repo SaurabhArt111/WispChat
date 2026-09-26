@@ -11,6 +11,10 @@ const conversationSchema = new mongoose.Schema(
     avatar: { type: String, default: "" },
     admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // When true, only admins can post messages in this group — everyone
+    // else can still read, react, and see media (classic WhatsApp
+    // "announcement group" behaviour).
+    onlyAdminsCanMessage: { type: Boolean, default: false },
 
     lastMessage: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
     lastMessageAt: { type: Date, default: Date.now },

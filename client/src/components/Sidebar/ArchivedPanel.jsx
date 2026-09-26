@@ -1,16 +1,21 @@
 import { useMemo } from "react";
 import { useChat } from "../../context/ChatContext";
 import ConversationItem from "./ConversationItem";
-import { ArchiveIcon } from "../common/Icons";
+import { ArchiveIcon, BackIcon } from "../common/Icons";
 import "../../styles/railPanels.css";
 
-export default function ArchivedPanel() {
+export default function ArchivedPanel({ onBack }) {
   const { conversations, activeId, openConversation } = useChat();
   const archived = useMemo(() => conversations.filter((c) => c.archived), [conversations]);
 
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
+        {onBack && (
+          <button className="icon-btn btn-sm" onClick={onBack} title="Back">
+            <BackIcon size={18} />
+          </button>
+        )}
         <h2>Archived</h2>
         <span className="rail-panel-count">{archived.length}</span>
       </div>

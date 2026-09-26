@@ -82,6 +82,13 @@ export async function sendMessage(req, res) {
   if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) {
     return res.status(403).json({ message: "Not a participant" });
   }
+  if (
+    conv.isGroup &&
+    conv.onlyAdminsCanMessage &&
+    !conv.admins.some((a) => String(a) === String(req.user._id))
+  ) {
+    return res.status(403).json({ message: "Only admins can send messages in this group" });
+  }
   // Ciphertext isn't ".trim()"-empty-checkable the way plaintext is, so an
   // encrypted send is considered non-empty as long as it carries a key
   // envelope (the client already refused to build one for a truly empty

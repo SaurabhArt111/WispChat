@@ -1317,8 +1317,22 @@
   pointer-events: none;
 }
 
+.composer-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 14px;
+  margin: 0 5% 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
 @media (max-width: 768px) {
   .enter-send-toggle {
     display: none;
   }
 }
+

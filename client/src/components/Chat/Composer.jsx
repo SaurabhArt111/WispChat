@@ -11,6 +11,7 @@ import {
   CloseIcon,
   EditIcon,
   ReplyIcon,
+  LockIcon,
 } from "../common/Icons";
 
 let typingTimeout = null;
@@ -38,6 +39,11 @@ export default function Composer({
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPopRef = useRef(null);
+
+  const isLockedForMe =
+    conversation.isGroup &&
+    conversation.onlyAdminsCanMessage &&
+    !conversation.admins?.some((a) => (a._id || a) === user._id);
 
   // Sync enter-to-send changes from storage/settings
   useEffect(() => {
@@ -147,6 +153,17 @@ export default function Composer({
   const recipientName = conversation.isGroup
     ? conversation.name
     : conversation.participants?.find((p) => p._id !== user._id)?.displayName || "chat";
+
+  if (isLockedForMe) {
+    return (
+      <div className="composer-wrap">
+        <div className="composer-locked-banner">
+          <LockIcon size={14} />
+          <span>Only admins can send messages in this group</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="composer-wrap">

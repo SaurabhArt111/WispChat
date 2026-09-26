@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import client from "../api/client";
 import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
@@ -63,7 +64,13 @@ export function ChatProvider({ children }) {
     setHasMoreByConv((prev) => ({ ...prev, [conversationId]: res.data.hasMore }));
   }, []);
 
-  const openConversation = useCallback(
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Loads a conversation's data and marks it active — but doesn't touch the
+  // URL. This is the low-level "activate" step, driven off the current
+  // route (see the sync effect below) rather than called directly by UI.
+  const activateConversation = useCallback(
     async (conversationId) => {
       if (!conversationId) {
         setActiveId(null);
@@ -78,6 +85,33 @@ export function ChatProvider({ children }) {
       setConversations((prev) => prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c)));
     },
     [loadMessages, messagesByConv, socket]
+  );
+
+  // Public entry point used throughout the UI: pushes /chat/:id onto the
+  // URL so a conversation is a real, shareable/back-button-able route. The
+  // actual data load happens in the effect below, reacting to the URL
+  // rather than being called imperatively — that way a browser back/forward
+  // navigation or a direct link to /chat/:id activates the conversation too,
+  // not just a click inside the app.
+  const openConversation = useCallback(
+    (conversationId) => {
+      if (!conversationId) {
+        setActiveId(null);
+        return;
+      }
+      navigate(`/chat/${conversationId}`);
+    },
+    [navigate]
+  );
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/chat\/([^/]+)/);
+    const routeId = match ? match[1] : null;
+    if (routeId !== activeIdRef.current) {
+      activateConversation(routeId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]
   );
 
   const sendMessage = useCallback(
@@ -486,8 +520,8 @@ export function ChatProvider({ children }) {
   );
 
   const createGroup = useCallback(
-    async (name, participantIds, description) => {
-      const res = await client.post("/conversations/group", { name, participantIds, description });
+    async (name, participantIds, description, avatar) => {
+      const res = await client.post("/conversations/group", { name, participantIds, description, avatar });
       upsertConversation(res.data.conversation);
       return res.data.conversation;
     },
@@ -614,7 +648,7 @@ export function ChatProvider({ children }) {
     typing: typingByConv[activeId] || {},
     presence,
     openConversation,
-    closeActiveChat: () => setActiveId(null),
+    closeActiveChat: () => navigate("/"),
     loadMoreMessages: (before) => loadMessages(activeId, before),
     sendMessage,
     sendMediaMessage,
