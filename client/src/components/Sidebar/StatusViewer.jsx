@@ -17,12 +17,41 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
   const [progress, setProgress] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showViewers, setShowViewers] = useState(false);
+  const [dragY, setDragY] = useState(0);
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const pausedAtRef = useRef(0);
   const videoRef = useRef(null);
+  const dismissDragRef = useRef(null);
 
   const item = entry.items[index];
+
+  // Swiping/scrolling down closes the viewer — mirrors Instagram/WhatsApp
+  // status. A downward drag on the content pauses the auto-advance timer
+  // (via the existing mouse/touch-down pause handlers) and slides the
+  // stage down with the gesture; releasing past a small threshold closes,
+  // releasing short of it snaps back. A plain mouse wheel scroll down does
+  // the same thing without needing a drag at all.
+  function dismissDragStart(clientY) {
+    dismissDragRef.current = { startY: clientY, active: true };
+  }
+  function dismissDragMove(clientY) {
+    if (!dismissDragRef.current?.active) return;
+    const delta = clientY - dismissDragRef.current.startY;
+    setDragY(Math.max(0, delta));
+  }
+  function dismissDragEnd() {
+    if (!dismissDragRef.current?.active) return;
+    dismissDragRef.current.active = false;
+    if (dragY > 90) {
+      onClose();
+      return;
+    }
+    setDragY(0);
+  }
+  function handleWheel(e) {
+    if (e.deltaY > 24) onClose();
+  }
 
   useEffect(() => {
     if (item && !isOwn) markViewed(item._id);
@@ -44,6 +73,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     setProgress(0);
     pausedAtRef.current = 0;
     startRef.current = null;
+    setDragY(0);
     if (item?.kind === "video") return; // driven by the <video> timeupdate instead
     const duration = IMAGE_DURATION;
 
@@ -103,8 +133,15 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
   }
 
   return createPortal(
-    <div className="status-viewer-overlay">
-      <div className="status-viewer-stage">
+    <div className="status-viewer-overlay" onWheel={handleWheel}>
+      <div
+        className="status-viewer-stage"
+        style={{
+          transform: dragY ? `translateY(${dragY}px)` : undefined,
+          opacity: dragY ? Math.max(0.4, 1 - dragY / 260) : 1,
+          transition: dismissDragRef.current?.active ? "none" : "transform 160ms var(--ease), opacity 160ms var(--ease)",
+        }}
+      >
         <div className="status-progress-row">
           {entry.items.map((it, i) => (
             <div className="status-progress-track" key={it._id}>
@@ -139,10 +176,24 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
 
         <div
           className="status-viewer-content"
-          onMouseDown={() => setPaused(true)}
-          onMouseUp={() => setPaused(false)}
-          onTouchStart={() => setPaused(true)}
-          onTouchEnd={() => setPaused(false)}
+          onMouseDown={(e) => {
+            setPaused(true);
+            dismissDragStart(e.clientY);
+          }}
+          onMouseMove={(e) => dismissDragMove(e.clientY)}
+          onMouseUp={() => {
+            setPaused(false);
+            dismissDragEnd();
+          }}
+          onTouchStart={(e) => {
+            setPaused(true);
+            dismissDragStart(e.touches[0].clientY);
+          }}
+          onTouchMove={(e) => dismissDragMove(e.touches[0].clientY)}
+          onTouchEnd={() => {
+            setPaused(false);
+            dismissDragEnd();
+          }}
         >
           {item.kind === "text" ? (
             <div className="status-text-stage status-text-view" style={{ background: item.bgColor || "#5ef2c0" }}>
@@ -174,12 +225,14 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
           <div className="status-viewers-list">
             {item.viewers?.length ? (
               item.viewers.map((v) => (
-                <div className="status-viewers-row" key={v.user}>
-                  {formatClock(v.at)}
+                <div className="status-viewers-row" key={v.user?._id || v.user}>
+                  <Avatar user={v.user || {}} size={30} />
+                  <span className="status-viewers-name">{v.user?.displayName || "Someone"}</span>
+                  <span className="status-viewers-time">{formatClock(v.at)}</span>
                 </div>
               ))
             ) : (
-              <div className="status-viewers-row">No views yet</div>
+              <div className="status-viewers-row status-viewers-empty">No views yet</div>
             )}
           </div>
         )}

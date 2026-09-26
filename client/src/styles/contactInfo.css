@@ -67,6 +67,20 @@
   border-bottom: 1px solid var(--border-soft);
 }
 
+.contact-info-avatar-status-btn {
+  padding: 3px;
+  border-radius: 50%;
+  border: 2.5px solid var(--wisp);
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+  transition: transform var(--fast) var(--ease);
+}
+
+.contact-info-avatar-status-btn:hover {
+  transform: scale(1.03);
+}
+
 .contact-info-name {
   margin-top: 14px;
   font-family: "Space Grotesk", sans-serif;

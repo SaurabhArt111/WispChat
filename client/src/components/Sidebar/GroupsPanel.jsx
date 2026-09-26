@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { useChat } from "../../context/ChatContext";
 import ConversationItem from "./ConversationItem";
 import NewGroupModal from "./NewGroupModal";
+import MobileMoreButton from "./MobileMoreButton";
 import { UsersIcon, PlusIcon } from "../common/Icons";
 import "../../styles/railPanels.css";
 
-export default function GroupsPanel() {
+export default function GroupsPanel({ onOpenMore }) {
   const { conversations, activeId, openConversation } = useChat();
   const [showNewGroup, setShowNewGroup] = useState(false);
   const groups = useMemo(
@@ -16,6 +17,7 @@ export default function GroupsPanel() {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Groups</h2>
         <button className="icon-btn" title="Create group" onClick={() => setShowNewGroup(true)}>
           <PlusIcon size={17} />

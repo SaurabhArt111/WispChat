@@ -3,6 +3,7 @@ import client from "../../api/client";
 import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
+import MobileMoreButton from "./MobileMoreButton";
 import { MegaphoneIcon, SendIcon, CheckIcon } from "../common/Icons";
 import "../../styles/railPanels.css";
 
@@ -13,7 +14,7 @@ import "../../styles/railPanels.css";
  * group, and recipients can't see who else got it, matching how broadcast
  * lists work in most chat apps.
  */
-export default function BroadcastPanel() {
+export default function BroadcastPanel({ onOpenMore }) {
   const { startDirectConversation, sendMessage } = useChat();
   const { showToast } = useToast();
   const [contacts, setContacts] = useState([]);
@@ -60,6 +61,7 @@ export default function BroadcastPanel() {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Broadcast Lists</h2>
       </div>
 

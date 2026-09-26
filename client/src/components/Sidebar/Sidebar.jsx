@@ -8,6 +8,7 @@ import NewChatModal from "./NewChatModal";
 import NewGroupModal from "./NewGroupModal";
 import ProfileModal from "./ProfileModal";
 import FriendRequestsModal from "./FriendRequestsModal";
+import MobileMoreButton from "./MobileMoreButton";
 import client from "../../api/client";
 import {
   SearchIcon,
@@ -22,12 +23,13 @@ import {
 } from "../common/Icons";
 import "../../styles/sidebar.css";
 
-const PULL_THRESHOLD = 64;
-const PULL_MAX = 96;
+const PILL_REVEAL = 18; // px dragged before the Archived pill starts appearing
+const PULL_THRESHOLD = 90; // px dragged before release triggers a chat-list refresh
+const PULL_MAX = 120;
 
-export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived }) {
+export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenMore }) {
   const { user, logout } = useAuth();
-  const { conversations, activeId, openConversation, loadingConversations } = useChat();
+  const { conversations, activeId, openConversation, loadingConversations, refreshConversations } = useChat();
   const { openMenu } = useContextMenu();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -37,18 +39,23 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived 
   const [showRequests, setShowRequests] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
   const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const searchInputRef = useRef(null);
   const listRef = useRef(null);
   const pullRef = useRef(null);
 
   const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
 
-  // Pull-to-reveal-Archived: dragging down from the very top of the list
-  // (mirrors the classic "pull down to see archived chats" pattern) slides
-  // an "Archived" pill into view; releasing past the threshold opens it,
-  // releasing short of it just snaps back.
+  // Pull-to-reveal-Archived, in two stages so dragging never opens anything
+  // by itself:
+  //   1. A short drag (past PILL_REVEAL) fades/scales the "Archived" pill
+  //      into view. It's a button — the person has to tap it to actually
+  //      open Archived; letting go here just snaps the list back.
+  //   2. Continuing to stretch past PULL_THRESHOLD and then releasing
+  //      instead refreshes the chat list (a classic pull-to-refresh),
+  //      showing a spinner while it reloads.
   function pullStart(clientY) {
-    if (listRef.current?.scrollTop > 0) return;
+    if (listRef.current?.scrollTop > 0 || refreshing) return;
     pullRef.current = { startY: clientY, active: true };
   }
   function pullMove(clientY) {
@@ -60,13 +67,21 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived 
     }
     setPullDistance(Math.min(PULL_MAX, delta * 0.55));
   }
-  function pullEnd() {
+  async function pullEnd() {
     if (!pullRef.current?.active) return;
     pullRef.current.active = false;
-    if (pullDistance >= PULL_THRESHOLD) {
-      onOpenArchived?.();
-    }
+    const wasPastRefreshPoint = pullDistance >= PULL_THRESHOLD;
     setPullDistance(0);
+    if (wasPastRefreshPoint) {
+      setRefreshing(true);
+      try {
+        await refreshConversations?.();
+      } finally {
+        // Keep the spinner up briefly even on a fast response — an
+        // instant flash reads as broken, not as "it worked".
+        setTimeout(() => setRefreshing(false), 450);
+      }
+    }
   }
 
   useEffect(() => {
@@ -168,6 +183,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived 
           <span className="sidebar-badge">chat</span>
         </div>
         <div className="sidebar-actions">
+          {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
           <button
             className="icon-btn"
             title="Friend requests"
@@ -251,15 +267,21 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived 
         onMouseLeave={pullEnd}
         style={{ transform: pullDistance ? `translateY(${pullDistance}px)` : undefined }}
       >
-        {pullDistance > 0 && (
+        {refreshing && (
+          <div className="conversation-list-refresh-spinner" style={{ top: -40 }}>
+            <span className="refresh-spinner-icon" />
+            <span>Refreshing chats…</span>
+          </div>
+        )}
+        {!refreshing && pullDistance > PILL_REVEAL && (
           <button
-            className={`archived-pull-pill ${pullDistance >= PULL_THRESHOLD ? "ready" : ""}`}
+            className={`archived-pull-pill entering ${pullDistance >= PULL_THRESHOLD ? "ready" : ""}`}
             style={{ top: -pullDistance }}
             onClick={onOpenArchived}
           >
             <ArchiveIcon size={15} />
             {pullDistance >= PULL_THRESHOLD
-              ? "Release for Archived"
+              ? "Release to refresh chats"
               : `Archived${archivedCount ? ` (${archivedCount})` : ""}`}
           </button>
         )}

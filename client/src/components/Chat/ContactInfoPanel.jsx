@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
+import { useStatus } from "../../context/StatusContext";
 import { useToast } from "../../context/ToastContext";
 import client from "../../api/client";
 import { mediaUrl } from "../../api/config";
 import Avatar from "../common/Avatar";
 import Lightbox from "./Lightbox";
 import GroupInfoModal from "./GroupInfoModal";
+import StatusViewer from "../Sidebar/StatusViewer";
 import { formatLastSeen, formatBytes } from "../../utils/time";
 import { BackIcon, CloseIcon, MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon } from "../common/Icons";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
@@ -24,10 +26,12 @@ const DEFAULT_WIDTH = 320;
 export default function ContactInfoPanel({ conversation, onClose }) {
   const { user } = useAuth();
   const { messages, presence, upsertConversation, closeActiveChat } = useChat();
+  const { contactEntries } = useStatus();
   const { showToast } = useToast();
   const [tab, setTab] = useState("media");
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [showStatusViewer, setShowStatusViewer] = useState(false);
   const [width, setWidth] = useState(
     () => Number(localStorage.getItem("wisp_contact_panel_width")) || DEFAULT_WIDTH
   );
@@ -76,6 +80,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
     : other;
   const isOnline = other ? presence[other._id]?.isOnline ?? other.isOnline : false;
   const lastSeen = other ? presence[other._id]?.lastSeen ?? other.lastSeen : null;
+  const contactStatusEntry = other ? contactEntries.find((f) => f.user._id === other._id) : null;
 
   const media = useMemo(
     () =>
@@ -141,7 +146,17 @@ export default function ContactInfoPanel({ conversation, onClose }) {
 
       <div className="contact-info-scroll">
         <div className="contact-info-hero">
-          <Avatar user={avatarUser} size={96} showStatus={!conversation.isGroup} online={isOnline} />
+          {contactStatusEntry ? (
+            <button
+              className="contact-info-avatar-status-btn"
+              onClick={() => setShowStatusViewer(true)}
+              title="View status"
+            >
+              <Avatar user={avatarUser} size={96} showStatus={!conversation.isGroup} online={isOnline} />
+            </button>
+          ) : (
+            <Avatar user={avatarUser} size={96} showStatus={!conversation.isGroup} online={isOnline} />
+          )}
           <div className="contact-info-name">{label}</div>
           <div className="contact-info-sub">
             {conversation.isGroup
@@ -273,6 +288,9 @@ export default function ContactInfoPanel({ conversation, onClose }) {
 
       {showGroupSettings && (
         <GroupInfoModal conversation={conversation} onClose={() => setShowGroupSettings(false)} />
+      )}
+      {showStatusViewer && contactStatusEntry && (
+        <StatusViewer entry={contactStatusEntry} isOwn={false} onClose={() => setShowStatusViewer(false)} />
       )}
     </aside>
   );

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useSocket } from "../../context/SocketContext";
 import Avatar from "../common/Avatar";
+import MobileMoreButton from "./MobileMoreButton";
 import { PhoneIcon, VideoIcon } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
 import "../../styles/railPanels.css";
@@ -18,7 +19,7 @@ function callLabel(call) {
   return `${label} · ${minutes > 0 ? `${minutes}m ` : ""}${seconds}s`;
 }
 
-export default function CallsPanel() {
+export default function CallsPanel({ onOpenMore }) {
   const { user } = useAuth();
   const { openConversation } = useChat();
   const { socket } = useSocket();
@@ -56,6 +57,7 @@ export default function CallsPanel() {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Calls</h2>
         {!loading && calls.length > 0 && <span className="rail-panel-count">{calls.length}</span>}
       </div>

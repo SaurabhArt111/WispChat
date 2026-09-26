@@ -34,6 +34,13 @@ export const IMAGE_SKIP_BELOW_BYTES = 220 * 1024; // already small enough, don't
 export const GIF_TARGET_BYTES = 1024 * 1024; // 1MB
 export const GIF_SKIP_BELOW_BYTES = 300 * 1024;
 
+// Status slides are viewed briefly and expire in 24h, so they're worth
+// compressing noticeably harder than a chat photo someone might want to
+// keep at fuller quality — smaller uploads, faster loads for whoever's
+// viewing on a slow connection.
+export const STATUS_IMAGE_TARGET_BYTES = 320 * 1024; // ~320KB
+export const STATUS_GIF_TARGET_BYTES = 450 * 1024;
+
 let ffmpegPromise = null;
 
 // NOTE: an earlier version of this file tried to opportunistically load
@@ -311,10 +318,10 @@ export function needsCompression(file) {
  * documents, small images, svg) resolve immediately with the original
  * file.
  */
-export async function compressMedia(file, { onProgress } = {}) {
+export async function compressMedia(file, { onProgress, targetBytes } = {}) {
   try {
-    if (file.type === "image/gif") return await compressGifFile(file, { onProgress });
-    if (file.type.startsWith("image/")) return await compressImageFile(file, { onProgress });
+    if (file.type === "image/gif") return await compressGifFile(file, { onProgress, targetBytes });
+    if (file.type.startsWith("image/")) return await compressImageFile(file, { onProgress, targetBytes });
     if (file.type.startsWith("video/")) return await compressVideoFile(file, { onProgress });
   } catch (err) {
     console.error("Media compression failed, sending original file instead:", err?.message || err);

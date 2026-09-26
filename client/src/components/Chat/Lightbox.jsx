@@ -13,10 +13,12 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   const [index, setIndex] = useState(startIndex);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [origin, setOrigin] = useState({ x: 50, y: 50 });
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef(null);
   const pinchRef = useRef(null);
   const overlayRef = useRef(null);
+  const imgRef = useRef(null);
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
 
@@ -24,7 +26,36 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setOrigin({ x: 50, y: 50 });
   }, [index]);
+
+  // Keeps the pan offset from ever dragging the image so far that its
+  // edge leaves a big empty gap in the stage — clamps relative to how
+  // much the current zoom level has actually enlarged the image.
+  function clampPan(next, z) {
+    if (z <= 1) return { x: 0, y: 0 };
+    const el = imgRef.current;
+    const maxX = el ? (el.clientWidth * (z - 1)) / 2 : 400 * z;
+    const maxY = el ? (el.clientHeight * (z - 1)) / 2 : 400 * z;
+    return {
+      x: Math.max(-maxX, Math.min(maxX, next.x)),
+      y: Math.max(-maxY, Math.min(maxY, next.y)),
+    };
+  }
+
+  // Converts a pointer position into a 0–100 percentage within the image
+  // element, used as the CSS transform-origin so zooming (wheel, pinch, or
+  // double-click) magnifies toward wherever the pointer/fingers actually
+  // are, instead of always zooming from dead-center.
+  function originFromPoint(clientX, clientY) {
+    const el = imgRef.current;
+    if (!el) return { x: 50, y: 50 };
+    const rect = el.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100)),
+    };
+  }
 
   useEffect(() => {
     function onKey(e) {
@@ -52,9 +83,13 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
     if (!el) return;
     function handleWheel(e) {
       e.preventDefault();
+      setOrigin(originFromPoint(e.clientX, e.clientY));
       setZoom((z) => {
         const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z - e.deltaY * 0.0018 * z));
-        if (next <= 1.02) setPan({ x: 0, y: 0 });
+        if (next <= 1.02) {
+          setPan({ x: 0, y: 0 });
+          setOrigin({ x: 50, y: 50 });
+        }
         return next;
       });
     }
@@ -84,7 +119,7 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    setPan({ x: dragRef.current.origin.x + dx, y: dragRef.current.origin.y + dy });
+    setPan(clampPan({ x: dragRef.current.origin.x + dx, y: dragRef.current.origin.y + dy }, zoom));
   }
   function endDrag() {
     dragRef.current = null;
@@ -100,7 +135,9 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   }
   function handleTouchStart(e) {
     if (e.touches.length === 2) {
+      const [a, b] = e.touches;
       pinchRef.current = { startDist: touchDistance(e.touches), startZoom: zoom };
+      setOrigin(originFromPoint((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2));
       dragRef.current = null;
     } else if (e.touches.length === 1 && zoom > 1) {
       const t = e.touches[0];
@@ -114,13 +151,16 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
       const ratio = dist / pinchRef.current.startDist;
       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pinchRef.current.startZoom * ratio));
       setZoom(next);
-      if (next <= 1.02) setPan({ x: 0, y: 0 });
+      if (next <= 1.02) {
+        setPan({ x: 0, y: 0 });
+        setOrigin({ x: 50, y: 50 });
+      }
     } else if (e.touches.length === 1 && dragRef.current) {
       e.preventDefault();
       const t = e.touches[0];
       const dx = t.clientX - dragRef.current.startX;
       const dy = t.clientY - dragRef.current.startY;
-      setPan({ x: dragRef.current.origin.x + dx, y: dragRef.current.origin.y + dy });
+      setPan(clampPan({ x: dragRef.current.origin.x + dx, y: dragRef.current.origin.y + dy }, zoom));
     }
   }
   function handleTouchEnd(e) {
@@ -129,11 +169,14 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   }
 
   function toggleZoom(e) {
-    // Double-click: quick zoom to 2.4x at click point, or back out to 1x.
+    // Double-click: quick zoom to 2.4x centered on the click point, or
+    // back out to 1x.
     if (zoom > 1) {
       setZoom(1);
       setPan({ x: 0, y: 0 });
+      setOrigin({ x: 50, y: 50 });
     } else {
+      setOrigin(originFromPoint(e.clientX, e.clientY));
       setZoom(2.4);
     }
   }
@@ -229,6 +272,7 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
         onContextMenu={handleStageContextMenu}
       >
         <img
+          ref={imgRef}
           src={resolvedUrl || ""}
           alt={img.name || "Photo"}
           className="lightbox-img"
@@ -236,6 +280,7 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
           onDoubleClick={toggleZoom}
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: `${origin.x}% ${origin.y}%`,
             cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in",
             opacity: loading || !resolvedUrl ? 0.3 : 1,
             touchAction: zoom > 1 ? "none" : "auto",

@@ -45,7 +45,7 @@ function ProgressRing({ progress = 0, size = 34 }) {
   );
 }
 
-function PendingImage({ a }) {
+function PendingImage({ a, overlay }) {
   return (
     <div className="image-grid-item attachment-pending">
       <img src={a.localUrl} alt={a.name} className="image-grid-img" />
@@ -53,6 +53,7 @@ function PendingImage({ a }) {
         <ProgressRing progress={a.progress} />
         <span>{a.stage === "compressing" ? "Optimizing…" : "Sending…"}</span>
       </div>
+      {overlay}
     </div>
   );
 }
@@ -87,13 +88,14 @@ function PendingGeneric({ a }) {
 // shown at all, so each one is wrapped in a tiny component that resolves
 // a usable (blob:) src via useDecryptedMediaUrl before rendering.
 
-function AttachmentImage({ message, a, onClick, onContextMenu }) {
+function AttachmentImage({ message, a, onClick, onContextMenu, overlay }) {
   const { url, loading, error } = useDecryptedMediaUrl(message, a);
   if (loading) return <div className="image-grid-item attachment-decrypting"><LockIcon size={18} /></div>;
   if (error || !url) return <div className="image-grid-item attachment-decrypt-error">Couldn't decrypt</div>;
   return (
     <div className="image-grid-item" onClick={() => onClick(url)} onContextMenu={(e) => onContextMenu(e, url)}>
       <SafeImage src={url} alt={a.name} loading="lazy" className="image-grid-img" />
+      {overlay}
     </div>
   );
 }
@@ -130,31 +132,38 @@ function AttachmentAudio({ message, a }) {
 
 function AttachmentFile({ message, a, onContextMenu }) {
   const { url, loading, error } = useDecryptedMediaUrl(message, a);
+  const canOpen = !!url && !loading && !error;
   return (
-    <a
-      href={url || undefined}
-      download={a.name}
-      target="_blank"
-      rel="noreferrer"
-      className={`attachment-file ${!url ? "attachment-file-disabled" : ""}`}
-      onClick={(e) => {
-        if (!url) e.preventDefault();
-      }}
-      onContextMenu={(e) => onContextMenu(e, url)}
-    >
-      {getExtensionBadge(a.name)}
-      <div className="attachment-file-info">
-        <div className="attachment-file-name" title={a.name}>
-          {a.name}
+    <div className={`attachment-file ${!canOpen ? "attachment-file-disabled" : ""}`} onContextMenu={(e) => onContextMenu(e, url)}>
+      <button
+        type="button"
+        className="attachment-file-open"
+        disabled={!canOpen}
+        title={canOpen ? "Open to view" : undefined}
+        onClick={() => canOpen && window.open(url, "_blank", "noopener,noreferrer")}
+      >
+        {getExtensionBadge(a.name)}
+        <div className="attachment-file-info">
+          <div className="attachment-file-name" title={a.name}>
+            {a.name}
+          </div>
+          <div className="attachment-file-size">
+            {loading ? "Decrypting…" : error ? "Couldn't decrypt" : formatBytes(a.size)}
+          </div>
         </div>
-        <div className="attachment-file-size">
-          {loading ? "Decrypting…" : error ? "Couldn't decrypt" : formatBytes(a.size)}
-        </div>
-      </div>
-      <div className="attachment-download" title="Download">
+      </button>
+      <a
+        href={url || undefined}
+        download={a.name}
+        className="attachment-download"
+        title="Download"
+        onClick={(e) => {
+          if (!canOpen) e.preventDefault();
+        }}
+      >
         <DownloadIcon size={16} />
-      </div>
-    </a>
+      </a>
+    </div>
   );
 }
 
@@ -199,20 +208,24 @@ export default function AttachmentView({ message, attachments, onForward, onRepl
     <div className="attachments">
       {images.length > 0 && (
         <div className={`image-grid count-${Math.min(images.length, 4)}`}>
-          {images.slice(0, 4).map((a, i) =>
-            a._local ? (
-              <PendingImage key={a.localId || i} a={a} />
+          {images.slice(0, 4).map((a, i) => {
+            const isLastVisible = i === 3 && images.length > 4;
+            const moreOverlay = isLastVisible ? (
+              <div className="image-grid-more">+{images.length - 4}</div>
+            ) : null;
+            return a._local ? (
+              <PendingImage key={a.localId || i} a={a} overlay={moreOverlay} />
             ) : (
               <AttachmentImage
                 key={a.url || i}
                 message={message}
                 a={a}
+                overlay={moreOverlay}
                 onClick={(resolvedUrl) => setLightbox({ list: images, index: i, url: resolvedUrl })}
                 onContextMenu={(e, resolvedUrl) => imageContextMenu(e, a, resolvedUrl)}
               />
-            )
-          )}
-          {images.length > 4 && <div className="image-grid-more">+{images.length - 4}</div>}
+            );
+          })}
         </div>
       )}
 

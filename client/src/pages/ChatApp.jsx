@@ -4,6 +4,7 @@ import { useChat } from "../context/ChatContext";
 import { useStatus } from "../context/StatusContext";
 import AsideRail from "../components/Sidebar/AsideRail";
 import MobileBottomNav from "../components/Sidebar/MobileBottomNav";
+import MoreMenuSheet from "../components/Sidebar/MoreMenuSheet";
 import Sidebar from "../components/Sidebar/Sidebar";
 import ArchivedPanel from "../components/Sidebar/ArchivedPanel";
 import GroupsPanel from "../components/Sidebar/GroupsPanel";
@@ -38,11 +39,12 @@ export default function ChatApp() {
   const [showProfile, setShowProfile] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const settingsReturnRef = useRef("/");
 
   const routeSegment = location.pathname.split("/")[1] || "";
   const view = ROUTED_VIEWS.includes(routeSegment) ? routeSegment : "chats";
-  const showSettings = location.pathname === "/settings";
+  const showSettings = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
 
   function changeView(id) {
     if (id === "archived") {
@@ -82,14 +84,15 @@ export default function ChatApp() {
           onOpenNewChat={() => setShowNewChat(true)}
           onOpenNewGroup={() => setShowNewGroup(true)}
           onOpenArchived={() => setShowArchived(true)}
+          onOpenMore={() => setShowMoreMenu(true)}
         />
       )}
-      {showArchived && <ArchivedPanel onBack={() => setShowArchived(false)} />}
-      {view === "groups" && <GroupsPanel />}
-      {view === "status" && <StatusPanel />}
-      {view === "media" && <MediaStoragePanel />}
-      {view === "calls" && <CallsPanel />}
-      {view === "broadcast" && <BroadcastPanel />}
+      {showArchived && <ArchivedPanel onBack={() => setShowArchived(false)} onOpenMore={() => setShowMoreMenu(true)} />}
+      {view === "groups" && <GroupsPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {view === "status" && <StatusPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {view === "media" && <MediaStoragePanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {view === "calls" && <CallsPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {view === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
 
       <div className="app-main">
         {activeId ? (
@@ -140,8 +143,15 @@ export default function ChatApp() {
       <MobileBottomNav
         view={showArchived ? "archived" : view}
         onChangeView={changeView}
-        onOpenSettings={openSettings}
+        onOpenExplore={() => setShowNewChat(true)}
         hasUnreadStatus={hasUnread}
+      />
+
+      <MoreMenuSheet
+        open={showMoreMenu}
+        onClose={() => setShowMoreMenu(false)}
+        onChangeView={changeView}
+        onOpenSettings={openSettings}
       />
 
       {showNewChat && <NewChatModal onClose={() => setShowNewChat(false)} />}

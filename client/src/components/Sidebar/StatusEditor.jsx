@@ -5,7 +5,7 @@ import { useToast } from "../../context/ToastContext";
 import ImageEditor from "../MediaComposer/ImageEditor";
 import ConfirmModal from "../common/ConfirmModal";
 import { kindFromMime } from "../../utils/fileKind";
-import { compressMedia, needsCompression } from "../../utils/mediaCompressor";
+import { compressMedia, needsCompression, STATUS_IMAGE_TARGET_BYTES, STATUS_GIF_TARGET_BYTES } from "../../utils/mediaCompressor";
 import { CloseIcon, SendIcon } from "../common/Icons";
 import "../../styles/mediaComposer.css";
 import "../../styles/status.css";
@@ -49,12 +49,14 @@ export default function StatusEditor({ mode, file, onClose }) {
           blob = await editorRef.current.getFinalBlob();
           name = "status.png";
         }
-        // Same compressor used for chat media — statuses get the same
-        // "always compress, target ~1MB for photos" treatment before
-        // upload.
+        // Same compressor used for chat media, but with a noticeably
+        // tighter target — status slides are viewed briefly and expire in
+        // 24h, so it's worth trading a bit more quality for a much smaller,
+        // faster-loading upload than a chat photo would use.
         if (needsCompression(blob)) {
           setCompressState({ progress: 0, label: fileKind === "video" ? "Compressing video" : "Optimizing photo" });
-          blob = await compressMedia(blob, { onProgress: (p) => setCompressState((s) => ({ ...s, progress: p })) });
+          const targetBytes = blob.type === "image/gif" ? STATUS_GIF_TARGET_BYTES : STATUS_IMAGE_TARGET_BYTES;
+          blob = await compressMedia(blob, { targetBytes, onProgress: (p) => setCompressState((s) => ({ ...s, progress: p })) });
         }
         setCompressState(null);
         await postMediaStatus(blob, name, caption.trim());

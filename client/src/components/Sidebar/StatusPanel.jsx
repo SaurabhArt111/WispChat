@@ -5,12 +5,13 @@ import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import StatusEditor from "./StatusEditor";
 import StatusViewer from "./StatusViewer";
+import MobileMoreButton from "./MobileMoreButton";
 import { PlusIcon, StatusRingIcon, CameraIcon, TypeIcon } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
 import "../../styles/railPanels.css";
 import "../../styles/status.css";
 
-export default function StatusPanel() {
+export default function StatusPanel({ onOpenMore }) {
   const { user } = useAuth();
   const { myEntry, contactEntries, loading } = useStatus();
   const { showToast } = useToast();
@@ -47,6 +48,7 @@ export default function StatusPanel() {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Status</h2>
       </div>
 

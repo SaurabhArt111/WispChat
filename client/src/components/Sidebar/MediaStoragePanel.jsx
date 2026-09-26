@@ -6,6 +6,7 @@ import Lightbox from "../Chat/Lightbox";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { LockIcon } from "../common/Icons";
 import MediaStatsChart from "./MediaStatsChart";
+import MobileMoreButton from "./MobileMoreButton";
 import { LayersIcon, ImageIcon, VideoIcon, AudioIcon, FileIcon as DocIcon } from "../common/Icons";
 import { formatBytes, formatListTime } from "../../utils/time";
 import "../../styles/railPanels.css";
@@ -54,7 +55,7 @@ function GridThumb({ item, onClick }) {
   );
 }
 
-export default function MediaStoragePanel() {
+export default function MediaStoragePanel({ onOpenMore }) {
   const { openConversation } = useChat();
   const [stats, setStats] = useState(null);
   const [kind, setKind] = useState("image");
@@ -90,6 +91,7 @@ export default function MediaStoragePanel() {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Media & Storage</h2>
       </div>
       <div className="rail-panel-scroll">

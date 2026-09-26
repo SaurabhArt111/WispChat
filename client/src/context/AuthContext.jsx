@@ -15,6 +15,7 @@ import {
   cacheUnwrapPrivateKey,
 } from "../utils/crypto";
 import { logError } from "../utils/logger";
+import { clearCache as clearMessageCache } from "../utils/messageCache";
 
 const AuthContext = createContext(null);
 
@@ -169,6 +170,7 @@ export function AuthProvider({ children }) {
       /* ignore */
     }
     if (user?._id) localStorage.removeItem(cacheKeyName(user._id));
+    if (user?._id) clearMessageCache(user._id);
     localStorage.removeItem("wisp_token");
     setUser(null);
     privateKeyRef.current = null;

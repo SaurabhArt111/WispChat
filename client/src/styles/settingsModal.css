@@ -265,6 +265,16 @@
     display: none;
   }
 }
+
+.settings-back-btn {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .settings-back-btn {
+    display: inline-flex;
+  }
+}
 /* --- Wallpaper picker (Settings → Chats, and per-chat "More" menu) --- */
 .wallpaper-picker {
   display: grid;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import client from "../../api/client";
@@ -9,6 +10,7 @@ import WallpaperPicker from "../common/WallpaperPicker";
 import { getGlobalWallpaper, setGlobalWallpaper } from "../../utils/wallpaper";
 import {
   CloseIcon,
+  BackIcon,
   SettingsIcon,
   ShieldIcon,
   LockIcon,
@@ -52,19 +54,26 @@ const CATEGORIES = [
 
 export default function SettingsModal({ onClose, onOpenProfile }) {
   const { user, logout } = useAuth();
-  const [active, setActive] = useState(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Each category gets its own real URL — /settings/general,
+  // /settings/account, etc. — instead of only living in local state, so a
+  // section is bookmarkable/shareable and back/forward works.
+  const active = location.pathname.startsWith("/settings/")
+    ? location.pathname.slice("/settings/".length).split("/")[0] || null
+    : null;
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") {
-        if (active) setActive(null);
+        if (active) navigate("/settings");
         else onClose();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, onClose]);
+  }, [active, onClose, navigate]);
 
   async function handleLogout() {
     setShowLogoutConfirm(false);
@@ -77,6 +86,11 @@ export default function SettingsModal({ onClose, onOpenProfile }) {
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal settings-modal">
         <div className="modal-header">
+          {active && (
+            <button className="icon-btn btn-sm settings-back-btn" onClick={() => navigate("/settings")} title="Back">
+              <BackIcon size={18} />
+            </button>
+          )}
           <h2>{activeCategory ? activeCategory.label : "Settings"}</h2>
           <button className="icon-btn btn-sm" onClick={onClose} title="Close (Esc)">
             <CloseIcon size={18} />
@@ -94,7 +108,7 @@ export default function SettingsModal({ onClose, onOpenProfile }) {
             </button>
 
             {CATEGORIES.map((c) => (
-              <button key={c.id} className="settings-list-item" onClick={() => setActive(c.id)}>
+              <button key={c.id} className="settings-list-item" onClick={() => navigate(`/settings/${c.id}`)}>
                 <span className="settings-list-icon">
                   <c.icon size={18} />
                 </span>

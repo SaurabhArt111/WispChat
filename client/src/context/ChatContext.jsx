@@ -7,6 +7,13 @@ import { uploadFiles, uploadPreparedFiles } from "../api/upload";
 import { decryptBytesWithKey, encryptBytesWithKey } from "../utils/crypto";
 import { compressItems } from "../utils/mediaCompressor";
 import { mediaUrl } from "../api/config";
+import {
+  readCachedConversations,
+  writeCachedConversations,
+  readCachedMessages,
+  writeCachedMessages,
+  clearCache,
+} from "../utils/messageCache";
 
 const ChatContext = createContext(null);
 
@@ -24,6 +31,8 @@ export function ChatProvider({ children }) {
 
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
 
   const refreshConversations = useCallback(async () => {
     const res = await client.get("/conversations");
@@ -32,13 +41,34 @@ export function ChatProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (user) refreshConversations();
-    else {
+    if (user) {
+      // Show whatever we saw last session immediately — the network
+      // refresh below will still run and replace it with the real thing,
+      // but the person gets a populated list instantly instead of a
+      // skeleton (or a completely blank pane) while that's in flight.
+      const cached = readCachedConversations(user._id);
+      if (cached && cached.length) {
+        setConversations(cached);
+        setLoadingConversations(false);
+      }
+      refreshConversations();
+    } else {
       setConversations([]);
       setMessagesByConv({});
       setActiveId(null);
     }
   }, [user, refreshConversations]);
+
+  useEffect(() => {
+    if (user && conversations.length > 0) writeCachedConversations(user._id, conversations);
+  }, [user, conversations]);
+
+  useEffect(() => {
+    if (!user) return;
+    for (const [convId, msgs] of Object.entries(messagesByConv)) {
+      if (msgs?.length) writeCachedMessages(user._id, convId, msgs);
+    }
+  }, [user, messagesByConv]);
 
   const upsertConversation = useCallback((conv) => {
     setConversations((prev) => {
@@ -78,13 +108,17 @@ export function ChatProvider({ children }) {
       }
       setActiveId(conversationId);
       if (!messagesByConv[conversationId]) {
+        const cached = user && readCachedMessages(user._id, conversationId);
+        if (cached && cached.length) {
+          setMessagesByConv((prev) => ({ ...prev, [conversationId]: cached }));
+        }
         await loadMessages(conversationId);
       }
       client.post(`/messages/${conversationId}/read`).catch(() => {});
       socket?.emit("conversation:join", { conversationId });
       setConversations((prev) => prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c)));
     },
-    [loadMessages, messagesByConv, socket]
+    [loadMessages, messagesByConv, socket, user]
   );
 
   // Public entry point used throughout the UI: pushes /chat/:id onto the
@@ -557,6 +591,62 @@ export function ChatProvider({ children }) {
       });
       if (activeIdRef.current === msg.conversation && msg.sender?._id !== user?._id) {
         client.post(`/messages/${msg.conversation}/read`).catch(() => {});
+      }
+
+      // System notification for messages that arrive while the person
+      // isn't actively looking at that chat — mirrors the call notification
+      // below it and is what the Settings → Notifications copy already
+      // promises ("new messages can show a system notification"), it just
+      // wasn't wired up on the receiving side yet.
+      if (
+        msg.sender?._id !== user?._id &&
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
+        const conv = conversationsRef.current.find((c) => c._id === msg.conversation);
+        const isActiveAndFocused = activeIdRef.current === msg.conversation && !document.hidden;
+        if (conv && !conv.muted && !isActiveAndFocused) {
+          e2ee
+            .decryptMessageText(msg)
+            .then(({ text, locked }) => {
+              const senderName = msg.sender?.displayName || "Someone";
+              const title = conv.isGroup ? `${senderName} in ${conv.name}` : senderName;
+              let body;
+              if (locked) body = "New message";
+              else if (text) body = text.length > 120 ? text.slice(0, 117) + "…" : text;
+              else if (msg.attachments?.length) {
+                const kind = msg.attachments[0].kind;
+                body =
+                  msg.attachments.length > 1
+                    ? `${msg.attachments.length} attachments`
+                    : kind === "image"
+                    ? "📷 Photo"
+                    : kind === "video"
+                    ? "🎥 Video"
+                    : kind === "audio"
+                    ? "🎤 Voice message"
+                    : "📎 File";
+              } else body = "New message";
+
+              try {
+                const n = new Notification(title, {
+                  body,
+                  icon: "/icons/icon-192.png",
+                  tag: `wisp-msg-${msg.conversation}`,
+                });
+                n.onclick = () => {
+                  window.focus();
+                  navigate(`/chat/${msg.conversation}`);
+                  n.close();
+                };
+              } catch {
+                // Some browsers (notably iOS Safari, even installed as a
+                // PWA) throw synchronously from `new Notification()` — the
+                // in-app unread badge still covers it either way.
+              }
+            })
+            .catch(() => {});
+        }
       }
     };
 

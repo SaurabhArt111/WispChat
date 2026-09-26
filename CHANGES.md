@@ -81,3 +81,70 @@ if you want to inspect it — see the note at the bottom of this file._
 A full git history (base → my changes → your changes → merge) is included
 in this zip as a `.git` folder, in case you want to inspect exactly what
 changed and by whom, or cherry-pick/revert something later.
+
+---
+
+## Round 3 (this update)
+
+**Done:**
+- **Image grid bug (the "+1 blocks clicks" screenshot)** — the "+N more"
+  overlay was `position:absolute; inset:0` as a *sibling* of the grid tiles,
+  so it covered all 4 thumbnails instead of just the last one. Fixed by
+  nesting it inside the 4th tile only.
+- **File/PDF attachments** — now have two separate actions: click the row
+  to open it in a new tab (view), a small download icon to explicitly save
+  it. Previously one link only ever forced a download.
+- **Lightbox zoom** — wheel, pinch, and double-click zoom now all anchor to
+  the actual cursor/pinch/click point instead of always zooming from
+  dead-center, and pan is clamped so you can't drag a zoomed image
+  completely off-screen.
+- **Archive drag gesture reworked** — no longer auto-opens Archived on
+  release. A short drag reveals an "Archived" button (with a pop-in
+  animation) you have to tap; dragging further and releasing instead
+  refreshes the chat list with a spinner animation.
+- **Bottom nav** — removed the bouncy overshoot easing on the More sheet,
+  moved "More" out of the bottom nav entirely into a small button in the
+  top of every panel (Sidebar, Groups, Status, Media, Calls, Broadcast,
+  Archived), and replaced the bottom nav's "Groups" tab with "Explore"
+  (opens the existing find-people/new-chat search flow).
+- **Status viewer** — closes on swipe-down or scroll-down, and the viewer
+  list now shows an avatar + name for each viewer (was just a bare
+  timestamp before). Server now populates viewer identities.
+- **Status compression** — status photos/GIFs now target ~320KB/450KB
+  instead of sharing chat media's 1MB target, since status is brief and
+  ephemeral.
+- **Status preview from Contact Info** — a contact's avatar on their
+  Contact Info page is now a clickable ring that opens their current status
+  if they have one.
+- **Message/conversation caching** — conversations and each chat's recent
+  messages persist to localStorage and hydrate instantly on boot, instead
+  of showing a blank screen/skeleton until the network call resolves.
+  Cleared on logout.
+- **System notifications for new messages** — Settings already promised
+  this ("new messages can show a system notification") but it was never
+  wired up on the receiving side; it now shows a notification (respecting
+  per-chat mute, with a decrypted preview) when a message arrives for a
+  chat you're not actively looking at. Incoming-call notifications already
+  existed.
+- **Settings now has real per-section URLs** — `/settings/general`,
+  `/settings/account`, `/settings/privacy`, etc., with a mobile back
+  button, instead of only living in local component state.
+
+**Already existed (verified, no work needed):**
+- Single/double-tick + blue "read" color on messages — fully implemented.
+- PWA "update available" banner, install prompt, and iOS add-to-home-screen
+  tip — all already built into `PwaManager.jsx`.
+
+**Not done — flagged rather than faked:**
+- Status/media **filters** while uploading (Instagram-style color filters) —
+  a genuinely new feature, not started.
+- **Camera capture** directly in chat and status (live photo/video capture,
+  not just file picking) — not started.
+- A **"recording audio" indicator** — there's actually no voice-note
+  *recording* feature in this codebase at all yet (only playback of
+  existing audio attachments), so there's nothing to attach an indicator
+  to. Building voice-note recording is a mid-sized feature on its own.
+- Deeper UI/UX rework of "modules" beyond what's listed above (this phrase
+  was vague in the request — happy to take a specific module if you have
+  one in mind).
+

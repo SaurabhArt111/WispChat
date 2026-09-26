@@ -215,7 +215,7 @@
 .archived-pull-pill {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(1);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -231,10 +231,58 @@
   z-index: 5;
 }
 
+.archived-pull-pill.entering {
+  animation: pillPopIn 200ms var(--ease);
+}
+
+@keyframes pillPopIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
 .archived-pull-pill.ready {
   background: var(--wisp);
   color: #04211a;
   border-color: var(--wisp);
+}
+
+.conversation-list-refresh-spinner {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-round);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 5;
+  animation: pillPopIn 160ms var(--ease);
+}
+
+.refresh-spinner-icon {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--wisp);
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .conv-group {

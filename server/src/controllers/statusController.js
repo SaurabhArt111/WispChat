@@ -15,6 +15,7 @@ export async function getFeed(req, res) {
   const statuses = await Status.find({ user: { $in: audience }, expiresAt: { $gt: new Date() } })
     .sort({ createdAt: 1 })
     .populate("user", "username displayName avatar avatarColor")
+    .populate("viewers.user", "username displayName avatar avatarColor")
     .lean();
 
   // Group into one entry per user, each with their ordered slides, so the

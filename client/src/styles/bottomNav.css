@@ -77,7 +77,7 @@
   border-top-left-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-lg);
   padding: 10px 12px calc(14px + env(safe-area-inset-bottom, 0px));
-  animation: slideUp 180ms var(--ease-spring);
+  animation: slideUp 180ms var(--ease);
 }
 
 .bottom-nav-more-handle {
@@ -121,5 +121,18 @@
   .app-shell:not(.has-active-chat) .sidebar,
   .app-shell:not(.has-active-chat) .rail-panel {
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* "More" trigger button used in each panel's top header — desktop already
+   has these destinations as individual AsideRail buttons, so this only
+   shows up below the mobile breakpoint. */
+.mobile-more-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-more-btn {
+    display: inline-flex;
   }
 }

@@ -797,6 +797,7 @@
   justify-content: center;
   font-size: 19px;
   font-weight: 700;
+  pointer-events: none;
 }
 
 .attachment-video-wrap {
@@ -905,15 +906,43 @@
   color: var(--text-faint);
 }
 
+.attachment-file-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.attachment-file-open:disabled {
+  cursor: default;
+}
+
 .attachment-download {
   color: var(--text-faint);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  padding: 6px;
+  margin: -6px;
+  border-radius: var(--radius-sm);
 }
 
 .attachment-file:hover .attachment-download {
   color: var(--wisp);
+}
+
+.attachment-download:hover {
+  background: var(--surface-4);
 }
 
 /* --- Drag & Drop Overlay --- */
