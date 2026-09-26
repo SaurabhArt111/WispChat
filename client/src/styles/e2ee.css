@@ -70,7 +70,7 @@
 /* Small inline badge used in the chat header / composer to show whether a
    conversation's messages are end-to-end encrypted. */
 .e2ee-badge {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 4px;
   font-size: 11.5px;
@@ -230,7 +230,7 @@
 }
 
 
-@media (max-width: 480px) {
+@media (max-width: 580px) {
 
   .e2ee-badge {
     display: none;

@@ -56,7 +56,7 @@ export function resolveWallpaperStyle(conversationId) {
 
   if (value.startsWith("data:")) {
     return {
-      backgroundImage: `linear-gradient(rgba(6,10,9,0.45), rgba(6,10,9,0.45)), url("${value}")`,
+      backgroundImage: `linear-gradient(rgba(6,10,9,0.75), rgba(6,10,9,0.85)), url("${value}")`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
