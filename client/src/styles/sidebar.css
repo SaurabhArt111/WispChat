@@ -252,6 +252,14 @@
   border-color: var(--wisp);
 }
 
+.archived-pull-pill.pinned {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.archived-pull-pill.pinned:hover {
+  background: var(--surface-4);
+}
+
 .conversation-list-refresh-spinner {
   position: absolute;
   left: 50%;

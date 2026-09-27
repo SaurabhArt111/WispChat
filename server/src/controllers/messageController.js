@@ -223,7 +223,7 @@ export async function getMediaList(req, res) {
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate("sender", "displayName username avatar avatarColor e2ee.publicKeyJwk")
-    .select("attachments sender conversation createdAt encrypted iv keys")
+    .select("attachments sender conversation createdAt encrypted text iv keys")
     .lean();
 
   const items = [];
@@ -237,8 +237,13 @@ export async function getMediaList(req, res) {
         // Carried along so the client can decrypt this attachment the
         // same way it would inside the chat itself — the gallery isn't a
         // separate, unencrypted copy of anything, it's just a different
-        // view over the same messages.
+        // view over the same messages. `messageText`/`messageIv` are the
+        // message's (possibly empty) *caption* ciphertext — decrypting the
+        // attachment needs the same unwrapped message key either way, so
+        // this has to be complete enough to reconstruct that, not just the
+        // attachment's own fields.
         messageEncrypted: m.encrypted,
+        messageText: m.text,
         messageIv: m.iv,
         messageKeys: m.keys,
         sender: m.sender,

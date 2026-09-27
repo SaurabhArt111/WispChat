@@ -45,10 +45,21 @@ export default function ChatApp() {
   const routeSegment = location.pathname.split("/")[1] || "";
   const view = ROUTED_VIEWS.includes(routeSegment) ? routeSegment : "chats";
   const showSettings = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
+  // Single source of truth for which sidebar-column panel is on screen.
+  // Deriving it once here (rather than checking `showArchived` and `view`
+  // independently at each render site) makes it structurally impossible
+  // for two panels to render at once — e.g. opening Archived from the More
+  // sheet while already on a routed view like /media used to leave `view`
+  // still equal to "media" and `showArchived` true at the same time, so
+  // both panels rendered stacked on top of each other.
+  const activePanel = showArchived ? "archived" : view;
 
   function changeView(id) {
     if (id === "archived") {
       setShowArchived(true);
+      // Clear whatever routed view we might have been on so it can't
+      // still be "active" underneath Archived (see activePanel above).
+      if (view !== "chats") navigate("/");
       return;
     }
     setShowArchived(false);
@@ -72,14 +83,14 @@ export default function ChatApp() {
     <div className={`app-shell ${activeId ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""}`}>
       <ConnectionBanner />
       <AsideRail
-        view={showArchived ? "archived" : view}
+        view={activePanel}
         onChangeView={changeView}
         onOpenProfile={() => setShowProfile(true)}
         onOpenSettings={openSettings}
         hasUnreadStatus={hasUnread}
       />
 
-      {view === "chats" && !showArchived && (
+      {activePanel === "chats" && (
         <Sidebar
           onOpenNewChat={() => setShowNewChat(true)}
           onOpenNewGroup={() => setShowNewGroup(true)}
@@ -87,12 +98,14 @@ export default function ChatApp() {
           onOpenMore={() => setShowMoreMenu(true)}
         />
       )}
-      {showArchived && <ArchivedPanel onBack={() => setShowArchived(false)} onOpenMore={() => setShowMoreMenu(true)} />}
-      {view === "groups" && <GroupsPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {view === "status" && <StatusPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {view === "media" && <MediaStoragePanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {view === "calls" && <CallsPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {view === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "archived" && (
+        <ArchivedPanel onBack={() => setShowArchived(false)} onOpenMore={() => setShowMoreMenu(true)} />
+      )}
+      {activePanel === "groups" && <GroupsPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "status" && <StatusPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "media" && <MediaStoragePanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "calls" && <CallsPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
 
       <div className="app-main">
         {activeId ? (
@@ -141,7 +154,7 @@ export default function ChatApp() {
       )}
 
       <MobileBottomNav
-        view={showArchived ? "archived" : view}
+        view={activePanel}
         onChangeView={changeView}
         onOpenExplore={() => setShowNewChat(true)}
         hasUnreadStatus={hasUnread}

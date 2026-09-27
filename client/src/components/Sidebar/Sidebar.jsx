@@ -23,13 +23,14 @@ import {
 } from "../common/Icons";
 import "../../styles/sidebar.css";
 
-const PILL_REVEAL = 18; // px dragged before the Archived pill starts appearing
-const PULL_THRESHOLD = 90; // px dragged before release triggers a chat-list refresh
-const PULL_MAX = 120;
+const PILL_SPACE = 52; // px reserved above the list once the Archived pill is revealed/pinned
+const PILL_REVEAL = 26; // px of downward drag needed to reveal it
+const COLLAPSE_AT = PILL_SPACE * 0.5; // drag back up past this (while revealed) to hide it again
+const PULL_MAX = 90;
 
 export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenMore }) {
   const { user, logout } = useAuth();
-  const { conversations, activeId, openConversation, loadingConversations, refreshConversations } = useChat();
+  const { conversations, activeId, openConversation, loadingConversations } = useChat();
   const { openMenu } = useContextMenu();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -38,50 +39,44 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
   const [showProfile, setShowProfile] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
-  const [pullDistance, setPullDistance] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
+  // Whether the "Archived" pill is currently pinned above the list. Unlike
+  // a momentary pull-to-refresh, this persists after the finger/mouse lets
+  // go — it only goes away again once the person deliberately drags the
+  // list back up (see pullEnd), or taps the pill to actually open Archived.
+  const [revealed, setRevealed] = useState(false);
+  // Only non-null while a drag is actively in progress, so the list can
+  // track the finger/mouse live; falls back to the resting position
+  // (0 or PILL_SPACE, depending on `revealed`) the rest of the time.
+  const [liveOffset, setLiveOffset] = useState(null);
   const searchInputRef = useRef(null);
   const listRef = useRef(null);
-  const pullRef = useRef(null);
+  const dragRef = useRef(null);
 
   const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
+  const restingOffset = revealed ? PILL_SPACE : 0;
+  const displayOffset = liveOffset ?? restingOffset;
 
-  // Pull-to-reveal-Archived, in two stages so dragging never opens anything
-  // by itself:
-  //   1. A short drag (past PILL_REVEAL) fades/scales the "Archived" pill
-  //      into view. It's a button — the person has to tap it to actually
-  //      open Archived; letting go here just snaps the list back.
-  //   2. Continuing to stretch past PULL_THRESHOLD and then releasing
-  //      instead refreshes the chat list (a classic pull-to-refresh),
-  //      showing a spinner while it reloads.
+  // Pull-to-reveal-Archived, mirroring Telegram: dragging down from the
+  // top of the list reveals a persistent "Archived" pill pinned above it —
+  // it stays there (tapping it opens Archived) until the person drags the
+  // list back up from the top far enough to collapse it again. Nothing
+  // about the gesture itself opens Archived; only tapping the pill does.
   function pullStart(clientY) {
-    if (listRef.current?.scrollTop > 0 || refreshing) return;
-    pullRef.current = { startY: clientY, active: true };
+    if (listRef.current?.scrollTop > 0) return;
+    dragRef.current = { startY: clientY, baseOffset: restingOffset };
   }
   function pullMove(clientY) {
-    if (!pullRef.current?.active) return;
-    const delta = clientY - pullRef.current.startY;
-    if (delta <= 0) {
-      setPullDistance(0);
-      return;
-    }
-    setPullDistance(Math.min(PULL_MAX, delta * 0.55));
+    if (!dragRef.current) return;
+    const delta = clientY - dragRef.current.startY;
+    const next = dragRef.current.baseOffset + delta * 0.6;
+    setLiveOffset(Math.max(0, Math.min(PULL_MAX, next)));
   }
-  async function pullEnd() {
-    if (!pullRef.current?.active) return;
-    pullRef.current.active = false;
-    const wasPastRefreshPoint = pullDistance >= PULL_THRESHOLD;
-    setPullDistance(0);
-    if (wasPastRefreshPoint) {
-      setRefreshing(true);
-      try {
-        await refreshConversations?.();
-      } finally {
-        // Keep the spinner up briefly even on a fast response — an
-        // instant flash reads as broken, not as "it worked".
-        setTimeout(() => setRefreshing(false), 450);
-      }
-    }
+  function pullEnd() {
+    if (!dragRef.current) return;
+    const finalOffset = liveOffset ?? dragRef.current.baseOffset;
+    dragRef.current = null;
+    setLiveOffset(null);
+    setRevealed(revealed ? finalOffset >= COLLAPSE_AT : finalOffset >= PILL_REVEAL);
   }
 
   useEffect(() => {
@@ -265,24 +260,23 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
         onMouseMove={(e) => pullMove(e.clientY)}
         onMouseUp={pullEnd}
         onMouseLeave={pullEnd}
-        style={{ transform: pullDistance ? `translateY(${pullDistance}px)` : undefined }}
+        style={{
+          transform: displayOffset ? `translateY(${displayOffset}px)` : undefined,
+          transition: dragRef.current ? "none" : "transform 220ms var(--ease)",
+        }}
       >
-        {refreshing && (
-          <div className="conversation-list-refresh-spinner" style={{ top: -40 }}>
-            <span className="refresh-spinner-icon" />
-            <span>Refreshing chats…</span>
-          </div>
-        )}
-        {!refreshing && pullDistance > PILL_REVEAL && (
+        {displayOffset > PILL_REVEAL * 0.6 && (
           <button
-            className={`archived-pull-pill entering ${pullDistance >= PULL_THRESHOLD ? "ready" : ""}`}
-            style={{ top: -pullDistance }}
+            className={`archived-pull-pill entering ${revealed && !dragRef.current ? "pinned" : ""}`}
+            style={{
+              top: -displayOffset,
+              opacity: Math.min(1, displayOffset / PILL_REVEAL),
+              transition: dragRef.current ? "none" : "top 220ms var(--ease), opacity 160ms var(--ease)",
+            }}
             onClick={onOpenArchived}
           >
             <ArchiveIcon size={15} />
-            {pullDistance >= PULL_THRESHOLD
-              ? "Release to refresh chats"
-              : `Archived${archivedCount ? ` (${archivedCount})` : ""}`}
+            Archived{archivedCount ? ` (${archivedCount})` : ""}
           </button>
         )}
         {loadingConversations && (

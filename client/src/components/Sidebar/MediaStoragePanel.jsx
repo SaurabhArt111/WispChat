@@ -31,6 +31,7 @@ function itemAsMessage(item) {
     _id: item.messageId,
     sender: item.sender,
     encrypted: item.messageEncrypted,
+    text: item.messageText,
     iv: item.messageIv,
     keys: item.messageKeys,
   };

@@ -232,13 +232,26 @@ export function AuthProvider({ children }) {
       const myEntry = (message.keys || []).find((k) => String(k.user?._id || k.user) === String(user._id));
       const senderPub = message.sender?.e2ee?.publicKeyJwk;
       if (!myEntry || !senderPub) return { text: "", locked: true };
+      let mk;
       try {
-        const mk = await unwrapMessageKeyFromSender(myEntry.wrappedKey, myEntry.keyIv, privateKeyRef.current, senderPub);
-        const text = message.iv ? await decryptTextWithKey(mk, message.text, message.iv) : "";
-        return { text, locked: false, mk };
+        mk = await unwrapMessageKeyFromSender(myEntry.wrappedKey, myEntry.keyIv, privateKeyRef.current, senderPub);
       } catch (err) {
         logError("e2ee decrypt", err);
         return { text: "", locked: true };
+      }
+      // The message key is what actually matters for callers decrypting an
+      // attachment (useDecryptedMediaUrl) — the caption/text below is a
+      // separate, often-empty field (an attachment with no caption still
+      // has a valid `mk` and `iv`, but decrypting "" isn't always
+      // meaningful). A caption-decrypt failure shouldn't take the whole
+      // call down and withhold `mk` from an attachment that would
+      // otherwise decrypt just fine.
+      try {
+        const text = message.iv && message.text ? await decryptTextWithKey(mk, message.text, message.iv) : "";
+        return { text, locked: false, mk };
+      } catch (err) {
+        logError("e2ee decrypt", err);
+        return { text: "", locked: false, mk };
       }
     },
     [user]

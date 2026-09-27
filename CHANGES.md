@@ -148,3 +148,48 @@ changed and by whom, or cherry-pick/revert something later.
   was vague in the request — happy to take a specific module if you have
   one in mind).
 
+---
+
+## Round 4 (this update)
+
+**Bugs fixed:**
+- **Media & Storage always showed "Unavailable"** — the gallery endpoint
+  (`getMediaList`) selected the message's fields for reconstructing the
+  decryption key but silently dropped `text`/left it unset while still
+  claiming the message had an `iv`; the client's decrypt helper tried to
+  decrypt that missing caption *before* returning the actual attachment
+  key, so it threw and failed every single item, image or not. Fixed by
+  forwarding the caption fields properly, and separately hardened
+  `decryptMessageText` so a caption-decrypt failure can never again
+  discard an otherwise-valid attachment key.
+- **Archived could render on top of another panel** (your first
+  screenshot — "Archived" and "Media & Storage" showing stacked together)
+  — opening Archived from the More sheet while already on a routed view
+  like `/media` left that route's `view` state untouched, so both
+  conditions were true at once. Replaced the two independent conditions
+  with a single derived `activePanel`, so only one can ever render,
+  structurally.
+
+**Archive drag gesture reworked to match your exact description:**
+Dragging down from the top of the chat list now reveals an "Archived"
+pill that **stays pinned** above the list after you let go (it doesn't
+snap back) — tapping it opens Archived. While it's pinned, dragging the
+list back up from the top far enough collapses it again. This replaces
+last round's version, which snapped back on release and used a second
+"drag further to refresh" gesture instead — you didn't ask for that this
+time, so I dropped it to match this description exactly.
+
+**Not yet done from this message** (queued for next round):
+- Matching the reference-image patterns for the "+" new-chat menu
+  (New group/Channels/Broadcasts/Linked devices/Settings dropdown) and the
+  Status tab's camera+edit floating buttons.
+- A mobile long-press bottom sheet for chat list items (Pin/Archive/Add to
+  folder/View info/Delete), matching the reference screenshot.
+- Chat header "More" menu additions seen in the reference (in-chat
+  "Search", "Story alerts on" toggle).
+- I can't currently view/play the uploaded `.mp4` directly — I worked from
+  your detailed written description of the Telegram behavior instead. If
+  what I built doesn't match what the video shows, tell me where it
+  differs and I'll adjust.
+
+
