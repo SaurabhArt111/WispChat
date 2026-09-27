@@ -52,12 +52,23 @@ export function StatusProvider({ children }) {
   );
 
   const markViewed = useCallback(async (statusId) => {
+    // Update the list immediately so a contact moves to Viewed as soon as
+    // their last unseen slide is opened, without waiting for a feed reload.
+    setFeed((current) =>
+      current.map((entry) => ({
+        ...entry,
+        items: entry.items.map((item) =>
+          item._id === statusId ? { ...item, viewedByMe: true } : item
+        ),
+      }))
+    );
     try {
       await client.post(`/status/${statusId}/view`);
     } catch {
-      // non-critical — worst case the view count/ring state is a bit stale
+      // Reconcile optimistic state with the server if the request failed.
+      await refreshFeed();
     }
-  }, []);
+  }, [refreshFeed]);
 
   const deleteStatus = useCallback(
     async (statusId) => {

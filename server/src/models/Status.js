@@ -23,6 +23,7 @@ const statusSchema = new mongoose.Schema(
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         at: { type: Date, default: Date.now },
+        count: { type: Number, default: 1, min: 1 },
       },
     ],
 

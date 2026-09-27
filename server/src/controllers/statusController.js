@@ -33,8 +33,15 @@ export async function getFeed(req, res) {
       bgColor: s.bgColor,
       caption: s.caption,
       createdAt: s.createdAt,
-      viewerCount: s.viewers?.length || 0,
-      viewedByMe: s.viewers?.some((v) => String(v.user) === String(req.user._id)) || false,
+      // The footer counts people, while each person's row separately shows
+      // how many times they viewed this slide.
+      viewerCount: new Set(
+        (s.viewers || []).map((viewer) => String(viewer.user?._id || viewer.user))
+      ).size,
+      viewedByMe:
+        s.viewers?.some(
+          (viewer) => String(viewer.user?._id || viewer.user) === String(req.user._id)
+        ) || false,
       viewers: String(s.user._id) === String(req.user._id) ? s.viewers : undefined,
     });
   }
@@ -77,13 +84,30 @@ export async function createStatus(req, res) {
 }
 
 export async function viewStatus(req, res) {
-  const status = await Status.findById(req.params.id);
+  const status = await Status.findById(req.params.id).select("_id user viewers");
   if (!status) return res.status(404).json({ message: "Status not found" });
 
-  const already = status.viewers.some((v) => String(v.user) === String(req.user._id));
-  if (!already && String(status.user) !== String(req.user._id)) {
-    status.viewers.push({ user: req.user._id, at: new Date() });
-    await status.save();
+  if (String(status.user) !== String(req.user._id)) {
+    const now = new Date();
+    const priorView = status.viewers.find((viewer) => String(viewer.user) === String(req.user._id));
+    if (priorView) {
+      const update = priorView.count == null
+        ? { $set: { "viewers.$.count": 2, "viewers.$.at": now } }
+        : { $inc: { "viewers.$.count": 1 }, $set: { "viewers.$.at": now } };
+      await Status.updateOne({ _id: status._id, "viewers.user": req.user._id }, update);
+    } else {
+      const result = await Status.updateOne(
+        { _id: status._id, "viewers.user": { $ne: req.user._id } },
+        { $push: { viewers: { user: req.user._id, at: now, count: 1 } } }
+      );
+      // A concurrent first view may have inserted this user after our read.
+      if (!result.modifiedCount) {
+        await Status.updateOne(
+          { _id: status._id, "viewers.user": req.user._id },
+          { $inc: { "viewers.$.count": 1 }, $set: { "viewers.$.at": now } }
+        );
+      }
+    }
   }
   res.json({ ok: true });
 }

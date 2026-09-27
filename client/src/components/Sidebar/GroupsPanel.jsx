@@ -17,11 +17,11 @@ export default function GroupsPanel({ onOpenMore }) {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
-        <h2>Groups</h2>
         <button className="icon-btn" title="Create group" onClick={() => setShowNewGroup(true)}>
           <PlusIcon size={17} />
         </button>
+        <h2>Groups</h2>
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
       </div>
       {groups.length === 0 ? (
         <div className="rail-panel-empty">

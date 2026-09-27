@@ -61,8 +61,8 @@ export default function BroadcastPanel({ onOpenMore }) {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Broadcast Lists</h2>
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
       </div>
 
       {contacts.length === 0 ? (

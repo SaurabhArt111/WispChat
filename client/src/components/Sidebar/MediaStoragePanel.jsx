@@ -92,8 +92,8 @@ export default function MediaStoragePanel({ onOpenMore }) {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Media & Storage</h2>
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
       </div>
       <div className="rail-panel-scroll">
         <div className="rail-panel-section">

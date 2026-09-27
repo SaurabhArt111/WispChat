@@ -15,7 +15,7 @@ import {
   ExternalLinkIcon,
   InfoIcon,
 } from "../common/Icons";
-import { SafeImage, SafeVideo } from "../common/SafeMedia";
+import { SafeAudio, SafeImage, SafeVideo } from "../common/SafeMedia";
 
 function getExtensionBadge(name = "") {
   const ext = name.split(".").pop()?.toUpperCase().slice(0, 4) || "FILE";
@@ -124,7 +124,7 @@ function AttachmentAudio({ message, a }) {
       ) : error || !url ? (
         <div className="attachment-decrypt-error">Couldn't decrypt audio</div>
       ) : (
-        <audio src={url} controls className="attachment-audio" />
+        <SafeAudio src={url} controls className="attachment-audio" />
       )}
     </div>
   );

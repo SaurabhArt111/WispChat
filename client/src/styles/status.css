@@ -40,7 +40,7 @@
 }
 
 .status-ring.seen {
-  background: var(--border);
+  background: #858b91;
 }
 
 .status-ring.has-status {
@@ -99,7 +99,7 @@
 .status-fab-stack {
   position: absolute;
   right: 18px;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -385,6 +385,12 @@
   flex-shrink: 0;
   font-size: 11.5px;
   color: var(--text-faint);
+}
+
+.status-viewers-count {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
 }
 
 .status-viewers-empty {

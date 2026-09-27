@@ -26,6 +26,7 @@ export default function CallsPanel({ onOpenMore }) {
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -52,20 +53,25 @@ export default function CallsPanel({ onOpenMore }) {
       active = false;
       socket?.off("message:new", onMessage);
     };
-  }, [socket]);
+  }, [socket, retryCount]);
 
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+        {!loading && calls.length > 0 && <span className="rail-panel-count">{calls.length} Logs</span>}
         <h2>Calls</h2>
-        {!loading && calls.length > 0 && <span className="rail-panel-count">{calls.length}</span>}
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
       </div>
 
       {loading ? (
         <div className="rail-panel-empty rail-panel-empty-tall"><p>Loading calls...</p></div>
       ) : failed ? (
-        <div className="rail-panel-empty rail-panel-empty-tall"><p>Could not load call history.</p></div>
+        <div className="rail-panel-empty rail-panel-empty-tall">
+          <p>Call history is unavailable. Check your connection and try again.</p>
+          <button className="btn btn-primary btn-sm" onClick={() => setRetryCount((count) => count + 1)}>
+            Retry
+          </button>
+        </div>
       ) : calls.length === 0 ? (
         <div className="rail-panel-empty rail-panel-empty-tall">
           <PhoneIcon size={34} />

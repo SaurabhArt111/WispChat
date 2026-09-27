@@ -113,7 +113,7 @@
   padding: 8px 12px;
   background: var(--surface-3);
   border-radius: var(--radius-round);
-  border: 1px solid var(--border);
+  /* border: 1px solid var(--border); */
   transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
 
@@ -129,7 +129,7 @@
   flex-shrink: 0;
 }
 
-.sidebar-search input {
+.sidebar-search-input {
   background: none;
   border: none;
   flex: 1;
@@ -207,6 +207,14 @@
 }
 
 /* --- Conversation List --- */
+.conversation-list-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
 .conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -220,6 +228,7 @@
 
 .archived-pull-pill {
   position: absolute;
+  top: 0;
   left: 50%;
   transform: translateX(-50%) scale(1);
   display: flex;

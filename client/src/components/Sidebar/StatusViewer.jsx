@@ -4,6 +4,7 @@ import { useStatus } from "../../context/StatusContext";
 import { mediaUrl } from "../../api/config";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
+import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { CloseIcon, TrashIcon, EyeIcon } from "../common/Icons";
 import { formatClock } from "../../utils/time";
 import "../../styles/status.css";
@@ -241,7 +242,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
               <p>{item.text}</p>
             </div>
           ) : item.kind === "video" ? (
-            <video
+            <SafeVideo
               ref={videoRef}
               src={mediaUrl(item.url)}
               className="status-media"
@@ -251,7 +252,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
               onEnded={goNext}
             />
           ) : (
-            <img src={mediaUrl(item.url)} alt="" className="status-media" />
+            <SafeImage src={mediaUrl(item.url)} alt="" className="status-media" />
           )}
           {item.caption && <div className="status-caption">{item.caption}</div>}
         </div>
@@ -265,10 +266,29 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
         {showViewers && (
           <div className="status-viewers-list">
             {item.viewers?.length ? (
-              item.viewers.map((v) => (
+              Array.from(
+                item.viewers.reduce((byUser, viewer) => {
+                  const id = String(viewer.user?._id || viewer.user);
+                  const existing = byUser.get(id);
+                  byUser.set(
+                    id,
+                    existing
+                      ? {
+                          ...viewer,
+                          count: (existing.count || 1) + (viewer.count || 1),
+                          at: new Date(existing.at) > new Date(viewer.at) ? existing.at : viewer.at,
+                        }
+                      : { ...viewer, count: viewer.count || 1 }
+                  );
+                  return byUser;
+                }, new Map()).values()
+              ).map((v) => (
                 <div className="status-viewers-row" key={v.user?._id || v.user}>
                   <Avatar user={v.user || {}} size={30} />
                   <span className="status-viewers-name">{v.user?.displayName || "Someone"}</span>
+                  <span className="status-viewers-count">
+                    {v.count > 1 ? `watched ${v.count}` : "1 view"}
+                  </span>
                   <span className="status-viewers-time">{formatClock(v.at)}</span>
                 </div>
               ))

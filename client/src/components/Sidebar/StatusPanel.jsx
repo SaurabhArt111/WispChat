@@ -22,6 +22,18 @@ export default function StatusPanel({ onOpenMore }) {
 
   const myCount = myEntry?.items?.length || 0;
   const atLimit = myCount >= MAX_STATUSES;
+  const statusSections = [
+    {
+      title: "Remaining to watch",
+      entries: contactEntries.filter((entry) => entry.items.some((item) => !item.viewedByMe)),
+      allSeen: false,
+    },
+    {
+      title: "Watched",
+      entries: contactEntries.filter((entry) => entry.items.every((item) => item.viewedByMe)),
+      allSeen: true,
+    },
+  ].filter((section) => section.entries.length > 0);
 
   function guardLimit() {
     if (atLimit) {
@@ -52,8 +64,8 @@ export default function StatusPanel({ onOpenMore }) {
   return (
     <aside className="rail-panel">
       <div className="rail-panel-header">
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
         <h2>Status</h2>
+        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
       </div>
 
       <div className="rail-panel-scroll status-panel-scroll">
@@ -84,12 +96,11 @@ export default function StatusPanel({ onOpenMore }) {
           <input ref={fileInputRef} type="file" accept="image/*,video/*" hidden onChange={onFileChosen} />
         </div>
 
-        {contactEntries.length > 0 && (
-          <>
-            <div className="rail-panel-section-title status-recent-title">Recent updates</div>
+        {statusSections.map(({ title, entries, allSeen }) => (
+          <section key={title}>
+            <div className="rail-panel-section-title status-recent-title">{title}</div>
             <div className="status-list">
-              {contactEntries.map((entry) => {
-                const allSeen = entry.items.every((i) => i.viewedByMe);
+              {entries.map((entry) => {
                 const latest = entry.items[entry.items.length - 1];
                 return (
                   <button className="status-row" key={entry.user._id} onClick={() => setViewing(entry)}>
@@ -104,8 +115,8 @@ export default function StatusPanel({ onOpenMore }) {
                 );
               })}
             </div>
-          </>
-        )}
+          </section>
+        ))}
 
         {!loading && contactEntries.length === 0 && (
           <div className="rail-panel-empty">
