@@ -7,10 +7,12 @@ const ContextMenuCtx = createContext(null);
 export function ContextMenuProvider({ children }) {
   const [menu, setMenu] = useState(null); // { x, y, items, header }
   const menuRef = useRef(null);
+  const openedAtRef = useRef(0);
 
   const openMenu = useCallback((event, items, header, options) => {
     event.preventDefault();
     event.stopPropagation();
+    openedAtRef.current = Date.now();
     setMenu({ x: event.clientX, y: event.clientY, items, header, reactions: options?.reactions });
   }, []);
 
@@ -19,6 +21,13 @@ export function ContextMenuProvider({ children }) {
   useEffect(() => {
     if (!menu) return;
     const onDown = (e) => {
+      // Mobile long-press opens this via a synthetic event fired straight
+      // from a timer, not from an actual "mousedown" — but the touch that
+      // triggered it is still in flight, and some browsers still emit a
+      // trailing compatibility mousedown/click for it a moment later. That
+      // stray event would otherwise land here and close the menu the same
+      // gesture just opened. A brief grace period after opening ignores it.
+      if (Date.now() - openedAtRef.current < 400) return;
       if (menuRef.current && !menuRef.current.contains(e.target)) closeMenu();
     };
     const onKey = (e) => {

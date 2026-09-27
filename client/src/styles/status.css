@@ -7,17 +7,7 @@
   position: relative;
 }
 
-.status-add-more-btn {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-}
 
-.status-add-more-btn.disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
 
 .status-row {
   width: 100%;
@@ -104,35 +94,60 @@
   flex-direction: column;
 }
 
-.status-add-menu {
+/* Floating add-status actions — pinned to the panel, not the page, so
+   they scroll away with nothing and stay put over the status list. */
+.status-fab-stack {
   position: absolute;
-  left: 62px;
-  top: 58px;
-  z-index: 30;
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  min-width: 190px;
+  right: 18px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 20;
 }
 
-.status-add-menu button {
+.status-fab {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 14px;
-  background: transparent;
+  justify-content: center;
   border: none;
-  color: var(--text);
-  font-size: 13.5px;
+  border-radius: 50%;
+  color: #fff;
   cursor: pointer;
-  text-align: left;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform 120ms var(--ease), box-shadow 120ms var(--ease), opacity 120ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.status-add-menu button:hover {
-  background: var(--surface-hover);
+.status-fab:active {
+  transform: scale(0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.status-fab.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status-fab-edit {
+  width: 42px;
+  height: 42px;
+  background: var(--surface-4);
+  color: var(--text);
+}
+
+.status-fab-camera {
+  width: 54px;
+  height: 54px;
+  background: var(--wisp);
+  color: #04211a;
+}
+
+@media (max-width: 768px) {
+  .status-fab-stack {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* --- Status editor (reuses .media-composer* from mediaComposer.css) --- */
@@ -314,25 +329,6 @@
   font-size: 14px;
   text-align: center;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-}
-
-.status-tap-zone {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 35%;
-  z-index: 2;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.status-tap-zone.left {
-  left: 0;
-}
-
-.status-tap-zone.right {
-  right: 0;
 }
 
 .status-viewer-footer {

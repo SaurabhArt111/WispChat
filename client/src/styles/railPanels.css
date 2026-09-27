@@ -7,6 +7,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 @media (min-width: 1280px) {
@@ -21,6 +22,12 @@
   justify-content: space-between;
   padding: 18px 18px 14px;
   border-bottom: 1px solid var(--border-soft);
+}
+
+@media (max-width: 768px) {
+  .rail-panel-header {
+    padding-top: calc(18px + env(safe-area-inset-top, 0px));
+  }
 }
 
 .rail-panel-header h2 {

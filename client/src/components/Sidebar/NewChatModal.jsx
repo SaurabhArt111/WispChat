@@ -4,9 +4,9 @@ import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import Modal from "../common/Modal";
-import { SearchIcon, UserPlusIcon, SendIcon } from "../common/Icons";
+import { SearchIcon, UserPlusIcon, SendIcon, UsersIcon } from "../common/Icons";
 
-export default function NewChatModal({ onClose }) {
+export default function NewChatModal({ onClose, onOpenNewGroup }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -80,6 +80,22 @@ export default function NewChatModal({ onClose }) {
       </div>
 
       <div className="user-pick-list">
+        {!query.trim() && onOpenNewGroup && (
+          <button
+            className="user-pick-row user-pick-action-row"
+            onClick={() => {
+              onClose();
+              onOpenNewGroup();
+            }}
+          >
+            <span className="user-pick-action-icon">
+              <UsersIcon size={19} />
+            </span>
+            <div className="user-pick-info">
+              <div className="user-pick-name">New group</div>
+            </div>
+          </button>
+        )}
         {loading && <p className="modal-hint">Searching users…</p>}
         {!loading && list.length === 0 && (
           <p className="modal-hint">

@@ -18,23 +18,27 @@ export default function StatusPanel({ onOpenMore }) {
   const [editorMode, setEditorMode] = useState(null); // null | 'text' | 'file'
   const [pickedFile, setPickedFile] = useState(null);
   const [viewing, setViewing] = useState(null); // entry object to view
-  const [showAddMenu, setShowAddMenu] = useState(false);
   const fileInputRef = useRef(null);
 
   const myCount = myEntry?.items?.length || 0;
   const atLimit = myCount >= MAX_STATUSES;
 
-  function toggleAddMenu() {
+  function guardLimit() {
     if (atLimit) {
       showToast(`You can only have ${MAX_STATUSES} active status updates at once`);
-      return;
+      return true;
     }
-    setShowAddMenu((s) => !s);
+    return false;
   }
 
   function openFilePicker() {
-    setShowAddMenu(false);
+    if (guardLimit()) return;
     fileInputRef.current?.click();
+  }
+
+  function openTextEditor() {
+    if (guardLimit()) return;
+    setEditorMode("text");
   }
 
   function onFileChosen(e) {
@@ -56,7 +60,7 @@ export default function StatusPanel({ onOpenMore }) {
         <div className="status-my-row-wrap">
           <button
             className="status-row"
-            onClick={() => (myEntry ? setViewing(myEntry) : toggleAddMenu())}
+            onClick={() => (myEntry ? setViewing(myEntry) : openFilePicker())}
           >
             <span className={`status-ring ${myEntry ? "has-status" : "empty"}`}>
               <Avatar user={user} size={50} />
@@ -77,32 +81,6 @@ export default function StatusPanel({ onOpenMore }) {
               </div>
             </div>
           </button>
-
-          {myEntry && (
-            <button
-              className={`icon-btn status-add-more-btn ${atLimit ? "disabled" : ""}`}
-              title={atLimit ? `Maximum ${MAX_STATUSES} statuses` : "Add another status"}
-              onClick={toggleAddMenu}
-            >
-              <PlusIcon size={16} />
-            </button>
-          )}
-
-          {showAddMenu && (
-            <div className="status-add-menu">
-              <button onClick={openFilePicker}>
-                <CameraIcon size={16} /> Photo or video
-              </button>
-              <button
-                onClick={() => {
-                  setShowAddMenu(false);
-                  setEditorMode("text");
-                }}
-              >
-                <TypeIcon size={16} /> Text status
-              </button>
-            </div>
-          )}
           <input ref={fileInputRef} type="file" accept="image/*,video/*" hidden onChange={onFileChosen} />
         </div>
 
@@ -138,6 +116,28 @@ export default function StatusPanel({ onOpenMore }) {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Floating add actions, pinned to the bottom-right of the panel —
+          a small "text status" pencil FAB stacked above a larger green
+          camera FAB, matching WhatsApp/Telegram. Both are always on
+          screen (not tucked behind a menu toggle) so adding a status is a
+          single tap, with touch targets sized well past the 44px minimum. */}
+      <div className="status-fab-stack">
+        <button
+          className={`status-fab status-fab-edit ${atLimit ? "disabled" : ""}`}
+          title={atLimit ? `Maximum ${MAX_STATUSES} statuses` : "Text status"}
+          onClick={openTextEditor}
+        >
+          <TypeIcon size={19} />
+        </button>
+        <button
+          className={`status-fab status-fab-camera ${atLimit ? "disabled" : ""}`}
+          title={atLimit ? `Maximum ${MAX_STATUSES} statuses` : "Photo or video status"}
+          onClick={openFilePicker}
+        >
+          <CameraIcon size={22} />
+        </button>
       </div>
 
       {editorMode && (

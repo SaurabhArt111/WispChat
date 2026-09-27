@@ -167,7 +167,12 @@ export default function ChatApp() {
         onOpenSettings={openSettings}
       />
 
-      {showNewChat && <NewChatModal onClose={() => setShowNewChat(false)} />}
+      {showNewChat && (
+        <NewChatModal
+          onClose={() => setShowNewChat(false)}
+          onOpenNewGroup={() => setShowNewGroup(true)}
+        />
+      )}
       {showNewGroup && <NewGroupModal onClose={() => setShowNewGroup(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {showSettings && (

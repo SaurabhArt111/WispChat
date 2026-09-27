@@ -61,22 +61,47 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
   // it stays there (tapping it opens Archived) until the person drags the
   // list back up from the top far enough to collapse it again. Nothing
   // about the gesture itself opens Archived; only tapping the pill does.
-  function pullStart(clientY) {
+  //
+  // Built on Pointer Events (not separate touch/mouse handlers) so mouse,
+  // touch and pen all go through one code path, and pointer capture keeps
+  // receiving move/up events even if the finger drifts off the list. The
+  // gesture only ever engages while the list is scrolled to the very top,
+  // and once it does we suppress the browser's own scroll/overscroll for
+  // that pointer so our transform doesn't fight native rubber-banding.
+  function pullStart(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     if (listRef.current?.scrollTop > 0) return;
-    dragRef.current = { startY: clientY, baseOffset: restingOffset };
+    dragRef.current = { startY: e.clientY, baseOffset: restingOffset, engaged: false, pointerId: e.pointerId };
   }
-  function pullMove(clientY) {
-    if (!dragRef.current) return;
-    const delta = clientY - dragRef.current.startY;
-    const next = dragRef.current.baseOffset + delta * 0.6;
+  function pullMove(e) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const delta = e.clientY - drag.startY;
+    // Ignore upward drags entirely if the list can still scroll up itself;
+    // only a genuine pull *past* the top should engage the reveal gesture,
+    // so a small dead-zone keeps ordinary scroll flicks from misfiring it.
+    if (!drag.engaged) {
+      if (Math.abs(delta) < 6) return;
+      if (delta < 0 && !revealed) return; // nothing to collapse yet, let it scroll
+      drag.engaged = true;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    e.preventDefault();
+    const next = drag.baseOffset + delta * 0.6;
     setLiveOffset(Math.max(0, Math.min(PULL_MAX, next)));
   }
-  function pullEnd() {
-    if (!dragRef.current) return;
-    const finalOffset = liveOffset ?? dragRef.current.baseOffset;
+  function pullEnd(e) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (drag.engaged) {
+      const finalOffset = liveOffset ?? drag.baseOffset;
+      setRevealed(revealed ? finalOffset >= COLLAPSE_AT : finalOffset >= PILL_REVEAL);
+    }
     dragRef.current = null;
     setLiveOffset(null);
-    setRevealed(revealed ? finalOffset >= COLLAPSE_AT : finalOffset >= PILL_REVEAL);
+    try {
+      e?.currentTarget?.releasePointerCapture?.(e.pointerId);
+    } catch {}
   }
 
   useEffect(() => {
@@ -253,25 +278,25 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
       <div
         className="conversation-list"
         ref={listRef}
-        onTouchStart={(e) => pullStart(e.touches[0].clientY)}
-        onTouchMove={(e) => pullMove(e.touches[0].clientY)}
-        onTouchEnd={pullEnd}
-        onMouseDown={(e) => pullStart(e.clientY)}
-        onMouseMove={(e) => pullMove(e.clientY)}
-        onMouseUp={pullEnd}
-        onMouseLeave={pullEnd}
+        onPointerDown={pullStart}
+        onPointerMove={pullMove}
+        onPointerUp={pullEnd}
+        onPointerCancel={pullEnd}
         style={{
           transform: displayOffset ? `translateY(${displayOffset}px)` : undefined,
-          transition: dragRef.current ? "none" : "transform 220ms var(--ease)",
+          transition: dragRef.current?.engaged ? "none" : "transform 220ms var(--ease)",
+          touchAction: "pan-y",
         }}
       >
         {displayOffset > PILL_REVEAL * 0.6 && (
           <button
-            className={`archived-pull-pill entering ${revealed && !dragRef.current ? "pinned" : ""}`}
+            className={`archived-pull-pill entering ${revealed && !dragRef.current?.engaged ? "pinned" : ""} ${
+              displayOffset >= (revealed ? COLLAPSE_AT : PILL_REVEAL) ? "ready" : ""
+            }`}
             style={{
               top: -displayOffset,
               opacity: Math.min(1, displayOffset / PILL_REVEAL),
-              transition: dragRef.current ? "none" : "top 220ms var(--ease), opacity 160ms var(--ease)",
+              transition: dragRef.current?.engaged ? "none" : "top 220ms var(--ease), opacity 160ms var(--ease)",
             }}
             onClick={onOpenArchived}
           >
@@ -337,7 +362,15 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
         )}
       </div>
 
-      {showNewChat && <NewChatModal onClose={() => setShowNewChat(false)} />}
+      {showNewChat && (
+        <NewChatModal
+          onClose={() => setShowNewChat(false)}
+          onOpenNewGroup={() => {
+            setShowNewChat(false);
+            onOpenNewGroup ? onOpenNewGroup() : setShowNewGroup(true);
+          }}
+        />
+      )}
       {showNewGroup && <NewGroupModal onClose={() => setShowNewGroup(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {showRequests && (

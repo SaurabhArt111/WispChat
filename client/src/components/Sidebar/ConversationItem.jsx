@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
@@ -85,26 +85,105 @@ export default function ConversationItem({ conversation, active, onClick }) {
   // snaps it fully open, releasing before that snaps it back closed —
   // the same interaction Telegram/WhatsApp mobile use.
   const REVEAL_WIDTH = 84;
+  // A real drag only starts once the pointer has moved a few px — a plain
+  // tap (or the start of a long-press) must not be swallowed by the swipe
+  // handler, and a plain tap must not be swallowed by the long-press timer
+  // either. Both are decided lazily off the same pointerdown.
+  const DRAG_SLOP = 6;
+  const LONG_PRESS_MS = 480;
   const [dragX, setDragX] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const dragStartRef = useRef(null); // { startX, baseX }
+  const [pressed, setPressed] = useState(false);
+  const dragStartRef = useRef(null); // { startX, startY, baseX, dragging }
+  const longPressTimerRef = useRef(null);
+  const suppressClickRef = useRef(false);
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function fireLongPressMenu(x, y) {
+    suppressClickRef.current = true;
+    setPressed(false);
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(10);
+      } catch {}
+    }
+    handleContextMenu({
+      clientX: x,
+      clientY: y,
+      preventDefault() {},
+      stopPropagation() {},
+    });
+  }
 
   function onPointerDown(e) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    dragStartRef.current = { startX: e.clientX, baseX: revealed ? -REVEAL_WIDTH : 0 };
-    setDragging(true);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: revealed ? -REVEAL_WIDTH : 0,
+      dragging: false,
+      pointerId: e.pointerId,
+    };
+    setPressed(true);
+    // Only touch/pen get the long-press-for-menu gesture — desktop already
+    // has right-click for that, and holding the mouse button down is a
+    // completely different (and much more common) motion to leave alone.
+    if (e.pointerType !== "mouse") {
+      clearLongPressTimer();
+      longPressTimerRef.current = setTimeout(() => {
+        const drag = dragStartRef.current;
+        if (!drag || drag.dragging) return;
+        dragStartRef.current = null;
+        fireLongPressMenu(e.clientX, e.clientY);
+      }, LONG_PRESS_MS);
+    }
   }
   function onPointerMove(e) {
-    if (!dragStartRef.current) return;
-    const delta = e.clientX - dragStartRef.current.startX;
-    const next = Math.min(0, Math.max(-REVEAL_WIDTH, dragStartRef.current.baseX + delta));
+    const drag = dragStartRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const deltaX = e.clientX - drag.startX;
+    const deltaY = e.clientY - drag.startY;
+    if (!drag.dragging) {
+      // Any real movement cancels a pending long-press — it's a scroll or
+      // a swipe now, not a hold. Only commit to the horizontal swipe once
+      // the motion is clearly more horizontal than vertical, so a vertical
+      // list-scroll started on top of a row doesn't get hijacked into it.
+      if (Math.abs(deltaX) < DRAG_SLOP && Math.abs(deltaY) < DRAG_SLOP) return;
+      clearLongPressTimer();
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        dragStartRef.current = null;
+        setPressed(false);
+        return; // vertical scroll — let the list handle it natively
+      }
+      drag.dragging = true;
+      setDragging(true);
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    e.preventDefault();
+    const next = Math.min(0, Math.max(-REVEAL_WIDTH, drag.baseX + deltaX));
     setDragX(next);
   }
-  function endDrag() {
-    if (!dragStartRef.current) return;
+  function endDrag(e) {
+    clearLongPressTimer();
+    setPressed(false);
+    const drag = dragStartRef.current;
     dragStartRef.current = null;
+    if (!drag) return;
+    if (!drag.dragging) {
+      setDragging(false);
+      return;
+    }
     setDragging(false);
+    try {
+      e?.currentTarget?.releasePointerCapture?.(drag.pointerId);
+    } catch {}
     setDragX((x) => {
       const open = x < -REVEAL_WIDTH / 2;
       setRevealed(open);
@@ -114,6 +193,18 @@ export default function ConversationItem({ conversation, active, onClick }) {
   function closeSwipe() {
     setRevealed(false);
     setDragX(0);
+  }
+  useEffect(() => clearLongPressTimer, []);
+
+  function handleRowPointerLeave() {
+    // A pointer that wanders off the row (drags outside, browser-cancels
+    // the pointer, etc.) should drop a pending long-press rather than let
+    // it fire on an element the finger isn't over anymore.
+    if (dragStartRef.current && !dragStartRef.current.dragging) {
+      clearLongPressTimer();
+      dragStartRef.current = null;
+      setPressed(false);
+    }
   }
 
   const other = !conversation.isGroup
@@ -147,6 +238,14 @@ export default function ConversationItem({ conversation, active, onClick }) {
   }
 
   function handleRowClick(e) {
+    // A long-press already opened the action menu for this same gesture —
+    // the pointerup that follows still synthesizes a click, and without
+    // this guard it would immediately navigate into the chat right after.
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      e.preventDefault();
+      return;
+    }
     // First tap while the archive action is revealed just closes it
     // again, matching the swipe-row convention elsewhere — it shouldn't
     // also navigate into the chat in the same tap.
@@ -208,13 +307,16 @@ export default function ConversationItem({ conversation, active, onClick }) {
         <span>{conversation.archived ? "Unarchive" : "Archive"}</span>
       </button>
       <button
-        className={`conv-item ${active ? "active" : ""} ${conversation.pinned ? "is-pinned" : ""}`}
+        className={`conv-item ${active ? "active" : ""} ${conversation.pinned ? "is-pinned" : ""} ${
+          pressed ? "is-pressed" : ""
+        }`}
         onClick={handleRowClick}
         onContextMenu={handleContextMenu}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onPointerLeave={handleRowPointerLeave}
         style={{
           transform: `translateX(${dragX}px)`,
           transition: dragging ? "none" : "transform 220ms var(--ease, ease)",

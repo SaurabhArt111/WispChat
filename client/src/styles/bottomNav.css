@@ -30,13 +30,25 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
+  min-height: 44px;
   background: transparent;
   border: none;
   color: var(--text-faint);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--fast) var(--ease), transform 100ms var(--ease);
+}
+
+.bottom-nav-btn:active {
+  transform: scale(0.92);
+  color: var(--text-dim);
 }
 
 .bottom-nav-btn.active {
+  color: var(--wisp);
+}
+
+.bottom-nav-btn.active:active {
   color: var(--wisp);
 }
 

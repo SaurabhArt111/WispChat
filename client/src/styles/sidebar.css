@@ -18,6 +18,12 @@
   background: rgba(255, 255, 255, 0.015);
 }
 
+@media (max-width: 768px) {
+  .sidebar-topbar {
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  }
+}
+
 .sidebar-self {
   display: flex;
   align-items: center;
@@ -364,6 +370,10 @@
   background: var(--surface-2);
 }
 
+.conv-item.is-pressed {
+  background: var(--surface-2);
+}
+
 .conv-item-main {
   flex: 1;
   min-width: 0;
@@ -551,6 +561,36 @@
 
 .user-pick-row.selectable:hover {
   background: var(--surface-3);
+}
+
+/* "New group" (and similar) entry rows at the top of the New Chat list —
+   Telegram/WhatsApp put these above the contact list itself rather than
+   behind a separate top-bar button, so tapping "+" leads to one place
+   that covers both starting a chat and starting a group. */
+.user-pick-action-row {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.user-pick-action-row:hover,
+.user-pick-action-row:active {
+  background: var(--surface-3);
+}
+
+.user-pick-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--wisp);
+  color: #04211a;
+  flex-shrink: 0;
 }
 
 .user-pick-row input[type="checkbox"] {

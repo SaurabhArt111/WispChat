@@ -22,32 +22,88 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
   const startRef = useRef(null);
   const pausedAtRef = useRef(0);
   const videoRef = useRef(null);
-  const dismissDragRef = useRef(null);
+  const gestureRef = useRef(null);
+  const contentRef = useRef(null);
 
   const item = entry.items[index];
 
-  // Swiping/scrolling down closes the viewer — mirrors Instagram/WhatsApp
-  // status. A downward drag on the content pauses the auto-advance timer
-  // (via the existing mouse/touch-down pause handlers) and slides the
-  // stage down with the gesture; releasing past a small threshold closes,
-  // releasing short of it snaps back. A plain mouse wheel scroll down does
-  // the same thing without needing a drag at all.
-  function dismissDragStart(clientY) {
-    dismissDragRef.current = { startY: clientY, active: true };
+  // One unified pointer-gesture handler drives both left/right tap-to-
+  // navigate and swipe-down-to-dismiss, on the same surface, instead of
+  // routing them through separate overlapping elements (which is what let
+  // the old two invisible nav buttons block the dismiss drag whenever it
+  // started over them). The gesture direction is decided lazily off the
+  // first few pixels of movement, so a tap doesn't get mistaken for a
+  // drag and a drag doesn't get mistaken for a tap:
+  //  - barely moved, released quickly → tap: left third = prev, right
+  //    third = next, middle = no-op (matches the original tap zones).
+  //  - moved mostly downward → dismiss drag: content follows the finger
+  //    1:1 and fades out, closing past a small release threshold with no
+  //    extra hold, second tap, or delay, and snapping back otherwise.
+  //  - moved mostly sideways with no real vertical component → ignored,
+  //    so it can't be confused with either gesture.
+  const TAP_SLOP = 10;
+  const DISMISS_CLOSE_AT = 90;
+
+  function gestureStart(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    gestureRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+      direction: null, // 'tap' | 'vertical' | 'horizontal' once decided
+      startTime: performance.now(),
+    };
   }
-  function dismissDragMove(clientY) {
-    if (!dismissDragRef.current?.active) return;
-    const delta = clientY - dismissDragRef.current.startY;
-    setDragY(Math.max(0, delta));
+  function gestureMove(e) {
+    const g = gestureRef.current;
+    if (!g || g.pointerId !== e.pointerId) return;
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
+    if (!g.direction) {
+      if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) return;
+      if (dy > 0 && dy > Math.abs(dx)) {
+        g.direction = "vertical";
+        setPaused(true);
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      } else {
+        g.direction = "horizontal"; // sideways or upward drag — not used for anything
+      }
+    }
+    if (g.direction === "vertical") {
+      e.preventDefault();
+      setDragY(Math.max(0, dy));
+    }
   }
-  function dismissDragEnd() {
-    if (!dismissDragRef.current?.active) return;
-    dismissDragRef.current.active = false;
-    if (dragY > 90) {
-      onClose();
+  function gestureEnd(e) {
+    const g = gestureRef.current;
+    if (!g || g.pointerId !== e.pointerId) return;
+    gestureRef.current = null;
+    if (g.direction === "vertical") {
+      setPaused(false);
+      if (dragY > DISMISS_CLOSE_AT) {
+        onClose();
+      } else {
+        setDragY(0);
+      }
       return;
     }
-    setDragY(0);
+    if (g.direction === null) {
+      // A genuine tap: decide prev/next/no-op from where it landed.
+      const rect = contentRef.current?.getBoundingClientRect();
+      if (rect) {
+        const relX = (e.clientX - rect.left) / rect.width;
+        if (relX < 0.35) goPrev();
+        else if (relX > 0.65) goNext();
+      }
+    }
+  }
+  function gestureCancel() {
+    const g = gestureRef.current;
+    gestureRef.current = null;
+    if (g?.direction === "vertical") {
+      setPaused(false);
+      setDragY(0);
+    }
   }
   function handleWheel(e) {
     if (e.deltaY > 24) onClose();
@@ -139,7 +195,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           opacity: dragY ? Math.max(0.4, 1 - dragY / 260) : 1,
-          transition: dismissDragRef.current?.active ? "none" : "transform 160ms var(--ease), opacity 160ms var(--ease)",
+          transition: gestureRef.current?.direction === "vertical" ? "none" : "transform 160ms var(--ease), opacity 160ms var(--ease)",
         }}
       >
         <div className="status-progress-row">
@@ -171,29 +227,14 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
           </div>
         </div>
 
-        <button className="status-tap-zone left" onClick={goPrev} aria-label="Previous" />
-        <button className="status-tap-zone right" onClick={goNext} aria-label="Next" />
-
         <div
+          ref={contentRef}
           className="status-viewer-content"
-          onMouseDown={(e) => {
-            setPaused(true);
-            dismissDragStart(e.clientY);
-          }}
-          onMouseMove={(e) => dismissDragMove(e.clientY)}
-          onMouseUp={() => {
-            setPaused(false);
-            dismissDragEnd();
-          }}
-          onTouchStart={(e) => {
-            setPaused(true);
-            dismissDragStart(e.touches[0].clientY);
-          }}
-          onTouchMove={(e) => dismissDragMove(e.touches[0].clientY)}
-          onTouchEnd={() => {
-            setPaused(false);
-            dismissDragEnd();
-          }}
+          onPointerDown={gestureStart}
+          onPointerMove={gestureMove}
+          onPointerUp={gestureEnd}
+          onPointerCancel={gestureCancel}
+          style={{ touchAction: "pan-x" }}
         >
           {item.kind === "text" ? (
             <div className="status-text-stage status-text-view" style={{ background: item.bgColor || "#5ef2c0" }}>
