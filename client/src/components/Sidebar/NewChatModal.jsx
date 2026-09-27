@@ -71,7 +71,6 @@ export default function NewChatModal({ onClose, onOpenNewGroup }) {
         <div className="sidebar-search">
           <SearchIcon size={16} className="sidebar-search-icon" />
           <input
-            className="sidebar-search-input"
             placeholder="Search by name, @username or email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
