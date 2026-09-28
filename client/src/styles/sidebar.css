@@ -657,3 +657,15 @@
   letter-spacing: 0.05em;
   margin: 8px 4px 4px;
 }
+
+/* Add-to-folder sheet */
+.folder-sheet { display: flex; flex-direction: column; gap: 6px; }
+.folder-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px;
+  background: transparent; border: 0; border-radius: 10px; color: var(--text); cursor: pointer; text-align: left;
+}
+.folder-row span { flex: 1; }
+.folder-row:hover { background: var(--surface-2); }
+.folder-new { display: flex; gap: 8px; margin-top: 6px; }
+.folder-new .input { flex: 1; min-width: 0; }
+.conv-folder-tag { font-size: 10.5px; color: var(--wisp); background: var(--surface-3); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }

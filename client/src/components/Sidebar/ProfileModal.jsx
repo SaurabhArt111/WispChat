@@ -5,6 +5,7 @@ import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import Modal from "../common/Modal";
 import AvatarCropModal from "./AvatarCropModal";
+import PostsGrid from "../Posts/PostsGrid";
 import { CameraIcon, CopyIcon } from "../common/Icons";
 
 export default function ProfileModal({ onClose }) {
@@ -110,6 +111,11 @@ export default function ProfileModal({ onClose }) {
               <CopyIcon size={14} /> Copy
             </button>
           </div>
+        </div>
+
+        <div className="field">
+          <label>My posts</label>
+          <PostsGrid userId={user._id} editable />
         </div>
       </Modal>
 

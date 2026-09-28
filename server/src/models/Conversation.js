@@ -23,6 +23,21 @@ const conversationSchema = new mongoose.Schema(
     mutedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     pinnedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     archivedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // "Delete chat" — removes the conversation from just this user's own
+    // list (and clears their message history the same way clearedAt does)
+    // without touching it for the other participant(s). It reappears for
+    // them automatically the next time a new message lands (see
+    // sendMessage), same as WhatsApp/Arattai.
+    deletedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // Free-form per-user folder tag ("Work", "Family", …) set via the long
+    // press "Add to folder" action — one entry per user, replaced wholesale
+    // whenever they retag or clear it.
+    folders: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        folder: { type: String, trim: true, maxlength: 40 },
+      },
+    ],
     clearedAt: [
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

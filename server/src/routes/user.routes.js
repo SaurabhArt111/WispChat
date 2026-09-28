@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   searchUsers,
   updateProfile,
+  updateStatusPrivacy,
   getContacts,
   sendFriendRequest,
   listFriendRequests,
@@ -16,6 +17,7 @@ router.use(requireAuth);
 
 router.get("/search", searchUsers);
 router.patch("/profile", updateProfile);
+router.patch("/status-privacy", updateStatusPrivacy);
 router.get("/contacts", getContacts);
 router.post("/friend-requests", sendFriendRequest);
 router.get("/friend-requests", listFriendRequests);

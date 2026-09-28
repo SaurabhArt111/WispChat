@@ -1,3 +1,4 @@
+import User from "../models/User.js";
 import Status from "../models/Status.js";
 import { kindFromMime } from "../middleware/upload.js";
 
@@ -6,11 +7,29 @@ import { kindFromMime } from "../middleware/upload.js";
 // just stops the count from growing unbounded before that happens.
 const MAX_ACTIVE_STATUSES = 5;
 
+// Whether `viewerId` is allowed to see `owner`'s status, per the owner's
+// own Status privacy setting (see StatusPrivacyModal / updateStatusPrivacy).
+// The base audience (mutual contacts, or yourself) is always checked by the
+// caller first — this only ever narrows that further.
+export function canViewStatus(owner, viewerId) {
+  if (String(owner._id) === String(viewerId)) return true;
+  const privacy = owner.statusPrivacy || { mode: "contacts" };
+  if (privacy.mode === "only_share_with") {
+    return (privacy.onlyUsers || []).some((id) => String(id) === String(viewerId));
+  }
+  if (privacy.mode === "contacts_except") {
+    return !(privacy.exceptUsers || []).some((id) => String(id) === String(viewerId));
+  }
+  return true; // "contacts" — already scoped to mutual contacts by the caller
+}
+
 // Statuses are visible to your mutual contacts and yourself — same audience
-// the rest of the app already uses for "who can see/add you".
+// the rest of the app already uses for "who can see/add you" — further
+// narrowed per-owner by that owner's own Status privacy setting.
 export async function getFeed(req, res) {
-  const user = await req.user.populate("contacts", "_id");
-  const audience = [req.user._id, ...user.contacts.map((c) => c._id)];
+  const user = await req.user.populate("contacts", "_id statusPrivacy");
+  const visibleContacts = user.contacts.filter((c) => canViewStatus(c, req.user._id));
+  const audience = [req.user._id, ...visibleContacts.map((c) => c._id)];
 
   const statuses = await Status.find({ user: { $in: audience }, expiresAt: { $gt: new Date() } })
     .sort({ createdAt: 1 })
@@ -88,6 +107,11 @@ export async function viewStatus(req, res) {
   if (!status) return res.status(404).json({ message: "Status not found" });
 
   if (String(status.user) !== String(req.user._id)) {
+    const owner = await User.findById(status.user).select("statusPrivacy contacts");
+    const isMutualContact = owner?.contacts?.some((id) => String(id) === String(req.user._id));
+    if (!owner || !isMutualContact || !canViewStatus(owner, req.user._id)) {
+      return res.status(403).json({ message: "You can't view this status" });
+    }
     const now = new Date();
     const priorView = status.viewers.find((viewer) => String(viewer.user) === String(req.user._id));
     if (priorView) {

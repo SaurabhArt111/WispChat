@@ -14,6 +14,19 @@ const userSchema = new mongoose.Schema(
     contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     blocked: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
+    // Who can see this user's Status updates — mirrors WhatsApp's three
+    // modes. "contacts" (default) is everyone in `contacts`; the other two
+    // modes carve out an allow/deny list on top of that same audience.
+    statusPrivacy: {
+      mode: {
+        type: String,
+        enum: ["contacts", "contacts_except", "only_share_with"],
+        default: "contacts",
+      },
+      exceptUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      onlyUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    },
+
     // --- End-to-end encryption identity ---
     // publicKeyJwk is safe to hand out to anyone (it's how peers encrypt
     // *to* this user) so it stays selected by default. The wrapped private
@@ -61,6 +74,11 @@ userSchema.methods.toPrivateJSON = function () {
       wrapIv: this.e2ee?.wrapIv || null,
       kdfSalt: this.e2ee?.kdfSalt || null,
       kdfIterations: this.e2ee?.kdfIterations || 0,
+    },
+    statusPrivacy: {
+      mode: this.statusPrivacy?.mode || "contacts",
+      exceptUsers: this.statusPrivacy?.exceptUsers || [],
+      onlyUsers: this.statusPrivacy?.onlyUsers || [],
     },
   };
 };

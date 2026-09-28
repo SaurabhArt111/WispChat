@@ -24,7 +24,11 @@ async function populateMessage(msg) {
 
 export async function getMessages(req, res) {
   const { conversationId } = req.params;
-  const { before, limit = 30 } = req.query;
+  // First page and every subsequent page load 60 messages at a time — the
+  // client's virtualized MessageList only calls loadMoreMessages when the
+  // person actually scrolls near the top, so this stays a real "load the
+  // next 60" rather than fetching the whole history up front.
+  const { before, limit = 60 } = req.query;
 
   const conv = await Conversation.findById(conversationId);
   if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) {
@@ -117,6 +121,11 @@ export async function sendMessage(req, res) {
 
   conv.lastMessage = msg._id;
   conv.lastMessageAt = new Date();
+  // A chat someone "deleted" (one-sided — see deleteConversation) should
+  // quietly reappear in their list the moment new activity happens in it,
+  // same as WhatsApp/Arattai — otherwise it'd stay hidden forever even
+  // though there's now something new to read.
+  conv.deletedBy = [];
   await conv.save();
 
   const io = req.io;
@@ -215,11 +224,16 @@ export async function getMediaList(req, res) {
   const conversations = await Conversation.find({ participants: req.user._id }, "_id");
   const conversationIds = conversations.map((c) => c._id);
 
-  const messages = await Message.find({
+  // `before` (an ISO date) pages further back in time — the Media & Storage
+  // panel asks for the next page as the person scrolls its virtualized grid.
+  const filter = {
     conversation: { $in: conversationIds },
     deletedForEveryone: { $ne: true },
     "attachments.kind": kind,
-  })
+  };
+  if (req.query.before) filter.createdAt = { $lt: new Date(req.query.before) };
+
+  const messages = await Message.find(filter)
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate("sender", "displayName username avatar avatarColor e2ee.publicKeyJwk")

@@ -31,12 +31,16 @@ async function serializeConversation(conv, userId) {
     muted: conv.mutedBy?.some((id) => String(id) === String(userId)),
     pinned: conv.pinnedBy?.some((id) => String(id) === String(userId)),
     archived: conv.archivedBy?.some((id) => String(id) === String(userId)),
+    folder: conv.folders?.find((f) => String(f.user) === String(userId))?.folder || null,
     unreadCount,
   };
 }
 
 export async function listConversations(req, res) {
-  const conversations = await Conversation.find({ participants: req.user._id })
+  const conversations = await Conversation.find({
+    participants: req.user._id,
+    deletedBy: { $ne: req.user._id },
+  })
     .populate("participants", PARTICIPANT_FIELDS)
     .populate({
       path: "lastMessage",
@@ -201,6 +205,39 @@ export async function clearConversation(req, res) {
     $push: { clearedAt: { user: req.user._id, at: new Date() } },
   });
   res.json({ ok: true });
+}
+
+// "Delete chat" from the long-press menu — one-sided: clears the history
+// for this user (same as clearConversation) and hides the conversation from
+// their list. It isn't a hard delete, so the other participant(s) keep
+// their own copy untouched, and it silently comes back for this user the
+// next time a new message arrives (see the `deletedBy` pull in sendMessage).
+export async function deleteConversation(req, res) {
+  const { id } = req.params;
+  const conv = await Conversation.findById(id);
+  if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) {
+    return res.status(404).json({ message: "Not found" });
+  }
+  await Message.updateMany({ conversation: id }, { $addToSet: { deletedFor: req.user._id } });
+  conv.deletedBy.addToSet(req.user._id);
+  await conv.save();
+  res.json({ ok: true });
+}
+
+// "Add to folder" from the long-press menu. `folder: null` (or "") clears
+// this user's tag on the conversation instead of setting one.
+export async function setConversationFolder(req, res) {
+  const { id } = req.params;
+  const { folder } = req.body;
+  const conv = await Conversation.findById(id);
+  if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) {
+    return res.status(404).json({ message: "Not found" });
+  }
+  conv.folders = conv.folders.filter((f) => String(f.user) !== String(req.user._id));
+  const trimmed = (folder || "").trim();
+  if (trimmed) conv.folders.push({ user: req.user._id, folder: trimmed });
+  await conv.save();
+  res.json({ folder: trimmed || null });
 }
 
 export async function leaveGroup(req, res) {

@@ -9,6 +9,7 @@ import {
   LayersIcon,
   MegaphoneIcon,
   SettingsIcon,
+  CompassIcon,
 } from "../common/Icons";
 import "../../styles/asideRail.css";
 
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { id: "chats", label: "Chats", icon: ChatIcon },
   { id: "calls", label: "Calls", icon: PhoneIcon },
   { id: "status", label: "Status", icon: StatusRingIcon },
+  { id: "explore", label: "Explore", icon: CompassIcon },
   { id: "groups", label: "Groups", icon: UsersIcon },
 ];
 

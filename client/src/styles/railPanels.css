@@ -361,3 +361,7 @@
   align-items: center;
   gap: 6px;
 }
+
+/* Virtualized Media & Storage grid (VirtuosoGrid) */
+.media-virtual-grid { display: flex; flex-wrap: wrap; padding: 0 6px; }
+.media-virtual-grid-item { width: 33.3333%; padding: 2px; box-sizing: border-box; }

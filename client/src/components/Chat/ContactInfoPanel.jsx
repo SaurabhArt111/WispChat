@@ -12,12 +12,16 @@ import StatusViewer from "../Sidebar/StatusViewer";
 import { formatLastSeen, formatBytes } from "../../utils/time";
 import { BackIcon, CloseIcon, MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon } from "../common/Icons";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
+import PostsGrid from "../Posts/PostsGrid";
 import "../../styles/contactInfo.css";
 
 const TABS = [
   { id: "media", label: "Media" },
   { id: "files", label: "Files" },
 ];
+
+// Direct chats also get a "Posts" tab (that person's Explorer posts).
+const POSTS_TAB = { id: "posts", label: "Posts" };
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 520;
@@ -206,19 +210,23 @@ export default function ContactInfoPanel({ conversation, onClose }) {
         )}
 
         <div className="contact-info-tabs">
-          {TABS.map((t) => (
+          {(conversation.isGroup ? TABS : [...TABS, POSTS_TAB]).map((t) => (
             <button
               key={t.id}
               className={`ci-tab ${tab === t.id ? "active" : ""}`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
-              <span className="ci-tab-count">{t.id === "media" ? media.length : files.length}</span>
+              {t.id !== "posts" && (
+                <span className="ci-tab-count">{t.id === "media" ? media.length : files.length}</span>
+              )}
             </button>
           ))}
         </div>
 
-        {tab === "media" ? (
+        {tab === "posts" && other ? (
+          <PostsGrid userId={other._id} />
+        ) : tab === "media" ? (
           media.length === 0 ? (
             <div className="ci-empty">
               <ImageIcon size={26} />

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Virtuoso, VirtuosoGrid } from "react-virtuoso";
 import client from "../../api/client";
 import { useChat } from "../../context/ChatContext";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
@@ -56,6 +57,50 @@ function GridThumb({ item, onClick }) {
   );
 }
 
+// Defined at module level (and fed via Virtuoso's `context`) so its identity
+// is stable — an inline component would be re-created every render and
+// remount the stats chart and tabs each time the list scrolls or updates.
+function PanelHeader({ context }) {
+  const { stats, kind, setKind } = context;
+  return (
+    <>
+      <div className="rail-panel-section">
+        <div className="rail-panel-section-title">
+          <LayersIcon size={15} /> Everything shared & received
+        </div>
+        <MediaStatsChart stats={stats} />
+      </div>
+      <div className="media-kind-tabs">
+        {KIND_TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`media-kind-tab ${kind === t.id ? "active" : ""}`}
+            onClick={() => setKind(t.id)}
+          >
+            <t.icon size={14} /> {t.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function PanelFooter({ context }) {
+  const { items, kind, loadingMore } = context;
+  if (items === null) return <div className="rail-panel-empty"><p>Loading…</p></div>;
+  if (items.length === 0) {
+    return (
+      <div className="rail-panel-empty">
+        <LayersIcon size={26} />
+        <p>Nothing here yet — {KIND_TABS.find((t) => t.id === kind)?.label.toLowerCase()} you send or receive across every chat will show up here.</p>
+      </div>
+    );
+  }
+  return loadingMore ? <div className="rail-panel-empty"><p>Loading more…</p></div> : <div style={{ height: 24 }} />;
+}
+
+const PAGE = 60;
+
 export default function MediaStoragePanel({ onOpenMore }) {
   const { openConversation } = useChat();
   const [stats, setStats] = useState(null);
@@ -67,13 +112,48 @@ export default function MediaStoragePanel({ onOpenMore }) {
     client.get("/messages/media/stats").then((res) => setStats(res.data)).catch(() => {});
   }, []);
 
+  const [loadingMore, setLoadingMore] = useState(false);
+  const doneRef = useRef(false);
+  const busyRef = useRef(false);
+
   useEffect(() => {
+    let active = true;
     setItems(null);
+    doneRef.current = false;
+    busyRef.current = false;
     client
-      .get(`/messages/media/list?kind=${kind}&limit=60`)
-      .then((res) => setItems(res.data.items))
-      .catch(() => setItems([]));
+      .get(`/messages/media/list?kind=${kind}&limit=${PAGE}`)
+      .then((res) => {
+        if (!active) return;
+        setItems(res.data.items);
+        if (res.data.items.length < PAGE) doneRef.current = true;
+      })
+      .catch(() => active && setItems([]));
+    return () => {
+      active = false;
+    };
   }, [kind]);
+
+  // Next page as the virtualized list nears its end.
+  const loadMore = useCallback(async () => {
+    if (busyRef.current || doneRef.current || !items?.length) return;
+    busyRef.current = true;
+    setLoadingMore(true);
+    try {
+      const before = items[items.length - 1].createdAt;
+      const res = await client.get(
+        `/messages/media/list?kind=${kind}&limit=${PAGE}&before=${encodeURIComponent(before)}`
+      );
+      const next = res.data.items || [];
+      if (next.length < PAGE) doneRef.current = true;
+      setItems((prev) => [...prev, ...next]);
+    } catch {
+      doneRef.current = true;
+    } finally {
+      busyRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [items, kind]);
 
   function openInChat(item) {
     openConversation(item.conversationId);
@@ -95,65 +175,52 @@ export default function MediaStoragePanel({ onOpenMore }) {
         <h2>Media & Storage</h2>
         {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
       </div>
-      <div className="rail-panel-scroll">
-        <div className="rail-panel-section">
-          <div className="rail-panel-section-title">
-            <LayersIcon size={15} /> Everything shared & received
-          </div>
-          <MediaStatsChart stats={stats} />
-        </div>
-
-        <div className="media-kind-tabs">
-          {KIND_TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`media-kind-tab ${kind === t.id ? "active" : ""}`}
-              onClick={() => setKind(t.id)}
-            >
-              <t.icon size={14} /> {t.label}
+      {kind === "image" || kind === "video" ? (
+        <VirtuosoGrid
+          key={kind}
+          style={{ flex: 1, minHeight: 0 }}
+          data={items || []}
+          context={{ stats, kind, setKind, items, loadingMore }}
+          computeItemKey={(index, item) => `${item.messageId}-${item.url}`}
+          listClassName="media-virtual-grid"
+          itemClassName="media-virtual-grid-item"
+          overscan={400}
+          endReached={loadMore}
+          components={{ Header: PanelHeader, Footer: PanelFooter }}
+          itemContent={(index, item) => (
+            <GridThumb
+              item={item}
+              onClick={() =>
+                item.kind === "video" ? openInChat(item) : setLightboxIndex(imageItems.findIndex((m) => m.url === item.url))
+              }
+            />
+          )}
+        />
+      ) : (
+        <Virtuoso
+          key={kind}
+          style={{ flex: 1, minHeight: 0 }}
+          data={items || []}
+          context={{ stats, kind, setKind, items, loadingMore }}
+          computeItemKey={(index, item) => `${item.messageId}-${item.url}`}
+          overscan={300}
+          endReached={loadMore}
+          components={{ Header: PanelHeader, Footer: PanelFooter }}
+          itemContent={(index, item) => (
+            <button className="media-storage-row" onClick={() => openInChat(item)}>
+              <div className="media-storage-row-icon">
+                {kind === "audio" ? <AudioIcon size={16} /> : <DocIcon size={16} />}
+              </div>
+              <div className="media-storage-row-meta">
+                <div className="media-storage-row-name">{item.name}</div>
+                <div className="media-storage-row-sub">
+                  {item.sender?.displayName} · {formatBytes(item.size)} · {formatListTime(item.createdAt)}
+                </div>
+              </div>
             </button>
-          ))}
-        </div>
-
-        {items === null ? (
-          <div className="rail-panel-empty">
-            <p>Loading…</p>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="rail-panel-empty">
-            <LayersIcon size={26} />
-            <p>Nothing here yet — {KIND_TABS.find((t) => t.id === kind)?.label.toLowerCase()} you send or receive across every chat will show up here.</p>
-          </div>
-        ) : kind === "image" || kind === "video" ? (
-          <div className="media-storage-grid">
-            {items.map((item, i) => (
-              <GridThumb
-                key={item.url + i}
-                item={item}
-                onClick={() =>
-                  item.kind === "video" ? openInChat(item) : setLightboxIndex(imageItems.findIndex((m) => m.url === item.url))
-                }
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="media-storage-list">
-            {items.map((item, i) => (
-              <button key={item.url + i} className="media-storage-row" onClick={() => openInChat(item)}>
-                <div className="media-storage-row-icon">
-                  {kind === "audio" ? <AudioIcon size={16} /> : <DocIcon size={16} />}
-                </div>
-                <div className="media-storage-row-meta">
-                  <div className="media-storage-row-name">{item.name}</div>
-                  <div className="media-storage-row-sub">
-                    {item.sender?.displayName} · {formatBytes(item.size)} · {formatListTime(item.createdAt)}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+          )}
+        />
+      )}
 
       {lightboxIndex !== null && (
         <Lightbox images={imageItems} startIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />

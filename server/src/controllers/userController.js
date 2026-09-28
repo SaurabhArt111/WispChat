@@ -1,22 +1,44 @@
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
 
+// Backs both the "New chat" people picker and the Explorer search bar —
+// matches by @username, display name, email, or (if the query happens to
+// be a valid Mongo id) the raw user ID itself, the same way Instagram lets
+// you paste someone's handle *or* find them by name.
 export async function searchUsers(req, res) {
   const q = (req.query.q || "").trim();
   if (!q) return res.json({ users: [] });
 
-  const users = await User.find({
-    _id: { $ne: req.user._id },
-    $or: [
-      { username: new RegExp(q, "i") },
-      { displayName: new RegExp(q, "i") },
-      { email: new RegExp(q, "i") },
-    ],
-  })
+  const or = [
+    { username: new RegExp(q.replace(/^@/, ""), "i") },
+    { displayName: new RegExp(q, "i") },
+    { email: new RegExp(q, "i") },
+  ];
+  if (mongoose.Types.ObjectId.isValid(q)) or.push({ _id: q });
+
+  const users = await User.find({ _id: { $ne: req.user._id }, $or: or })
     .limit(20)
     .select("username displayName avatar avatarColor about isOnline lastSeen e2ee.publicKeyJwk");
 
   res.json({ users });
+}
+
+// Powers Settings/Status > "Status privacy" (see StatusPrivacyModal). `mode`
+// is one of contacts / contacts_except / only_share_with; the matching list
+// (exceptUsers / onlyUsers) is only meaningful for the latter two modes, but
+// both are always stored so switching modes doesn't lose the other list.
+export async function updateStatusPrivacy(req, res) {
+  const { mode, exceptUsers, onlyUsers } = req.body;
+  if (mode && !["contacts", "contacts_except", "only_share_with"].includes(mode)) {
+    return res.status(400).json({ message: "Invalid privacy mode" });
+  }
+  req.user.statusPrivacy = req.user.statusPrivacy || {};
+  if (mode !== undefined) req.user.statusPrivacy.mode = mode;
+  if (Array.isArray(exceptUsers)) req.user.statusPrivacy.exceptUsers = exceptUsers;
+  if (Array.isArray(onlyUsers)) req.user.statusPrivacy.onlyUsers = onlyUsers;
+  await req.user.save();
+  res.json({ user: req.user.toPrivateJSON() });
 }
 
 export async function updateProfile(req, res) {

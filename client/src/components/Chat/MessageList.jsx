@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
 import { useChat } from "../../context/ChatContext";
 import { useAuth } from "../../context/AuthContext";
 import MessageBubble from "./MessageBubble";
@@ -7,116 +8,31 @@ import { formatDayLabel } from "../../utils/time";
 import { ChevronDownIcon, LockIcon } from "../common/Icons";
 import { onWallpaperChange, resolveWallpaperStyle } from "../../utils/wallpaper";
 
-export default function MessageList({
-  conversation,
-  onReply,
-  onEdit,
-  searchQuery = "",
-}) {
+// react-virtuoso's "inverse infinite scroll" needs a large positive starting
+// offset that can keep shrinking as older pages are prepended.
+const START_INDEX = 1_000_000;
+
+export default function MessageList({ conversation, onReply, onEdit, searchQuery = "" }) {
   const { messages, hasMore, loadMoreMessages, typing } = useChat();
   const { user } = useAuth();
   const typingUsers = Object.values(typing[conversation._id] || {});
-  const scrollRef = useRef(null);
-  const bottomRef = useRef(null);
+  const virtuosoRef = useRef(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
-  const prevScrollHeight = useRef(0);
-  const isFirstLoad = useRef(true);
-  const shouldStickToBottomRef = useRef(true);
+  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [wallpaperStyle, setWallpaperStyle] = useState(() => resolveWallpaperStyle(conversation._id));
+  const prevFirstKeyRef = useRef(null);
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const loadingMoreRef = useRef(false);
 
   // Re-resolve the wallpaper whenever it changes (Settings → Chats default,
-  // or this chat's own "More → Chat wallpaper" override) or when the person
-  // switches to a different chat.
+  // or this chat's own "More → Chat wallpaper" override).
   useEffect(() => {
     setWallpaperStyle(resolveWallpaperStyle(conversation._id));
     return onWallpaperChange(() => setWallpaperStyle(resolveWallpaperStyle(conversation._id)));
   }, [conversation._id]);
-
-
-  // NOTE: this used to be windowed/virtualized with a fixed per-row
-  // height estimate. Real message rows vary enormously in height (a
-  // one-line text bubble vs. a photo grid vs. a video) so a fixed
-  // estimate constantly mismatched real layout — that mismatch was
-  // exactly what caused scroll position to jump/glitch on every render,
-  // and could even make some rows compute as "outside the visible
-  // window" and not render at all, which is why media sometimes
-  // appeared to vanish even though it was still in `messages`. Loaded
-  // history is already bounded by pagination (loadMoreMessages fetches a
-  // page at a time), so just rendering every loaded message directly is
-  // both simpler and correct.
-
-  const isNearBottom = (el, threshold = 220) =>
-    el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
-
-  useEffect(() => {
-    isFirstLoad.current = true;
-    shouldStickToBottomRef.current = true;
-  }, [conversation._id]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    if (isFirstLoad.current) {
-      el.scrollTop = el.scrollHeight;
-      isFirstLoad.current = false;
-      shouldStickToBottomRef.current = true;
-      return;
-    }
-
-    if (shouldStickToBottomRef.current && isNearBottom(el)) {
-      requestAnimationFrame(() => {
-        const node = scrollRef.current;
-        if (!node) return;
-        node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-      });
-    }
-  }, [messages.length, typingUsers.length]);
-
-  function handleScroll() {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    shouldStickToBottomRef.current = distanceFromBottom <= 220;
-    setShowScrollBottom(distanceFromBottom > 250);
-
-    // Infinite scroll earlier messages
-    if (loadingMore || !hasMore) return;
-    if (el.scrollTop < 80) {
-      setLoadingMore(true);
-      prevScrollHeight.current = el.scrollHeight;
-      const oldest = messages[0]?.createdAt;
-      loadMoreMessages(oldest).then(() => {
-        requestAnimationFrame(() => {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTop =
-              scrollRef.current.scrollHeight - prevScrollHeight.current;
-          }
-        });
-        setLoadingMore(false);
-      });
-    }
-  }
-
-  function scrollToBottom() {
-    const el = scrollRef.current;
-    shouldStickToBottomRef.current = true;
-    setShowScrollBottom(false);
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }
-
-  function handleJumpToMessage(msgId) {
-    const targetEl = document.getElementById(`msg-${msgId}`);
-    if (targetEl) {
-      targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightedId(msgId);
-      setTimeout(() => setHighlightedId(null), 2000);
-    }
-  }
 
   const displayedMessages = useMemo(() => {
     if (!searchQuery?.trim()) return messages;
@@ -129,20 +45,88 @@ export default function MessageList({
     );
   }, [messages, searchQuery]);
 
-  let lastDay = null;
+  // Virtualized with react-virtuoso, which measures every row's *real*
+  // height (ResizeObserver) instead of a fixed estimate. That is what the
+  // old hand-rolled virtualization got wrong — text bubbles, photo grids
+  // and videos differ wildly in height, so fixed estimates made the scroll
+  // position jump and rows vanish. Day dividers / grouping are precomputed
+  // per row so itemContent doesn't need neighbour lookups.
+  const rows = useMemo(() => {
+    let lastDay = null;
+    return displayedMessages.map((msg, i) => {
+      const day = formatDayLabel(msg.createdAt);
+      const showDay = day !== lastDay;
+      lastDay = day;
+      const prev = displayedMessages[i - 1];
+      const isMine = (msg.sender?._id || msg.sender) === user._id;
+      const grouped =
+        !showDay &&
+        prev &&
+        (prev.sender?._id || prev.sender) === (msg.sender?._id || msg.sender) &&
+        new Date(msg.createdAt) - new Date(prev.createdAt) < 3 * 60 * 1000;
+      return { key: msg._id || msg.clientId || i, msg, day, showDay, isMine, grouped };
+    });
+  }, [displayedMessages, user._id]);
 
-  return (
-    <div className="message-list-wrap" style={wallpaperStyle}>
-      <div className="message-list" ref={scrollRef} onScroll={handleScroll}>
-        {loadingMore && <div className="messages-loading">Loading earlier messages…</div>}
+  // Keeps scroll position steady when older history is prepended: lowering
+  // firstItemIndex by the number of prepended rows keeps every visible row's
+  // effective index unchanged. Detected via the previous first row's key (not
+  // array length) so edits/reactions/appends don't trigger it. A layout
+  // effect applies it before paint, so there's no visible jump.
+  useLayoutEffect(() => {
+    const newFirstKey = rows[0]?.key ?? null;
+    const prevKey = prevFirstKeyRef.current;
+    if (prevKey != null && newFirstKey != null && prevKey !== newFirstKey) {
+      const prependedCount = rows.findIndex((r) => r.key === prevKey);
+      if (prependedCount > 0) setFirstItemIndex((v) => v - prependedCount);
+    }
+    prevFirstKeyRef.current = newFirstKey;
+  }, [rows]);
 
-        {displayedMessages.length === 0 && searchQuery && (
-          <div className="messages-empty-search">
-            <p>No messages matching "{searchQuery}"</p>
-          </div>
-        )}
+  // Latest 60 load first (server default); every time the person scrolls to
+  // the top, the next 60 older messages are fetched.
+  function handleStartReached() {
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const oldest = messages[0]?.createdAt;
+    Promise.resolve(loadMoreMessages(oldest)).finally(() => {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    });
+  }
 
-        {!searchQuery && !hasMore && displayedMessages.length > 0 && (
+  function scrollToBottom() {
+    setShowScrollBottom(false);
+    virtuosoRef.current?.scrollToIndex({
+      index: firstItemIndex + rows.length - 1,
+      align: "end",
+      behavior: "smooth",
+    });
+  }
+
+  // Works even when the target row isn't mounted (virtualized out).
+  function handleJumpToMessage(msgId) {
+    const idx = rows.findIndex((r) => r.msg._id === msgId);
+    if (idx < 0) return;
+    virtuosoRef.current?.scrollToIndex({
+      index: firstItemIndex + idx,
+      align: "center",
+      behavior: "smooth",
+    });
+    setHighlightedId(msgId);
+    setTimeout(() => setHighlightedId(null), 2000);
+  }
+
+  const showEmptySearch = searchQuery && rows.length === 0;
+  const typingKey = typingUsers.join(", ");
+
+  const components = useMemo(
+    () => ({
+      Header: () =>
+        loadingMore ? (
+          <div className="messages-loading">Loading earlier messages…</div>
+        ) : !searchQuery && !hasMore && rows.length > 0 ? (
           <div className="e2ee-intro-banner">
             <LockIcon size={13} />
             <span>
@@ -150,63 +134,76 @@ export default function MessageList({
               can read, listen to, or share them.
             </span>
           </div>
-        )}
-
-        <div className="message-list-inner">
-          {displayedMessages.map((msg, actualIndex) => {
-            const day = formatDayLabel(msg.createdAt);
-            const showDay = day !== lastDay;
-            lastDay = day;
-            const prev = displayedMessages[actualIndex - 1];
-            const isMine = (msg.sender?._id || msg.sender) === user._id;
-            const grouped =
-              !showDay &&
-              prev &&
-              (prev.sender?._id || prev.sender) === (msg.sender?._id || msg.sender) &&
-              new Date(msg.createdAt) - new Date(prev.createdAt) < 3 * 60 * 1000;
-
-            return (
-              <div key={msg._id || msg.clientId || actualIndex}>
-                {showDay && (
-                  <div className="day-divider">
-                    <span>{day}</span>
-                  </div>
-                )}
-                <MessageBubble
-                  message={msg}
-                  isMine={isMine}
-                  grouped={grouped}
-                  isGroup={conversation.isGroup}
-                  onReply={onReply}
-                  onEdit={onEdit}
-                  onJumpToMessage={handleJumpToMessage}
-                  isHighlighted={highlightedId === msg._id}
-                />
-              </div>
-            );
-          })}
-        </div>
-
-        {typingUsers.length > 0 && (
+        ) : (
+          <div style={{ height: 8 }} />
+        ),
+      Footer: () =>
+        typingKey ? (
           <div className="typing-bubble-row">
             <div className="typing-bubble">
               <TypingDots size="lg" />
               <span className="typing-bubble-text">
-                {typingUsers.join(", ")} {typingUsers.length > 1 ? "are" : "is"} typing…
+                {typingKey} {typingUsers.length > 1 ? "are" : "is"} typing…
               </span>
             </div>
           </div>
-        )}
+        ) : (
+          <div style={{ height: 8 }} />
+        ),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loadingMore, hasMore, searchQuery, rows.length > 0, typingKey]
+  );
 
-        <div ref={bottomRef} />
-      </div>
+  return (
+    <div className="message-list-wrap" style={wallpaperStyle}>
+      {showEmptySearch ? (
+        <div className="message-list">
+          <div className="messages-empty-search">
+            <p>No messages matching "{searchQuery}"</p>
+          </div>
+        </div>
+      ) : (
+        <Virtuoso
+          ref={virtuosoRef}
+          className="message-list"
+          data={rows}
+          computeItemKey={(index, row) => row.key}
+          firstItemIndex={firstItemIndex}
+          initialTopMostItemIndex={
+            rows.length ? { index: rows.length - 1, align: "end" } : undefined
+          }
+          alignToBottom
+          followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
+          atBottomThreshold={220}
+          atBottomStateChange={(atBottom) => setShowScrollBottom(!atBottom)}
+          startReached={handleStartReached}
+          increaseViewportBy={{ top: 800, bottom: 800 }}
+          components={components}
+          itemContent={(index, row) => (
+            <div className="message-row-item">
+              {row.showDay && (
+                <div className="day-divider">
+                  <span>{row.day}</span>
+                </div>
+              )}
+              <MessageBubble
+                message={row.msg}
+                isMine={row.isMine}
+                grouped={row.grouped}
+                isGroup={conversation.isGroup}
+                onReply={onReply}
+                onEdit={onEdit}
+                onJumpToMessage={handleJumpToMessage}
+                isHighlighted={highlightedId === row.msg._id}
+              />
+            </div>
+          )}
+        />
+      )}
 
       {showScrollBottom && (
-        <button
-          className="scroll-bottom-btn"
-          onClick={scrollToBottom}
-          title="Scroll to latest messages"
-        >
+        <button className="scroll-bottom-btn" onClick={scrollToBottom} title="Scroll to latest messages">
           <ChevronDownIcon size={18} />
         </button>
       )}

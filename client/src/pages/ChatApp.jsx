@@ -4,6 +4,7 @@ import { useChat } from "../context/ChatContext";
 import { useStatus } from "../context/StatusContext";
 import AsideRail from "../components/Sidebar/AsideRail";
 import MobileBottomNav from "../components/Sidebar/MobileBottomNav";
+import ExplorerPanel from "../components/Sidebar/ExplorerPanel";
 import MoreMenuSheet from "../components/Sidebar/MoreMenuSheet";
 import Sidebar from "../components/Sidebar/Sidebar";
 import ArchivedPanel from "../components/Sidebar/ArchivedPanel";
@@ -27,10 +28,10 @@ import "../styles/layout.css";
 // fallback for any path that doesn't match one of these. "Archived" is
 // deliberately left out — it stays a local panel toggle rather than a
 // route, reached only from the link inside the chat list itself.
-const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast"];
+const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore"];
 
 export default function ChatApp() {
-  const { activeId, activeConversation } = useChat();
+  const { activeId, activeConversation, infoRequest } = useChat();
   const { hasUnread } = useStatus();
   const location = useLocation();
   const navigate = useNavigate();
@@ -79,6 +80,17 @@ export default function ChatApp() {
     setShowContactInfo(false);
   }, [activeId]);
 
+  // Long-press → "View info" (see ChatContext.viewConversationInfo). Declared
+  // after the reset effect above so that, when the chat switch and the
+  // request land in the same commit, opening wins over resetting.
+  const handledInfoRef = useRef(0);
+  useEffect(() => {
+    if (infoRequest.n && infoRequest.n !== handledInfoRef.current && activeId === infoRequest.id) {
+      handledInfoRef.current = infoRequest.n;
+      setShowContactInfo(true);
+    }
+  }, [infoRequest, activeId]);
+
   return (
     <div className={`app-shell ${activeId ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""}`}>
       <ConnectionBanner />
@@ -105,6 +117,7 @@ export default function ChatApp() {
       {activePanel === "status" && <StatusPanel onOpenMore={() => setShowMoreMenu(true)} />}
       {activePanel === "media" && <MediaStoragePanel onOpenMore={() => setShowMoreMenu(true)} />}
       {activePanel === "calls" && <CallsPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "explore" && <ExplorerPanel onOpenMore={() => setShowMoreMenu(true)} />}
       {activePanel === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
 
       <div className="app-main">
@@ -156,7 +169,6 @@ export default function ChatApp() {
       <MobileBottomNav
         view={activePanel}
         onChangeView={changeView}
-        onOpenExplore={() => setShowNewChat(true)}
         hasUnreadStatus={hasUnread}
       />
 

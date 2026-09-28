@@ -9,6 +9,8 @@ import {
   updateAdmins,
   toggleConvoFlag,
   clearConversation,
+  deleteConversation,
+  setConversationFolder,
   leaveGroup,
 } from "../controllers/conversationController.js";
 
@@ -23,6 +25,8 @@ router.patch("/group/:id/members", updateMembers);
 router.patch("/group/:id/admins", updateAdmins);
 router.post("/:id/flag", toggleConvoFlag);
 router.post("/:id/clear", clearConversation);
+router.post("/:id/delete", deleteConversation);
+router.post("/:id/folder", setConversationFolder);
 router.post("/group/:id/leave", leaveGroup);
 
 export default router;

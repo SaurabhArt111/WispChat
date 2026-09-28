@@ -562,6 +562,40 @@ export function ChatProvider({ children }) {
     [upsertConversation]
   );
 
+  // --- Long-press menu actions (chat list) ---
+  // "View info": open the chat, then ask ChatApp (which owns the contact-info
+  // panel's open/closed state) to show it. A counter, not a boolean, so
+  // asking twice in a row still re-triggers the effect that watches it. The
+  // target id is included because the chat switch itself is async (URL-driven).
+  const [infoRequest, setInfoRequest] = useState({ id: null, n: 0 });
+  const viewConversationInfo = useCallback(
+    (id) => {
+      openConversation(id);
+      setInfoRequest((r) => ({ id, n: r.n + 1 }));
+    },
+    [openConversation]
+  );
+
+  // "Delete chat": one-sided (server keeps the other person's copy) — drop it
+  // from the local list right away and close it if it's the open chat.
+  const deleteChat = useCallback(
+    async (id) => {
+      await client.post(`/conversations/${id}/delete`);
+      setConversations((prev) => prev.filter((c) => c._id !== id));
+      if (activeId === id) navigate("/");
+    },
+    [activeId, navigate]
+  );
+
+  // "Add to folder": folder = "" clears it.
+  const setConversationFolder = useCallback(async (id, folder) => {
+    const res = await client.post(`/conversations/${id}/folder`, { folder });
+    setConversations((prev) =>
+      prev.map((c) => (c._id === id ? { ...c, folder: res.data.folder } : c))
+    );
+    return res.data.folder;
+  }, []);
+
   // --- Socket event wiring ---
   useEffect(() => {
     if (!socket) return;
@@ -752,6 +786,10 @@ export function ChatProvider({ children }) {
     createGroup,
     refreshConversations,
     upsertConversation,
+    infoRequest,
+    viewConversationInfo,
+    deleteChat,
+    setConversationFolder,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

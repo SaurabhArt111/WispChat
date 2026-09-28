@@ -15,6 +15,7 @@ import userRoutes from "./src/routes/user.routes.js";
 import conversationRoutes from "./src/routes/conversation.routes.js";
 import messageRoutes from "./src/routes/message.routes.js";
 import statusRoutes from "./src/routes/status.routes.js";
+import postRoutes from "./src/routes/post.routes.js";
 
 dotenv.config();
 
@@ -79,6 +80,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/status", statusRoutes);
+app.use("/api/posts", postRoutes);
 
 // Error handling middleware (e.g. Multer file size errors, validation errors)
 app.use((err, req, res, next) => {

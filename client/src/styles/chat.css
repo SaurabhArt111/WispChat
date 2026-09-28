@@ -210,15 +210,17 @@
 .message-list {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  height: 100%;
   overflow-x: hidden;
-  padding: 16px 5% 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  padding: 0 5%;
   overscroll-behavior-y: contain;
-  scroll-behavior: smooth;
-  contain: layout paint size style;
+  /* NOTE: no display:flex / gap / scroll-behavior:smooth here — this element
+     is the react-virtuoso scroller, which positions rows itself and does its
+     own smooth scrolling. */
+}
+
+.message-row-item {
+  width: 100%;
 }
 
 .message-list-inner {

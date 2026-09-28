@@ -6,6 +6,7 @@ import { useToast } from "../../context/ToastContext";
 import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
+import AddToFolderSheet from "./AddToFolderSheet";
 import { formatListTime } from "../../utils/time";
 import client from "../../api/client";
 import {
@@ -20,6 +21,8 @@ import {
   AudioIcon,
   FileIcon,
   LockIcon,
+  FolderIcon,
+  InfoIcon,
 } from "../common/Icons";
 
 // A component (not a plain function) specifically so it can decrypt the
@@ -74,10 +77,12 @@ function ConversationPreview({ conv, selfId, isTyping }) {
 
 export default function ConversationItem({ conversation, active, onClick }) {
   const { user } = useAuth();
-  const { presence, typing, upsertConversation } = useChat();
+  const { presence, typing, upsertConversation, viewConversationInfo, deleteChat } = useChat();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showFolderSheet, setShowFolderSheet] = useState(false);
 
   // Swipe-to-reveal-archive (mouse + touch, via Pointer Events so both
   // work through one code path). Dragging left slides the row over to
@@ -266,6 +271,16 @@ export default function ConversationItem({ conversation, active, onClick }) {
     }
   }
 
+  async function deleteThisChat() {
+    setConfirmDelete(false);
+    try {
+      await deleteChat(conversation._id);
+      showToast("Chat deleted");
+    } catch {
+      showToast("Could not delete chat", "danger");
+    }
+  }
+
   function handleContextMenu(e) {
     openMenu(
       e,
@@ -285,8 +300,19 @@ export default function ConversationItem({ conversation, active, onClick }) {
           icon: <ArchiveIcon size={15} />,
           onClick: () => flag("archive"),
         },
+        {
+          label: conversation.folder ? `Folder: ${conversation.folder}` : "Add to folder",
+          icon: <FolderIcon size={15} />,
+          onClick: () => setShowFolderSheet(true),
+        },
+        {
+          label: "View info",
+          icon: <InfoIcon size={15} />,
+          onClick: () => viewConversationInfo(conversation._id),
+        },
         { divider: true },
         { label: "Clear chat", danger: true, icon: <TrashIcon size={15} />, onClick: () => setConfirmClear(true) },
+        { label: "Delete chat", danger: true, icon: <TrashIcon size={15} />, onClick: () => setConfirmDelete(true) },
       ],
       label
     );
@@ -328,6 +354,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
           <div className="conv-item-row">
             <span className="conv-item-name">
               {label}
+              {conversation.folder && <span className="conv-folder-tag">{conversation.folder}</span>}
               {conversation.pinned && (
                 <span className="pin-badge" title="Pinned">
                   <PinIcon size={12} filled />
@@ -372,6 +399,19 @@ export default function ConversationItem({ conversation, active, onClick }) {
         onConfirm={clearChat}
         onCancel={() => setConfirmClear(false)}
       />
+    )}
+    {confirmDelete && (
+      <ConfirmModal
+        title="Delete this chat?"
+        message="This removes the chat and its history from your list. Other people in it keep their copy, and it comes back if someone messages you again."
+        confirmLabel="Delete chat"
+        danger
+        onConfirm={deleteThisChat}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    )}
+    {showFolderSheet && (
+      <AddToFolderSheet conversation={conversation} onClose={() => setShowFolderSheet(false)} />
     )}
     </>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
 import client from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
@@ -78,8 +79,13 @@ export default function CallsPanel({ onOpenMore }) {
           <p>Your voice and video calls will appear here.</p>
         </div>
       ) : (
-        <div className="rail-panel-list calls-list">
-          {calls.map((call) => {
+        <Virtuoso
+          className="calls-list"
+          style={{ flex: 1, minHeight: 0 }}
+          data={calls}
+          computeItemKey={(index, call) => call._id}
+          overscan={300}
+          itemContent={(index, call) => {
             const conversation = call.conversation;
             const peer = conversation?.isGroup
               ? { displayName: conversation.name, avatar: conversation.avatar, avatarColor: "#64748b" }
@@ -90,7 +96,6 @@ export default function CallsPanel({ onOpenMore }) {
             return (
               <button
                 className="call-log-row"
-                key={call._id}
                 onClick={() => openConversation(conversation?._id)}
                 type="button"
               >
@@ -105,8 +110,8 @@ export default function CallsPanel({ onOpenMore }) {
                 <span className="call-log-time">{formatListTime(call.createdAt)}</span>
               </button>
             );
-          })}
-        </div>
+          }}
+        />
       )}
     </aside>
   );

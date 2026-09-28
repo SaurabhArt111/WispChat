@@ -71,6 +71,41 @@ function RenderedMenu({ menu, menuRef, closeMenu }) {
     setPos({ x, y, visible: true });
   }, [menu]);
 
+  // On phones, plain menus (the chat-list long-press: Pin / Archive / Add to
+  // folder / View info / Delete chat) render as a bottom sheet over a dimmed
+  // backdrop, like WhatsApp/Arattai. Menus with a reaction strip (message
+  // bubbles) keep the floating popover anchored to the finger.
+  const asSheet = !menu.reactions && window.matchMedia?.("(max-width: 768px)").matches;
+  if (asSheet) {
+    return createPortal(
+      <div className="ctx-sheet-backdrop">
+        <div ref={menuRef} className="ctx-sheet" role="menu">
+          <div className="ctx-sheet-handle" />
+          {menu.items.map((item, i) =>
+            item.divider ? (
+              <div key={i} className="ctx-menu-divider" />
+            ) : (
+              <button
+                key={i}
+                role="menuitem"
+                className={`ctx-sheet-item ${item.danger ? "danger" : ""}`}
+                disabled={item.disabled}
+                onClick={() => {
+                  closeMenu();
+                  item.onClick?.();
+                }}
+              >
+                {item.icon && <span className="ctx-menu-icon">{item.icon}</span>}
+                <span>{item.label}</span>
+              </button>
+            )
+          )}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
   return createPortal(
     <div ref={menuRef} className="ctx-menu-group" style={{ left: pos.x, top: pos.y, opacity: pos.visible ? 1 : 0 }}>
       {menu.reactions && (

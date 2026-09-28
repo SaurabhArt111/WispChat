@@ -134,3 +134,22 @@
   background: var(--border-soft);
   margin: 4px 2px;
 }
+
+/* Mobile bottom-sheet variant (chat-list long-press) */
+.ctx-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 1100; background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: flex-end; animation: overlayFadeIn 140ms var(--ease);
+}
+.ctx-sheet {
+  width: 100%; background: var(--surface); border-radius: 22px 22px 0 0;
+  padding: 8px 8px calc(14px + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--shadow-lg); animation: modalSlideUp 200ms var(--ease);
+}
+.ctx-sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 4px auto 8px; }
+.ctx-sheet-item {
+  display: flex; align-items: center; gap: 18px; width: 100%; padding: 15px 16px;
+  background: transparent; border: 0; border-radius: 12px; color: var(--text);
+  font-size: 15.5px; text-align: left;
+}
+.ctx-sheet-item:active { background: var(--surface-2); }
+.ctx-sheet-item.danger { color: var(--danger, #ef4444); }
