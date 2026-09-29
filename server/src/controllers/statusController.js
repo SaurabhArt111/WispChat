@@ -1,6 +1,13 @@
 import User from "../models/User.js";
 import Status from "../models/Status.js";
 import { kindFromMime } from "../middleware/upload.js";
+import { emitToUsers, audienceOf } from "../utils/realtime.js";
+
+// Tell the owner (all their devices) and everyone who can see their status
+// that something changed, so feeds/rings/counts update without a reload.
+function notifyStatusChange(req, ownerUser, extra = {}) {
+  emitToUsers(req.io, audienceOf(ownerUser), "status:changed", { userId: ownerUser._id, ...extra });
+}
 
 // WhatsApp-style cap: at most 5 active (non-expired) slides on your status
 // at once. Older ones still expire on their own via the TTL index; this
@@ -99,6 +106,7 @@ export async function createStatus(req, res) {
       text: text.trim(),
       bgColor: bgColor || "#5ef2c0",
     });
+    notifyStatusChange(req, req.user, { action: "created" });
     return res.status(201).json({ status });
   }
 
@@ -112,6 +120,7 @@ export async function createStatus(req, res) {
     mimeType: file.mimetype,
     caption: (caption || "").trim(),
   });
+  notifyStatusChange(req, req.user, { action: "created" });
   res.status(201).json({ status });
 }
 
@@ -145,6 +154,8 @@ export async function viewStatus(req, res) {
         );
       }
     }
+    // The owner's viewer list / view count updates live.
+    emitToUsers(req.io, [status.user], "status:changed", { userId: status.user, action: "viewed" });
   }
   res.json({ ok: true });
 }
@@ -156,6 +167,7 @@ export async function deleteStatus(req, res) {
     return res.status(403).json({ message: "You can only delete your own status" });
   }
   await status.deleteOne();
+  notifyStatusChange(req, req.user, { action: "deleted" });
   res.json({ ok: true });
 }
 
@@ -197,5 +209,6 @@ export async function reactToStatus(req, res) {
   }
 
   await status.save();
+  emitToUsers(req.io, [status.user], "status:changed", { userId: status.user, action: "reacted" });
   res.json({ ok: true, reaction: { user: req.user._id, emoji: nextEmoji, at: now } });
 }

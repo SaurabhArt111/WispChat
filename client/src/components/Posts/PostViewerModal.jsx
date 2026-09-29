@@ -1,17 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import { mediaUrl } from "../../api/config";
-import { addPostComment, deletePost, deletePostComment, togglePostLike, updatePost, updatePostComment } from "../../api/posts";
-import { BackIcon, CheckIcon, CloseIcon, CommentIcon, EditIcon, HeartIcon, ImageIcon, SendPostIcon, TrashIcon } from "../common/Icons";
+import { addPostComment, deletePost, deletePostComment, updatePost, updatePostComment } from "../../api/posts";
+import usePostLike from "../../hooks/usePostLike";
+import useDoubleTap from "../../hooks/useDoubleTap";
+import { useLivePost } from "../../hooks/useLivePosts";
+import { BackIcon, CheckIcon, ChevronDownIcon, CloseIcon, CommentIcon, EditIcon, HeartIcon, ImageIcon, SendPostIcon, TrashIcon } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
 import "../../styles/posts.css";
 
-// Full post view: media + like + comments. `onChange(post)` lets the parent
-// grid keep its counts in sync; `onDeleted(id)` removes it from the grid.
-export default function PostViewerModal({ post: initial, onClose, onChange, onDeleted, isPage = false }) {
+// Desktop post view (a modal over Explore/profile, still on its own /post/:id
+// route): media on the left; author, caption, comments, likes on the right.
+// Arrow buttons / ← → keys step through the posts that follow, then
+// suggestions from other people. Double-click (or double-tap) the media to
+// like it with a heart animation. `onChange(post)` lets the parent keep its
+// copy in sync; `onDeleted(id)` removes it from the parent's list.
+export default function PostViewerModal({
+  post: initial,
+  onClose,
+  onChange,
+  onDeleted,
+  onPrev,
+  onNext,
+  isPage = false,
+}) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [post, setPost] = useState(initial);
@@ -25,7 +40,7 @@ export default function PostViewerModal({ post: initial, onClose, onChange, onDe
   const [newFile, setNewFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [heartBurst, setHeartBurst] = useState(0);
+  const [heartBurst, setHeartBurst] = useState(null); // { n, x, y }
   const fileRef = useRef(null);
   const previewUrl = useMemo(() => (newFile ? URL.createObjectURL(newFile) : null), [newFile]);
   useEffect(() => () => previewUrl && URL.revokeObjectURL(previewUrl), [previewUrl]);
@@ -75,34 +90,40 @@ export default function PostViewerModal({ post: initial, onClose, onChange, onDe
     }
   }
 
-  function update(next) {
-    setPost(next);
-    onChange?.(next);
-  }
+  const update = useCallback(
+    (next) => {
+      setPost(next);
+      onChange?.(next);
+    },
+    [onChange]
+  );
 
-  async function handleLike() {
-    // optimistic
-    const optimistic = {
-      ...post,
-      likedByMe: !post.likedByMe,
-      likeCount: post.likeCount + (post.likedByMe ? -1 : 1),
-    };
-    update(optimistic);
-    try {
-      const res = await togglePostLike(post._id);
-      update({ ...optimistic, likedByMe: res.likedByMe, likeCount: res.likeCount });
-    } catch {
-      update(post);
-      showToast("Couldn't update like", "danger");
+  // Likes/comments/edits from other people arrive live; a deletion closes the viewer.
+  useLivePost(setPost, { onGone: () => { onDeleted?.(post._id); onClose(); } });
+
+  const { toggleLike, likeOnly } = usePostLike(post, update);
+
+  const burst = useCallback((point) => setHeartBurst((b) => ({ n: (b?.n || 0) + 1, x: point?.x, y: point?.y })), []);
+  const doubleTap = useDoubleTap({
+    onDouble: (point) => {
+      if (editing) return;
+      burst(point);
+      likeOnly();
+    },
+  });
+
+  // ← / → move between posts; Esc closes (Esc handled by overlay click/close button already).
+  useEffect(() => {
+    if (isPage) return;
+    function onKey(e) {
+      if (e.target?.closest?.("input, textarea")) return;
+      if (e.key === "ArrowRight") onNext?.();
+      else if (e.key === "ArrowLeft") onPrev?.();
+      else if (e.key === "Escape") onClose();
     }
-  }
-
-  function handleMediaDoubleClick(e) {
-    if (editing) return;
-    e.preventDefault();
-    setHeartBurst((burst) => burst + 1);
-    if (!post.likedByMe) handleLike();
-  }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isPage, onNext, onPrev, onClose]);
 
   async function handleComment(e) {
     e.preventDefault();
@@ -161,17 +182,28 @@ export default function PostViewerModal({ post: initial, onClose, onChange, onDe
           </header>
         )}
         <div className="post-viewer-body">
-        <div className="post-viewer-media" onDoubleClick={handleMediaDoubleClick}>
-          {heartBurst > 0 && (
+        <div className="post-viewer-media" {...doubleTap}>
+          {heartBurst && (
             <div
-              key={heartBurst}
-              className="post-viewer-heart-burst"
-              onAnimationEnd={() => setHeartBurst(0)}
+              key={heartBurst.n}
+              className={`post-viewer-heart-burst ${heartBurst.x != null ? "at-point" : ""}`}
+              style={heartBurst.x != null ? { "--hx": `${heartBurst.x}px`, "--hy": `${heartBurst.y}px` } : undefined}
+              onAnimationEnd={() => setHeartBurst(null)}
               aria-hidden="true"
             >
               <HeartIcon size={92} filled />
             </div>
           )}
+          {/* {onPrev && (
+            <button className="post-viewer-nav prev" onClick={onPrev} title="Previous post" data-no-tap>
+              <ChevronDownIcon size={22} />
+            </button>
+          )}
+          {onNext && (
+            <button className="post-viewer-nav next" onClick={onNext} title="Next post" data-no-tap>
+              <ChevronDownIcon size={22} />
+            </button>
+          )} */}
           {newFile ? (
             newFile.type.startsWith("video") ? (
               <video src={previewUrl} controls muted playsInline />
@@ -291,14 +323,16 @@ export default function PostViewerModal({ post: initial, onClose, onChange, onDe
 
           <div className="post-viewer-actions">
             <button
-              className={`icon-btn ${post.likedByMe ? "post-liked" : ""}`}
+              className={`icon-btn post-like-btn ${post.likedByMe ? "post-liked" : ""}`}
               onClick={() => {
-                if (!post.likedByMe) setHeartBurst((burst) => burst + 1);
-                handleLike();
+                if (!post.likedByMe) burst();
+                toggleLike();
               }}
-              title="Like"
+              title={post.likedByMe ? "Unlike" : "Like"}
             >
-              <HeartIcon size={22} filled={post.likedByMe} />
+              <span key={post.likedByMe ? "on" : "off"} className="post-like-icon">
+                <HeartIcon size={22} filled={post.likedByMe} />
+              </span>
             </button>
             <span className="post-viewer-count"><CommentIcon size={16} /> {post.commentCount}</span>
             <span className="post-viewer-count">{post.likeCount} {post.likeCount === 1 ? "like" : "likes"}</span>

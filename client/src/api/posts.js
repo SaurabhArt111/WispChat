@@ -3,8 +3,13 @@ import client from "./client";
 // Thin wrappers around /api/posts so components don't repeat URL strings.
 export const MAX_POSTS_PER_USER = 6;
 
-export const fetchExploreFeed = (limit = 60) =>
-  client.get("/posts/feed", { params: { limit } }).then((r) => r.data.posts);
+// Explore feed. `scope`: "all" (people you know + people you don't),
+// "contacts", or "discover". `exclude` = ids already on screen, so each
+// call returns a fresh batch (infinite scroll without repeats).
+export const fetchExploreFeed = ({ limit = 24, scope = "all", exclude = [] } = {}) =>
+  client
+    .get("/posts/feed", { params: { limit, scope, exclude: exclude.slice(-300).join(",") } })
+    .then((r) => ({ posts: r.data.posts, hasMore: r.data.hasMore }));
 
 export const fetchUserPosts = (userId) =>
   client.get(`/posts/user/${userId}`).then((r) => r.data.posts);

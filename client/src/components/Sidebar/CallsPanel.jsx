@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import client from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -8,6 +8,7 @@ import Avatar from "../common/Avatar";
 import MobileMoreButton from "./MobileMoreButton";
 import { PhoneIcon, VideoIcon } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
+import useLiveRefresh from "../../hooks/useLiveRefresh";
 import "../../styles/railPanels.css";
 
 function callLabel(call) {
@@ -28,6 +29,7 @@ export default function CallsPanel({ onOpenMore }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const silentReloadRef = useRef(() => {});
 
   useEffect(() => {
     let active = true;
@@ -48,6 +50,7 @@ export default function CallsPanel({ onOpenMore }) {
       if (message.callInfo) loadCalls(false);
     }
 
+    silentReloadRef.current = () => loadCalls(false);
     loadCalls();
     socket?.on("message:new", onMessage);
     return () => {
@@ -55,6 +58,8 @@ export default function CallsPanel({ onOpenMore }) {
       socket?.off("message:new", onMessage);
     };
   }, [socket, retryCount]);
+
+  useLiveRefresh(() => silentReloadRef.current(), { pollMs: 60000 });
 
   return (
     <aside className="rail-panel">

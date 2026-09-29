@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
@@ -9,6 +9,7 @@ import NewGroupModal from "./NewGroupModal";
 import FriendRequestsModal from "./FriendRequestsModal";
 import MobileMoreButton from "./MobileMoreButton";
 import client from "../../api/client";
+import useLiveRefresh from "../../hooks/useLiveRefresh";
 import {
   SearchIcon,
   CloseIcon,
@@ -168,12 +169,22 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
     };
   }, []);
 
+  const loadRequestCount = useCallback(
+    () =>
+      client
+        .get("/users/friend-requests")
+        .then((res) => setRequestCount(res.data.incoming?.length || 0))
+        .catch(() => {}),
+    []
+  );
   useEffect(() => {
-    client
-      .get("/users/friend-requests")
-      .then((res) => setRequestCount(res.data.incoming?.length || 0))
-      .catch(() => {});
-  }, []);
+    loadRequestCount();
+  }, [loadRequestCount]);
+  // New / accepted / declined requests update the badge live.
+  useLiveRefresh(loadRequestCount, {
+    events: ["friend-request:new", "friend-request:resolved", "friend-request:changed", "contacts:changed"],
+    pollMs: 90000,
+  });
 
   // Keyboard shortcuts for search:
   //  - '/' focuses search, but only when not already typing somewhere else.

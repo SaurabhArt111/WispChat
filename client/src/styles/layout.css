@@ -203,3 +203,13 @@
   box-shadow: 0 0 10px var(--ember-glow);
   animation: pulseGlow 1.4s ease-in-out infinite;
 }
+/* Mobile post feed uses the whole screen (no bottom nav). */
+@media (max-width: 768px) {
+  .app-shell.is-post-route:not(.has-active-chat) .app-main {
+    padding-bottom: 0;
+  }
+  .app-shell.is-post-route .mobile-bottom-nav,
+  .app-shell.is-post-route .bottom-nav {
+    display: none;
+  }
+}

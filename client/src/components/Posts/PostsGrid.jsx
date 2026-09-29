@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext";
 import { fetchUserPosts, MAX_POSTS_PER_USER } from "../../api/posts";
 import PostThumb from "./PostThumb";
 import PostUploadModal from "./PostUploadModal";
 import { PlusIcon } from "../common/Icons";
+import useLivePosts from "../../hooks/useLivePosts";
+import useLiveRefresh from "../../hooks/useLiveRefresh";
+import { openPostRoute } from "../../utils/openPost";
 import "../../styles/posts.css";
 
 // A person's posts (max 6). `editable` = it's my own profile, so show the
@@ -17,27 +20,46 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
   const navigate = useNavigate();
   const location = useLocation();
 
+  const load = useCallback(async () => {
+    try {
+      const p = await fetchUserPosts(userId);
+      setPosts(p);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [userId]);
+
   useEffect(() => {
     let active = true;
     setPosts(null);
-    fetchUserPosts(userId)
-      .then((p) => {
-        if (!active) return;
-        setPosts(p);
-        onCountChange?.(p.length);
-      })
-      .catch(() => {
-        if (active) {
-          setPosts([]);
-          onCountChange?.(0);
-          showToast("Couldn't load posts", "danger");
-        }
-      });
+    load().then((ok) => {
+      if (active && !ok) {
+        setPosts([]);
+        showToast("Couldn't load posts", "danger");
+      }
+    });
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  // Keep the parent's count in sync with whatever is on screen.
+  useEffect(() => {
+    if (posts) onCountChange?.(posts.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts?.length]);
+
+  // Live: counts, edits, deletions, and this person publishing a new post.
+  const setLive = useCallback((updater) => setPosts((cur) => (cur ? updater(cur) : cur)), []);
+  useLivePosts(setLive, {
+    onNew: (post) => {
+      if (String(post.user?._id || post.user) !== String(userId)) return;
+      load();
+    },
+  });
+  useLiveRefresh(load, { pollMs: 120000 });
 
   if (posts === null) {
     return (
@@ -50,11 +72,7 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
   }
 
   const remaining = MAX_POSTS_PER_USER - posts.length;
-  const openPost = (post) => {
-    const from = `${location.pathname}${location.search}`;
-    sessionStorage.setItem("wisp-return-path", from);
-    navigate(`/post/${post._id}`, { state: { post, from } });
-  };
+  const openPost = (post) => openPostRoute(navigate, location, post, posts.filter((p) => p._id !== post._id));
 
   return (
     <div className="posts-grid-wrap">
@@ -79,8 +97,7 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
           remaining={remaining}
           onClose={() => setUploading(false)}
           onCreated={(post) => {
-            setPosts((list) => [post, ...list]);
-            onCountChange?.(posts.length + 1);
+            setPosts((list) => (list.some((x) => x._id === post._id) ? list : [post, ...list]));
           }}
         />
       )}

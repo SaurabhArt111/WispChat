@@ -69,7 +69,7 @@ export default function PwaManager() {
             const check = () => {
               if (navigator.onLine) registration.update().catch(() => {});
             };
-            const timer = setInterval(check, 30 * 60 * 1000);
+            const timer = setInterval(check, 10 * 60 * 1000);
             const onVisible = () => document.visibilityState === "visible" && check();
             document.addEventListener("visibilitychange", onVisible);
             window.addEventListener("online", check);

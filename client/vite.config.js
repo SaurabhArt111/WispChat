@@ -10,12 +10,11 @@ export default defineConfig({
       // build output and lets us layer on a few runtimeCaching rules for
       // API calls and uploaded media, without hand-writing a service worker.
       strategy: "generateSW",
-      // "prompt" (not "autoUpdate"): only in prompt mode does the generated
-      // registration code fire onNeedRefresh when a new version is waiting,
-      // which is what drives the in-app "Update available" popup
-      // (components/common/PwaManager.jsx). With "autoUpdate" that callback
-      // never runs, so people never saw an update notice.
-      registerType: "prompt",
+      // "autoUpdate": a new deploy activates immediately (skipWaiting +
+      // clientsClaim below) instead of waiting for someone to click an
+      // "Update available" card — waiting on that click is a big reason the
+      // app looked stuck on an old build.
+      registerType: "autoUpdate",
       // We call the registration hook ourselves (see src/pwa.js) so we can
       // show a custom "update available" toast instead of the plugin's
       // default silent/prompt behavior.
@@ -39,32 +38,32 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//, /^\/socket\.io\//],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: false, // we drive activation from the custom update prompt instead
+        skipWaiting: true,
         runtimeCaching: [
           {
-            // REST API: always prefer a fresh network response, but keep a
-            // short-lived cached fallback so the UI has *something* to show
-            // (e.g. the last conversation list) when the network is down.
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "wisp-api-cache",
-              networkTimeoutSeconds: 8,
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
+            // REST API + realtime: NEVER cache. The app keeps its own
+            // warm cache of conversations/messages (utils/messageCache.js)
+            // and revalidates it on every load; a service-worker copy of
+            // /api responses only ever served *stale* data (the old
+            // NetworkFirst rule fell back to a day-old response whenever
+            // the network was slow), which is exactly the "nothing updates
+            // until I reload" symptom.
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/") || url.pathname.startsWith("/socket.io/"),
+            handler: "NetworkOnly",
           },
           {
-            // Uploaded media (images/videos/audio/documents/gifs/stickers):
-            // once fetched, a given file never changes, so cache-first with
-            // a generous cap makes chat history usable offline without
-            // re-downloading media on every visit.
+            // Uploaded media: file names are unique and immutable, so
+            // cache-first is safe. `rangeRequests` lets cached video/audio
+            // still stream and seek (without it Safari refuses to play
+            // cached video), and only real 200 responses are stored so
+            // opaque/partial responses can't poison the cache.
             urlPattern: ({ url }) => url.pathname.startsWith("/uploads/"),
             handler: "CacheFirst",
             options: {
-              cacheName: "wisp-media-cache",
-              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheName: "wisp-media-cache-v2",
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [200] },
+              rangeRequests: true,
             },
           },
           {

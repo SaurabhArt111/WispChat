@@ -7,6 +7,7 @@ import { uploadFiles, uploadPreparedFiles } from "../api/upload";
 import { decryptBytesWithKey, encryptBytesWithKey } from "../utils/crypto";
 import { compressItems } from "../utils/mediaCompressor";
 import { mediaUrl } from "../api/config";
+import useLiveRefresh from "../hooks/useLiveRefresh";
 import {
   readCachedConversations,
   writeCachedConversations,
@@ -29,10 +30,13 @@ export function ChatProvider({ children }) {
   const [presence, setPresence] = useState({});
   const [loadingConversations, setLoadingConversations] = useState(true);
 
+  const hasMoreSeenRef = useRef({});
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  const messagesByConvRef = useRef(messagesByConv);
+  messagesByConvRef.current = messagesByConv;
 
   const refreshConversations = useCallback(async () => {
     const res = await client.get("/conversations");
@@ -86,12 +90,29 @@ export function ChatProvider({ children }) {
     setMessagesByConv((prev) => {
       const existing = prev[conversationId] || [];
       const incoming = res.data.messages;
-      const merged = before ? [...incoming, ...existing] : incoming;
+      let merged;
+      if (before) {
+        merged = [...incoming, ...existing];
+      } else {
+        // A refresh replaces the newest page but must not throw away older
+        // pages the person already scrolled back through, nor drop
+        // messages that are still being sent.
+        const firstTime = incoming.length ? new Date(incoming[0].createdAt).getTime() : null;
+        const older =
+          firstTime === null
+            ? []
+            : existing.filter((m) => !m.pending && !m.failed && new Date(m.createdAt).getTime() < firstTime);
+        const inFlight = existing.filter((m) => m.pending || m.failed);
+        merged = [...older, ...incoming, ...inFlight];
+      }
       const seen = new Set();
       const dedup = merged.filter((m) => (seen.has(m._id) ? false : (seen.add(m._id), true)));
       return { ...prev, [conversationId]: dedup };
     });
-    setHasMoreByConv((prev) => ({ ...prev, [conversationId]: res.data.hasMore }));
+    if (before || !hasMoreSeenRef.current[conversationId]) {
+      setHasMoreByConv((prev) => ({ ...prev, [conversationId]: res.data.hasMore }));
+      hasMoreSeenRef.current[conversationId] = true;
+    }
   }, []);
 
   const navigate = useNavigate();
@@ -107,18 +128,27 @@ export function ChatProvider({ children }) {
         return;
       }
       setActiveId(conversationId);
-      if (!messagesByConv[conversationId]) {
+      // Show whatever we already have instantly (memory, then the local
+      // cache) — but ALWAYS revalidate against the server. Previously a
+      // chat that had been opened once was never re-fetched, so anything
+      // that arrived while its socket was asleep never showed up until a
+      // full page reload.
+      if (!messagesByConvRef.current[conversationId]) {
         const cached = user && readCachedMessages(user._id, conversationId);
         if (cached && cached.length) {
-          setMessagesByConv((prev) => ({ ...prev, [conversationId]: cached }));
+          setMessagesByConv((prev) => (prev[conversationId] ? prev : { ...prev, [conversationId]: cached }));
         }
+      }
+      try {
         await loadMessages(conversationId);
+      } catch {
+        /* offline — keep showing the cached copy */
       }
       client.post(`/messages/${conversationId}/read`).catch(() => {});
       socket?.emit("conversation:join", { conversationId });
       setConversations((prev) => prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c)));
     },
-    [loadMessages, messagesByConv, socket, user]
+    [loadMessages, socket, user]
   );
 
   // Public entry point used throughout the UI: pushes /chat/:id onto the
@@ -612,7 +642,13 @@ export function ChatProvider({ children }) {
         const idx = prev.findIndex((c) => c._id === msg.conversation);
         const isActive = activeIdRef.current === msg.conversation;
         const isMine = msg.sender?._id === user?._id;
-        if (idx === -1) return prev;
+        if (idx === -1) {
+          // A message for a chat we haven't loaded yet (first message from a
+          // new contact, or a chat that was deleted on our side) — pull the
+          // list so the conversation appears live instead of after a reload.
+          setTimeout(() => refreshConversations().catch(() => {}), 0);
+          return prev;
+        }
         const next = [...prev];
         next[idx] = {
           ...next[idx],
@@ -760,7 +796,80 @@ export function ChatProvider({ children }) {
       socket.off("conversation:new", onConversationNew);
       socket.off("conversation:updated", onConversationUpdated);
     };
-  }, [socket, user, upsertConversation]);
+  }, [socket, user, upsertConversation, refreshConversations]);
+
+  // --- Keep everything fresh without reloads ---
+  // On (re)connect, when the app returns to the foreground, or when the
+  // network comes back: re-sync the conversation list and the open chat.
+  useLiveRefresh(
+    async () => {
+      if (!user) return;
+      await refreshConversations();
+      const openId = activeIdRef.current;
+      if (openId) {
+        await loadMessages(openId);
+        client.post(`/messages/${openId}/read`).catch(() => {});
+      }
+    },
+    { enabled: !!user, pollMs: 60000 }
+  );
+
+  useEffect(() => {
+    if (!socket) return;
+
+    // Someone changed their name/photo/about — patch it everywhere it is
+    // displayed (chat list, headers, group member lists, message senders).
+    const onUserUpdated = ({ user: u }) => {
+      if (!u?._id) return;
+      const patchUser = (x) => (x && String(x._id) === String(u._id) ? { ...x, ...u } : x);
+      setConversations((prev) =>
+        prev.map((c) => ({
+          ...c,
+          participants: (c.participants || []).map(patchUser),
+          lastMessage: c.lastMessage ? { ...c.lastMessage, sender: patchUser(c.lastMessage.sender) } : c.lastMessage,
+        }))
+      );
+      setMessagesByConv((prev) => {
+        const next = {};
+        for (const [k, list] of Object.entries(prev)) {
+          next[k] = list.map((m) => (m.sender && String(m.sender._id) === String(u._id) ? { ...m, sender: patchUser(m.sender) } : m));
+        }
+        return next;
+      });
+    };
+
+    // Mute / pin / archive / folder toggled on another tab or device.
+    const onFlags = ({ conversationId, patch }) => {
+      setConversations((prev) => prev.map((c) => (c._id === conversationId ? { ...c, ...patch } : c)));
+    };
+
+    const onRemoved = ({ conversationId }) => {
+      setConversations((prev) => prev.filter((c) => c._id !== conversationId));
+      setMessagesByConv((prev) => {
+        const { [conversationId]: _drop, ...rest } = prev;
+        return rest;
+      });
+      if (activeIdRef.current === conversationId) navigate("/");
+    };
+
+    const onCleared = ({ conversationId }) => {
+      setMessagesByConv((prev) => ({ ...prev, [conversationId]: [] }));
+      setConversations((prev) =>
+        prev.map((c) => (c._id === conversationId ? { ...c, lastMessage: null, unreadCount: 0 } : c))
+      );
+    };
+
+    socket.on("user:updated", onUserUpdated);
+    socket.on("conversation:flags", onFlags);
+    socket.on("conversation:removed", onRemoved);
+    socket.on("conversation:cleared", onCleared);
+    return () => {
+      socket.off("user:updated", onUserUpdated);
+      socket.off("conversation:flags", onFlags);
+      socket.off("conversation:removed", onRemoved);
+      socket.off("conversation:cleared", onCleared);
+    };
+  }, [socket, navigate]);
 
   const value = {
     conversations,

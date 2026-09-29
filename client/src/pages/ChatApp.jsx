@@ -20,6 +20,7 @@ import ProfileModal from "../components/Sidebar/ProfileModal";
 import SettingsModal from "../components/Sidebar/SettingsModal";
 import ChatWindow from "../components/Chat/ChatWindow";
 import ConnectionBanner from "../components/common/ConnectionBanner";
+import useMediaQuery from "../hooks/useMediaQuery";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
 import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
@@ -48,9 +49,28 @@ export default function ChatApp() {
   const settingsReturnRef = useRef("/");
 
   const routeSegment = location.pathname.split("/")[1] || "";
-  const view = ROUTED_VIEWS.includes(routeSegment) ? routeSegment : "chats";
-  const isProfilePage = routeSegment === "profile";
+  const isDesktop = useMediaQuery("(min-width: 769px)");
   const isPostPage = routeSegment === "post";
+  // A post opens as a modal over where you came from on desktop, and as its
+  // own full page on mobile — both on the same /post/:id route.
+  const postOverlay = isPostPage && isDesktop;
+  const postFullPage = isPostPage && !isDesktop;
+  let postOriginSegment = "explore";
+  if (isPostPage) {
+    let from = location.state?.from;
+    if (!from) {
+      try {
+        from = sessionStorage.getItem("wisp-return-path");
+      } catch {
+        from = null;
+      }
+    }
+    const seg = (from || "/explore").split("/")[1] || "";
+    postOriginSegment = seg === "post" ? "explore" : seg;
+  }
+  const isProfilePage = routeSegment === "profile" || (postOverlay && postOriginSegment === "profile");
+  const effectiveSegment = postOverlay ? postOriginSegment : routeSegment;
+  const view = ROUTED_VIEWS.includes(effectiveSegment) && effectiveSegment !== "post" ? effectiveSegment : postFullPage ? "post" : "chats";
   const showSettings = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
   // Single source of truth for which sidebar-column panel is on screen.
   // Deriving it once here (rather than checking `showArchived` and `view`
@@ -96,15 +116,6 @@ export default function ChatApp() {
     setShowContactInfo(false);
   }, [activeId]);
 
-  useEffect(() => {
-    const action = new URLSearchParams(location.search).get("action");
-    if (action === "new-chat") setShowNewChat(true);
-    if (action === "new-group") setShowNewGroup(true);
-    if (action === "new-chat" || action === "new-group") {
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.pathname, location.search, navigate]);
-
   // Long-press → "View info" (see ChatContext.viewConversationInfo). Declared
   // after the reset effect above so that, when the chat switch and the
   // request land in the same commit, opening wins over resetting.
@@ -117,7 +128,7 @@ export default function ChatApp() {
   }, [infoRequest, activeId]);
 
   return (
-    <div className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${isPostPage ? "is-post-route" : ""}`}>
+    <div className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${postFullPage ? "is-post-route" : ""}`}>
       <ConnectionBanner />
       <AsideRail
         view={activePanel}
@@ -147,7 +158,7 @@ export default function ChatApp() {
       {activePanel === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
 
       <div className="app-main">
-        {isPostPage ? (
+        {postFullPage ? (
           <PostViewerPage />
         ) : isProfilePage ? (
           <MyProfilePage
@@ -196,6 +207,7 @@ export default function ChatApp() {
           </div>
         )}
       </div>
+      {postOverlay && <PostViewerPage />}
       {showContactInfo && activeConversation && (
         <ContactInfoPanel conversation={activeConversation} onClose={() => setShowContactInfo(false)} />
       )}

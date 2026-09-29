@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
 import Post from "../models/Post.js";
+import Conversation from "../models/Conversation.js";
+import { emitToUsers, audienceOf } from "../utils/realtime.js";
 
 // Backs both the "New chat" people picker and the Explorer search bar —
 // matches by @username, display name, email, or (if the query happens to
@@ -114,6 +116,10 @@ export async function updateStatusPrivacy(req, res) {
   if (Array.isArray(exceptUsers)) req.user.statusPrivacy.exceptUsers = exceptUsers;
   if (Array.isArray(onlyUsers)) req.user.statusPrivacy.onlyUsers = onlyUsers;
   await req.user.save();
+  // Other devices of this account pick up the new privacy settings, and
+  // contacts re-check whose statuses they're allowed to see.
+  emitToUsers(req.io, [req.user._id], "me:updated", { user: req.user.toPrivateJSON() });
+  emitToUsers(req.io, audienceOf(req.user), "status:changed", { userId: req.user._id, action: "privacy" });
   res.json({ user: req.user.toPrivateJSON() });
 }
 
@@ -124,7 +130,26 @@ export async function updateProfile(req, res) {
   if (avatar !== undefined) req.user.avatar = avatar;
   if (avatarColor !== undefined) req.user.avatarColor = avatarColor;
   await req.user.save();
-  res.json({ user: req.user.toSafeJSON() });
+
+  // Everyone who can see this profile — contacts plus anyone sharing a chat
+  // (e.g. group members who aren't contacts) — gets the new name/photo/about
+  // immediately instead of after their next reload.
+  const convs = await Conversation.find({ participants: req.user._id }).select("participants").lean();
+  const audience = new Set(audienceOf(req.user).map(String));
+  convs.forEach((c) => c.participants.forEach((p) => audience.add(String(p))));
+  const safe = req.user.toSafeJSON();
+  emitToUsers(req.io, [...audience], "user:updated", {
+    user: {
+      _id: safe._id,
+      username: safe.username,
+      displayName: safe.displayName,
+      avatar: safe.avatar,
+      avatarColor: safe.avatarColor,
+      about: safe.about,
+    },
+  });
+  emitToUsers(req.io, [req.user._id], "me:updated", { user: req.user.toPrivateJSON() });
+  res.json({ user: safe });
 }
 
 export async function getContacts(req, res) {
@@ -159,6 +184,8 @@ export async function sendFriendRequest(req, res) {
   const populated = await request.populate("from", "username displayName avatar avatarColor");
 
   req.io?.to(`user:${userId}`).emit("friend-request:new", populated);
+  // The sender's other devices refresh their "Sent" list too.
+  emitToUsers(req.io, [req.user._id], "friend-request:changed", { requestId: request._id });
   res.status(201).json({ request: populated });
 }
 
@@ -192,6 +219,11 @@ export async function respondFriendRequest(req, res) {
   }
 
   req.io?.to(`user:${request.from}`).emit("friend-request:resolved", { requestId, accept });
+  // Both people (all devices) refresh their contact lists, request counts
+  // and status feeds — accepting changes who can see what.
+  emitToUsers(req.io, [request.from, request.to], "contacts:changed", { requestId, accept });
+  emitToUsers(req.io, [request.from, request.to], "friend-request:changed", { requestId });
+  if (accept) emitToUsers(req.io, [request.from, request.to], "status:changed", { action: "contacts" });
   res.json({ ok: true });
 }
 
@@ -201,6 +233,7 @@ export async function toggleBlock(req, res) {
   if (idx >= 0) req.user.blocked.splice(idx, 1);
   else req.user.blocked.push(userId);
   await req.user.save();
+  emitToUsers(req.io, [req.user._id, userId], "contacts:changed", { blocked: true });
   res.json({ blocked: req.user.blocked });
 }
 

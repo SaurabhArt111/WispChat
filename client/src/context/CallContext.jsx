@@ -3,19 +3,78 @@ import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
 import { useToast } from "./ToastContext";
 import { logError } from "../utils/logger";
+import client from "../api/client";
 
 const CallContext = createContext(null);
 
-// Public STUN servers (free, no signup) are enough to establish a direct
-// peer-to-peer connection on most home/office networks. Some networks
-// (symmetric NAT, some corporate firewalls) need a TURN relay to connect
-// at all — that requires running a TURN server, which is out of scope
-// here, so a call between two people on such networks may fail to
-// connect. Everything else about the call (media itself) is exactly the
-// same either way.
-const ICE_SERVERS = [
-  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+// Fallback STUN list used only if /api/calls/ice can't be reached. The real
+// list comes from the server (see server/src/routes/call.routes.js) and
+// includes a TURN relay when one is configured — without TURN, callers on
+// strict NATs / mobile data / corporate networks connect but get no
+// audio or video.
+const FALLBACK_ICE_SERVERS = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] },
 ];
+
+let iceCache = { at: 0, servers: FALLBACK_ICE_SERVERS };
+async function loadIceServers() {
+  // TURN credentials are short-lived; re-fetch if the cached copy is old.
+  if (Date.now() - iceCache.at < 30 * 60 * 1000) return iceCache.servers;
+  try {
+    const res = await client.get("/calls/ice", { timeout: 4000 });
+    if (res.data?.iceServers?.length) iceCache = { at: Date.now(), servers: res.data.iceServers };
+  } catch {
+    /* keep whatever we had */
+  }
+  return iceCache.servers;
+}
+
+// Good defaults for calls: echo cancellation / noise suppression on, a
+// resolution that a phone can actually encode in real time (asking for a
+// hard 1280x720 made weaker devices choke or fail getUserMedia), and
+// `ideal` so a camera that can't do it falls back instead of erroring.
+const AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+const VIDEO_CONSTRAINTS = {
+  facingMode: "user",
+  width: { ideal: 960, max: 1280 },
+  height: { ideal: 540, max: 720 },
+  frameRate: { ideal: 24, max: 30 },
+};
+
+async function getLocalMedia(kind) {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: AUDIO_CONSTRAINTS,
+      video: kind === "video" ? VIDEO_CONSTRAINTS : false,
+    });
+  } catch (err) {
+    // Camera missing/busy on a video call: fall back to audio-only rather than failing the call.
+    if (kind === "video" && err?.name !== "NotAllowedError") {
+      const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS, video: false });
+      audioOnly.__noCamera = true;
+      return audioOnly;
+    }
+    throw err;
+  }
+}
+
+// Cap outgoing video bitrate so a call doesn't saturate a weak uplink
+// (uncapped, browsers often overshoot and everything stutters).
+function tuneSenders(pc) {
+  pc.getSenders().forEach((sender) => {
+    if (!sender.track || sender.track.kind !== "video") return;
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate = 900_000;
+      params.encodings[0].maxFramerate = 30;
+      params.degradationPreference = "maintain-framerate";
+      sender.setParameters(params).catch(() => {});
+    } catch {
+      /* not supported everywhere */
+    }
+  });
+}
 
 const RING_TIMEOUT_MS = 45000;
 
@@ -88,33 +147,51 @@ export function CallProvider({ children }) {
   const { socket } = useSocket();
   const { showToast } = useToast();
 
-  const [call, setCall] = useState(null); // see shape notes below
+  // `call` drives the UI; `callRef` mirrors it so socket/WebRTC callbacks
+  // always see the *current* call instead of a stale closure (the old
+  // version re-subscribed every socket handler on each state change and
+  // could act on an outdated `call`).
+  const [call, setCallState] = useState(null);
+  const callRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
-  const pendingCandidatesRef = useRef([]);
+  const remoteStreamRef = useRef(null);
+  const pendingCandidatesRef = useRef([]); // remote candidates that arrived before we could apply them
+  const iceOutboxRef = useRef({ ready: false, list: [] }); // our candidates held until the invite is out
   const ringIntervalRef = useRef(null);
   const ringTimeoutRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
+  const disconnectTimerRef = useRef(null);
+  const failTimerRef = useRef(null);
   const incomingOfferRef = useRef(null); // { callId, conversationId, kind, offer, from }
-  const startingRef = useRef(false); // guards against a double-click firing startCall twice
+  const startingRef = useRef(false);
+  const makingOfferRef = useRef(false);
+  const negotiationReadyRef = useRef(false);
+  const wakeLockRef = useRef(null);
+
+  const patchCall = useCallback((patch, onlyCallId) => {
+    const cur = callRef.current;
+    if (!cur || (onlyCallId && cur.callId !== onlyCallId)) return;
+    const next = typeof patch === "function" ? patch(cur) : { ...cur, ...patch };
+    callRef.current = next;
+    setCallState(next);
+  }, []);
+  const replaceCall = useCallback((next) => {
+    callRef.current = next;
+    setCallState(next);
+  }, []);
 
   useEffect(() => {
-    if (Notification?.permission === "default") {
-      // Ask once, quietly, rather than blocking on it — declining just
-      // means incoming calls only ring in-app instead of also raising an
-      // OS notification when the tab isn't focused.
+    // `Notification` doesn't exist at all on iOS Safari (outside installed
+    // PWAs) — referencing it bare threw a ReferenceError there.
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
   }, []);
 
-  // Resume (or lazily create) the shared ring/ringback AudioContext the
-  // very first time the person interacts with the page at all — this is
-  // what makes a *later*, gesture-less incoming-call ringtone actually
-  // audible instead of silently blocked by the browser's autoplay policy.
+  // Resume (or lazily create) the shared ring AudioContext on first interaction.
   useEffect(() => {
     function resumeOnce() {
-      const ctx = getAudioCtx();
-      ctx?.resume().catch(() => {});
+      getAudioCtx()?.resume().catch(() => {});
       window.removeEventListener("pointerdown", resumeOnce);
       window.removeEventListener("keydown", resumeOnce);
     }
@@ -126,32 +203,64 @@ export function CallProvider({ children }) {
     };
   }, []);
 
+  async function acquireWakeLock() {
+    try {
+      if ("wakeLock" in navigator) wakeLockRef.current = await navigator.wakeLock.request("screen");
+    } catch {
+      /* not critical */
+    }
+  }
+  function releaseWakeLock() {
+    try {
+      wakeLockRef.current?.release();
+    } catch {
+      /* ignore */
+    }
+    wakeLockRef.current = null;
+  }
+
   const cleanup = useCallback(() => {
     clearInterval(ringIntervalRef.current);
     clearTimeout(ringTimeoutRef.current);
-    clearTimeout(reconnectTimeoutRef.current);
+    clearTimeout(disconnectTimerRef.current);
+    clearTimeout(failTimerRef.current);
     ringIntervalRef.current = null;
     ringTimeoutRef.current = null;
-    reconnectTimeoutRef.current = null;
+    disconnectTimerRef.current = null;
+    failTimerRef.current = null;
     pendingCandidatesRef.current = [];
+    iceOutboxRef.current = { ready: false, list: [] };
     incomingOfferRef.current = null;
     startingRef.current = false;
+    makingOfferRef.current = false;
+    negotiationReadyRef.current = false;
+    releaseWakeLock();
     if (pcRef.current) {
-      pcRef.current.close();
+      const pc = pcRef.current;
       pcRef.current = null;
+      pc.onicecandidate = pc.ontrack = pc.onconnectionstatechange = pc.onnegotiationneeded = null;
+      try {
+        pc.close();
+      } catch {
+        /* already closed */
+      }
     }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
-    setCall(null);
+    remoteStreamRef.current = null;
+    callRef.current = null;
+    setCallState(null);
   }, []);
 
   function startRingback() {
+    stopRinging();
     playTone([440, 480], 1400);
     ringIntervalRef.current = setInterval(() => playTone([440, 480], 1400), 3500);
   }
   function startRingtone() {
+    stopRinging();
     playTone([523, 659], 900);
     ringIntervalRef.current = setInterval(() => playTone([523, 659], 900), 2000);
   }
@@ -160,65 +269,133 @@ export function CallProvider({ children }) {
     ringIntervalRef.current = null;
   }
 
+  // ---- ICE restart / renegotiation ----
+  // The original caller is the "impolite" peer and the callee the "polite"
+  // one (WebRTC "perfect negotiation"), so if both sides try to restart at
+  // once the collision resolves itself instead of deadlocking the call.
+  const restartIce = useCallback(() => {
+    const pc = pcRef.current;
+    if (!pc || pc.signalingState === "closed") return;
+    try {
+      if (pc.restartIce) pc.restartIce(); // fires negotiationneeded
+      else negotiationReadyRef.current && pc.onnegotiationneeded?.();
+    } catch (err) {
+      logError("call:restartIce", err);
+    }
+  }, []);
+
   const buildPeerConnection = useCallback(
-    (callId, otherUserId) => {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    async (callId, otherUserId) => {
+      const iceServers = await loadIceServers();
+      const pc = new RTCPeerConnection({ iceServers, bundlePolicy: "max-bundle", iceCandidatePoolSize: 4 });
 
       pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          socket?.emit("call:ice-candidate", { callId, candidate: e.candidate, to: otherUserId });
+        if (!e.candidate) return;
+        const outbox = iceOutboxRef.current;
+        if (!outbox.ready) {
+          outbox.list.push(e.candidate);
+          return;
         }
+        socket?.emit("call:ice-candidate", { callId, candidate: e.candidate, to: otherUserId });
       };
 
       pc.ontrack = (e) => {
-        setCall((c) => (c && c.callId === callId ? { ...c, remoteStream: e.streams[0] } : c));
+        // Collect every incoming track into one stream we control. Relying
+        // on `e.streams[0]` alone broke whenever the browser delivered a
+        // track without an associated stream.
+        const stream = e.streams?.[0] || remoteStreamRef.current || new MediaStream();
+        if (!e.streams?.[0] && !stream.getTracks().includes(e.track)) stream.addTrack(e.track);
+        remoteStreamRef.current = stream;
+        patchCall((c) => ({ ...c, remoteStream: stream, remoteTracksAt: Date.now() }), callId);
+        e.track.onunmute = () => patchCall((c) => ({ ...c, remoteTracksAt: Date.now() }), callId);
+      };
+
+      pc.onnegotiationneeded = async () => {
+        if (!negotiationReadyRef.current) return; // the first offer/answer is driven manually
+        try {
+          makingOfferRef.current = true;
+          await pc.setLocalDescription(); // implicit offer (with iceRestart if restartIce() was called)
+          socket?.emit("call:signal", { callId, description: pc.localDescription });
+        } catch (err) {
+          logError("call:negotiation", err);
+        } finally {
+          makingOfferRef.current = false;
+        }
       };
 
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "connected") {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-          setCall((c) => {
-            if (!c || c.callId !== callId) return c;
-            computeSafetyCode(pc).then((safetyCode) =>
-              setCall((c2) => (c2 && c2.callId === callId ? { ...c2, safetyCode } : c2))
-            );
-            return { ...c, status: "connected", connectedAt: c.connectedAt || Date.now() };
-          });
-        } else if (["failed", "disconnected"].includes(pc.connectionState)) {
-          // A network blip (wifi handoff, brief packet loss) reports as
-          // "disconnected" and often self-heals in a few seconds; "failed"
-          // means ICE gave up entirely. Either way, try an ICE restart
-          // (renegotiating fresh candidates without tearing down the whole
-          // call) rather than immediately hanging up on a call that might
-          // still recover.
-          setCall((c) => (c && c.callId === callId && c.status !== "ended" ? { ...c, status: "reconnecting" } : c));
-          try {
-            pc.restartIce();
-          } catch {
-            // restartIce isn't supported in every browser — the
-            // reconnectTimeout below still covers cleanup either way.
-          }
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (["failed", "disconnected"].includes(pc.connectionState)) {
-              showToast("Call connection lost");
+        const state = pc.connectionState;
+        if (state === "connected") {
+          clearTimeout(disconnectTimerRef.current);
+          clearTimeout(failTimerRef.current);
+          negotiationReadyRef.current = true;
+          tuneSenders(pc);
+          patchCall((c) => {
+            computeSafetyCode(pc).then((safetyCode) => patchCall({ safetyCode }, callId));
+            return { ...c, status: "connected", connectedAt: c.connectedAt || Date.now(), peerUnstable: false };
+          }, callId);
+        } else if (state === "disconnected") {
+          // Often heals by itself within a couple of seconds; only react if it doesn't.
+          clearTimeout(disconnectTimerRef.current);
+          disconnectTimerRef.current = setTimeout(() => {
+            if (pcRef.current !== pc || pc.connectionState === "connected") return;
+            patchCall({ status: "reconnecting" }, callId);
+            restartIce();
+          }, 3000);
+          clearTimeout(failTimerRef.current);
+          failTimerRef.current = setTimeout(() => {
+            if (pcRef.current === pc && pc.connectionState !== "connected") {
+              showToast("Call connection lost", "danger");
+              socket?.emit("call:end", { callId });
               cleanup();
             }
-          }, 15000);
-        } else if (pc.connectionState === "closed") {
-          setCall((c) => (c && c.callId === callId && c.status !== "ended" ? { ...c, status: "reconnecting" } : c));
+          }, 25000);
+        } else if (state === "failed") {
+          patchCall({ status: "reconnecting" }, callId);
+          restartIce();
+          clearTimeout(failTimerRef.current);
+          failTimerRef.current = setTimeout(() => {
+            if (pcRef.current === pc && pc.connectionState !== "connected") {
+              showToast("Call connection failed — check your network", "danger");
+              socket?.emit("call:end", { callId });
+              cleanup();
+            }
+          }, 20000);
         }
       };
 
       return pc;
+    },
+    [socket, patchCall, restartIce, cleanup, showToast]
+  );
+
+  const flushRemoteCandidates = useCallback(async (pc) => {
+    const list = pendingCandidatesRef.current;
+    pendingCandidatesRef.current = [];
+    for (const c of list) await pc.addIceCandidate(c).catch(() => {});
+  }, []);
+
+  const flushOutbox = useCallback(
+    (callId, otherUserId) => {
+      const outbox = iceOutboxRef.current;
+      outbox.ready = true;
+      outbox.list.forEach((candidate) => socket?.emit("call:ice-candidate", { callId, candidate, to: otherUserId }));
+      outbox.list = [];
     },
     [socket]
   );
 
   const startCall = useCallback(
     async (conversation, kind) => {
-      if (call || startingRef.current) return; // already on/starting a call
+      if (callRef.current || startingRef.current) return;
+      if (!socket?.connected) {
+        showToast("You're offline — reconnecting. Try again in a moment.", "danger");
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
+        showToast("Calls need a modern browser over HTTPS (or localhost).", "danger");
+        return;
+      }
       startingRef.current = true;
       const other = conversation.participants.find((p) => p._id !== user._id);
       if (!other) {
@@ -228,79 +405,98 @@ export function CallProvider({ children }) {
 
       const callId = uid();
       try {
-        const localStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: kind === "video" ? { width: 1280, height: 720 } : false,
-        });
+        const localStream = await getLocalMedia(kind);
         localStreamRef.current = localStream;
+        const effectiveKind = kind === "video" && localStream.getVideoTracks().length ? "video" : "audio";
+        if (localStream.__noCamera) showToast("No camera available — starting as a voice call");
 
-        const pc = buildPeerConnection(callId, other._id);
+        const pc = await buildPeerConnection(callId, other._id);
         pcRef.current = pc;
+        iceOutboxRef.current = { ready: false, list: [] };
         localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
 
-        setCall({
+        replaceCall({
           callId,
           direction: "outgoing",
           status: "ringing",
-          kind,
+          kind: effectiveKind,
           peer: other,
           conversationId: conversation._id,
           localStream,
           remoteStream: null,
           muted: false,
           cameraOff: false,
+          remoteMuted: false,
+          remoteCameraOff: false,
+          peerUnstable: false,
           safetyCode: null,
+          deliveredRinging: false,
         });
         startingRef.current = false;
         startRingback();
+        acquireWakeLock();
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        socket?.emit("call:invite", { callId, calleeId: other._id, conversationId: conversation._id, kind, offer });
+        socket.emit("call:invite", {
+          callId,
+          calleeId: other._id,
+          conversationId: conversation._id,
+          kind: effectiveKind,
+          offer: pc.localDescription,
+        });
+        // The invite is on its way — now it's safe to send candidates.
+        flushOutbox(callId, other._id);
 
         ringTimeoutRef.current = setTimeout(() => {
-          showToast("No answer");
-          cleanup();
+          if (callRef.current?.callId === callId && callRef.current.status === "ringing") {
+            showToast("No answer");
+            socket.emit("call:decline", { callId });
+            cleanup();
+          }
         }, RING_TIMEOUT_MS + 2000);
       } catch (err) {
         logError("call:start", err);
         showToast(
           err?.name === "NotAllowedError"
             ? "Camera/microphone permission was denied"
+            : err?.name === "NotFoundError"
+            ? "No microphone found on this device"
             : "Couldn't start the call — check your camera/microphone",
           "danger"
         );
         cleanup();
       }
     },
-    [call, user, buildPeerConnection, socket, showToast, cleanup]
+    [user, buildPeerConnection, socket, showToast, cleanup, replaceCall, flushOutbox]
   );
 
   const acceptCall = useCallback(async () => {
     const pending = incomingOfferRef.current;
     if (!pending) return;
     stopRinging();
+    patchCall({ status: "connecting" }, pending.callId);
     try {
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: pending.kind === "video" ? { width: 1280, height: 720 } : false,
-      });
+      const localStream = await getLocalMedia(pending.kind);
       localStreamRef.current = localStream;
+      if (localStream.__noCamera) showToast("No camera available — joining with audio only");
 
-      const pc = buildPeerConnection(pending.callId, pending.from._id);
+      const pc = await buildPeerConnection(pending.callId, pending.from._id);
       pcRef.current = pc;
+      // Callee's candidates can go out straight away: the call already exists on the server.
+      iceOutboxRef.current = { ready: true, list: [] };
       localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
 
       await pc.setRemoteDescription(new RTCSessionDescription(pending.offer));
-      for (const c of pendingCandidatesRef.current) await pc.addIceCandidate(c).catch(() => {});
-      pendingCandidatesRef.current = [];
+      await flushRemoteCandidates(pc);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket?.emit("call:answer", { callId: pending.callId, answer });
+      socket?.emit("call:answer", { callId: pending.callId, answer: pc.localDescription });
 
-      setCall((c) => (c && c.callId === pending.callId ? { ...c, status: "connecting", localStream } : c));
+      patchCall({ status: "connecting", localStream }, pending.callId);
       incomingOfferRef.current = null;
+      acquireWakeLock();
     } catch (err) {
       logError("call:accept", err);
       showToast(
@@ -312,56 +508,86 @@ export function CallProvider({ children }) {
       socket?.emit("call:decline", { callId: pending.callId });
       cleanup();
     }
-  }, [buildPeerConnection, socket, showToast, cleanup]);
+  }, [buildPeerConnection, socket, showToast, cleanup, patchCall, flushRemoteCandidates]);
 
   const declineCall = useCallback(() => {
     const pending = incomingOfferRef.current;
+    const cur = callRef.current;
     if (pending) socket?.emit("call:decline", { callId: pending.callId });
-    else if (call) socket?.emit("call:decline", { callId: call.callId });
+    else if (cur) socket?.emit("call:decline", { callId: cur.callId });
     cleanup();
-  }, [call, socket, cleanup]);
+  }, [socket, cleanup]);
 
   const endCall = useCallback(() => {
-    if (call) socket?.emit("call:end", { callId: call.callId });
+    const cur = callRef.current;
+    if (cur) socket?.emit("call:end", { callId: cur.callId });
     cleanup();
-  }, [call, socket, cleanup]);
+  }, [socket, cleanup]);
+
+  const announceMediaState = useCallback(
+    (muted, cameraOff) => {
+      const cur = callRef.current;
+      if (cur) socket?.emit("call:media-state", { callId: cur.callId, muted, cameraOff });
+    },
+    [socket]
+  );
 
   const toggleMute = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
-    const track = stream.getAudioTracks()[0];
+    const track = localStreamRef.current?.getAudioTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
-    setCall((c) => (c ? { ...c, muted: !track.enabled } : c));
-  }, []);
+    patchCall({ muted: !track.enabled });
+    announceMediaState(!track.enabled, callRef.current?.cameraOff);
+  }, [patchCall, announceMediaState]);
 
   const toggleCamera = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
-    const track = stream.getVideoTracks()[0];
+    const track = localStreamRef.current?.getVideoTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
-    setCall((c) => (c ? { ...c, cameraOff: !track.enabled } : c));
-  }, []);
+    patchCall({ cameraOff: !track.enabled });
+    announceMediaState(callRef.current?.muted, !track.enabled);
+  }, [patchCall, announceMediaState]);
+
+  // Front/back camera switch on phones. Swaps the outgoing video track in
+  // place (replaceTrack) so no renegotiation or reconnect is needed.
+  const flipCamera = useCallback(async () => {
+    const pc = pcRef.current;
+    const stream = localStreamRef.current;
+    const oldTrack = stream?.getVideoTracks()[0];
+    if (!pc || !stream || !oldTrack) return;
+    const facing = oldTrack.getSettings?.().facingMode === "environment" ? "user" : "environment";
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({
+        video: { ...VIDEO_CONSTRAINTS, facingMode: { exact: facing } },
+      });
+      const newTrack = fresh.getVideoTracks()[0];
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      await sender?.replaceTrack(newTrack);
+      stream.removeTrack(oldTrack);
+      oldTrack.stop();
+      stream.addTrack(newTrack);
+      newTrack.enabled = !callRef.current?.cameraOff;
+      patchCall({ localStream: new MediaStream(stream.getTracks()), mirrored: facing === "user" });
+    } catch {
+      showToast("Couldn't switch camera on this device");
+    }
+  }, [patchCall, showToast]);
 
   // ---------------- socket wiring ----------------
+  // Handlers read `callRef` so this effect only re-runs when the socket
+  // itself changes.
   useEffect(() => {
     if (!socket) return;
 
     function onIncoming({ callId, conversationId, kind, offer, from }) {
-      // Already ringing/on this exact call (a duplicate delivery of the
-      // same invite, e.g. from a brief reconnect) — ignore rather than
-      // re-processing it as if it were a second call.
-      if (incomingOfferRef.current?.callId === callId || call?.callId === callId) return;
-      // Already on a call ourselves — let the caller know rather than
-      // silently dropping their invite.
-      if (call || incomingOfferRef.current) {
+      if (incomingOfferRef.current?.callId === callId || callRef.current?.callId === callId) return;
+      if (callRef.current || incomingOfferRef.current) {
         socket.emit("call:decline", { callId });
         return;
       }
       incomingOfferRef.current = { callId, conversationId, kind, offer, from };
       pendingCandidatesRef.current = [];
-      setCall({
+      replaceCall({
         callId,
         direction: "incoming",
         status: "ringing",
@@ -372,83 +598,152 @@ export function CallProvider({ children }) {
         remoteStream: null,
         muted: false,
         cameraOff: false,
+        remoteMuted: false,
+        remoteCameraOff: false,
+        peerUnstable: false,
         safetyCode: null,
       });
       startRingtone();
 
-      if (document.hidden && Notification?.permission === "granted") {
-        const n = new Notification(`Incoming ${kind === "video" ? "video" : "voice"} call`, {
-          body: from.displayName,
-          tag: `call-${callId}`,
-          requireInteraction: true,
-        });
-        n.onclick = () => {
-          window.focus();
-          n.close();
-        };
+      if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+        try {
+          const n = new Notification(`Incoming ${kind === "video" ? "video" : "voice"} call`, {
+            body: from.displayName,
+            tag: `call-${callId}`,
+            requireInteraction: true,
+            icon: "/icons/icon-192.png",
+          });
+          n.onclick = () => {
+            window.focus();
+            n.close();
+          };
+        } catch {
+          /* some browsers only allow notifications from a service worker */
+        }
       }
     }
 
-    function onAnswered({ callId, answer }) {
-      const pc = pcRef.current;
-      if (!pc || !call || call.callId !== callId) return;
-      stopRinging();
-      pc.setRemoteDescription(new RTCSessionDescription(answer))
-        .then(async () => {
-          for (const c of pendingCandidatesRef.current) await pc.addIceCandidate(c).catch(() => {});
-          pendingCandidatesRef.current = [];
-          setCall((c) => (c && c.callId === callId ? { ...c, status: "connecting" } : c));
-        })
-        .catch((err) => logError("call:answered", err));
+    function onRinging({ callId }) {
+      patchCall({ deliveredRinging: true }, callId);
     }
 
-    function onIceCandidate({ candidate }) {
+    async function onAnswered({ callId, answer }) {
+      const pc = pcRef.current;
+      const cur = callRef.current;
+      if (!pc || !cur || cur.callId !== callId) return;
+      stopRinging();
+      clearTimeout(ringTimeoutRef.current);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await flushRemoteCandidates(pc);
+        patchCall({ status: "connecting" }, callId);
+      } catch (err) {
+        logError("call:answered", err);
+      }
+    }
+
+    function onIceCandidate({ callId, candidate }) {
+      const cur = callRef.current;
+      if (!cur || cur.callId !== callId || !candidate) return;
       const pc = pcRef.current;
       const c = new RTCIceCandidate(candidate);
       if (pc && pc.remoteDescription) pc.addIceCandidate(c).catch(() => {});
       else pendingCandidatesRef.current.push(c);
     }
 
-    function onDeclined() {
-      showToast("Call declined");
-      cleanup();
-    }
-    function onBusy() {
-      showToast("They're on another call");
-      cleanup();
-    }
-    function onUnavailable() {
-      showToast("Couldn't reach them");
-      cleanup();
-    }
-    function onTimeout() {
-      showToast("No answer");
-      cleanup();
-    }
-    function onEnded() {
-      cleanup();
+    // Renegotiation from the other side (ICE restart etc.).
+    async function onSignal({ callId, description }) {
+      const pc = pcRef.current;
+      const cur = callRef.current;
+      if (!pc || !cur || cur.callId !== callId || !description) return;
+      const polite = cur.direction === "incoming";
+      try {
+        const collision = description.type === "offer" && (makingOfferRef.current || pc.signalingState !== "stable");
+        if (!polite && collision) return; // impolite peer ignores the colliding offer
+        await pc.setRemoteDescription(description); // polite peer rolls back implicitly
+        if (description.type === "offer") {
+          await pc.setLocalDescription();
+          socket.emit("call:signal", { callId, description: pc.localDescription });
+        }
+      } catch (err) {
+        logError("call:signal", err);
+      }
     }
 
-    socket.on("call:incoming", onIncoming);
-    socket.on("call:answered", onAnswered);
-    socket.on("call:ice-candidate", onIceCandidate);
-    socket.on("call:declined", onDeclined);
-    socket.on("call:busy", onBusy);
-    socket.on("call:unavailable", onUnavailable);
-    socket.on("call:timeout", onTimeout);
-    socket.on("call:ended", onEnded);
+    function onMediaState({ callId, muted, cameraOff }) {
+      patchCall({ remoteMuted: !!muted, remoteCameraOff: !!cameraOff }, callId);
+    }
+
+    const end = (message, tone) => () => {
+      if (message && callRef.current) showToast(message, tone);
+      cleanup();
+    };
+    const onDeclined = end("Call declined");
+    const onBusy = end("They're on another call");
+    const onUnavailable = end("Couldn't reach them — they appear to be offline");
+    const onTimeout = end("No answer");
+    const onEnded = ({ callId, reason } = {}) => {
+      if (callId && callRef.current && callRef.current.callId !== callId) return;
+      if (reason === "disconnected" && callRef.current) showToast("The other person lost connection");
+      cleanup();
+    };
+    // Answered / declined on another of my devices.
+    const onHandledElsewhere = ({ callId }) => {
+      const cur = callRef.current;
+      if (cur && cur.callId === callId && cur.direction === "incoming" && cur.status === "ringing") cleanup();
+    };
+    const onPeerUnstable = ({ callId }) => patchCall({ peerUnstable: true }, callId);
+    const onPeerReconnected = ({ callId }) => {
+      patchCall({ peerUnstable: false }, callId);
+      restartIce();
+    };
+
+    // Our own socket dropped and came back mid-call: nudge ICE so media recovers too.
+    function onSocketReconnect() {
+      const cur = callRef.current;
+      if (cur && cur.status !== "ringing" && pcRef.current?.connectionState !== "connected") restartIce();
+    }
+
+    const handlers = {
+      "call:incoming": onIncoming,
+      "call:ringing": onRinging,
+      "call:answered": onAnswered,
+      "call:ice-candidate": onIceCandidate,
+      "call:signal": onSignal,
+      "call:media-state": onMediaState,
+      "call:declined": onDeclined,
+      "call:busy": onBusy,
+      "call:unavailable": onUnavailable,
+      "call:timeout": onTimeout,
+      "call:ended": onEnded,
+      "call:handled-elsewhere": onHandledElsewhere,
+      "call:peer-unstable": onPeerUnstable,
+      "call:peer-reconnected": onPeerReconnected,
+      connect: onSocketReconnect,
+    };
+    Object.entries(handlers).forEach(([evt, fn]) => socket.on(evt, fn));
+
+    const onOnline = () => {
+      const cur = callRef.current;
+      if (cur && cur.status !== "ringing" && pcRef.current?.connectionState !== "connected") restartIce();
+    };
+    window.addEventListener("online", onOnline);
 
     return () => {
-      socket.off("call:incoming", onIncoming);
-      socket.off("call:answered", onAnswered);
-      socket.off("call:ice-candidate", onIceCandidate);
-      socket.off("call:declined", onDeclined);
-      socket.off("call:busy", onBusy);
-      socket.off("call:unavailable", onUnavailable);
-      socket.off("call:timeout", onTimeout);
-      socket.off("call:ended", onEnded);
+      Object.entries(handlers).forEach(([evt, fn]) => socket.off(evt, fn));
+      window.removeEventListener("online", onOnline);
     };
-  }, [socket, call, cleanup, showToast]);
+  }, [socket, cleanup, showToast, patchCall, replaceCall, restartIce, flushRemoteCandidates]);
+
+  // Leaving the page mid-call shouldn't leave the other person hanging.
+  useEffect(() => {
+    const onUnload = () => {
+      const cur = callRef.current;
+      if (cur) socket?.emit("call:end", { callId: cur.callId });
+    };
+    window.addEventListener("pagehide", onUnload);
+    return () => window.removeEventListener("pagehide", onUnload);
+  }, [socket]);
 
   return (
     <CallContext.Provider
@@ -460,6 +755,7 @@ export function CallProvider({ children }) {
         endCall,
         toggleMute,
         toggleCamera,
+        flipCamera,
       }}
     >
       {children}

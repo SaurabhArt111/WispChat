@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import client from "../api/client";
 import { useAuth } from "./AuthContext";
+import useLiveRefresh from "../hooks/useLiveRefresh";
 
 const StatusContext = createContext(null);
 
@@ -30,6 +31,15 @@ export function StatusProvider({ children }) {
       setLoading(false);
     }
   }, [user, refreshFeed]);
+
+  // Statuses change constantly (new slides, views, reactions, expiry,
+  // privacy edits, new contacts). Refresh on the server's push, on
+  // reconnect/foreground, and once a minute so expired slides drop off.
+  useLiveRefresh(refreshFeed, {
+    events: ["status:changed", "contacts:changed", "user:updated"],
+    pollMs: 60000,
+    enabled: !!user,
+  });
 
   const postTextStatus = useCallback(
     async (text, bgColor) => {

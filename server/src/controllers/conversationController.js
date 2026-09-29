@@ -1,6 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import { emitToUsers } from "../utils/realtime.js";
 
 // e2ee.publicKeyJwk rides along with every participant so the client can
 // build/refresh a conversation's encryption envelope (who to wrap the
@@ -140,6 +141,8 @@ export async function updateMembers(req, res) {
   const populated = await conv.populate("participants", PARTICIPANT_FIELDS);
   req.io?.to(`conversation:${id}`).emit("conversation:updated", populated);
   add.forEach((uid) => req.io?.to(`user:${uid}`).emit("conversation:new", populated));
+  emitToUsers(req.io, remove, "conversation:removed", { conversationId: id });
+  remove.forEach((uid) => req.io?.in(`user:${uid}`).socketsLeave?.(`conversation:${id}`));
   res.json({ conversation: await serializeConversation(populated, req.user._id) });
 }
 
@@ -192,6 +195,12 @@ export async function toggleConvoFlag(req, res) {
   else conv[field].push(req.user._id);
   await conv.save();
 
+  // Mute/pin/archive are per-person — mirror them to that person's other
+  // tabs and devices right away.
+  emitToUsers(req.io, [req.user._id], "conversation:flags", {
+    conversationId: id,
+    patch: { [{ mute: "muted", pin: "pinned", archive: "archived" }[flag]]: idx < 0 },
+  });
   res.json({ [flag + "d"]: idx < 0 });
 }
 
@@ -204,6 +213,7 @@ export async function clearConversation(req, res) {
   await Conversation.findByIdAndUpdate(id, {
     $push: { clearedAt: { user: req.user._id, at: new Date() } },
   });
+  emitToUsers(req.io, [req.user._id], "conversation:cleared", { conversationId: id });
   res.json({ ok: true });
 }
 
@@ -221,6 +231,7 @@ export async function deleteConversation(req, res) {
   await Message.updateMany({ conversation: id }, { $addToSet: { deletedFor: req.user._id } });
   conv.deletedBy.addToSet(req.user._id);
   await conv.save();
+  emitToUsers(req.io, [req.user._id], "conversation:removed", { conversationId: id });
   res.json({ ok: true });
 }
 
@@ -237,6 +248,10 @@ export async function setConversationFolder(req, res) {
   const trimmed = (folder || "").trim();
   if (trimmed) conv.folders.push({ user: req.user._id, folder: trimmed });
   await conv.save();
+  emitToUsers(req.io, [req.user._id], "conversation:flags", {
+    conversationId: id,
+    patch: { folder: trimmed || null },
+  });
   res.json({ folder: trimmed || null });
 }
 
@@ -250,5 +265,7 @@ export async function leaveGroup(req, res) {
   await conv.save();
 
   req.io?.to(`conversation:${id}`).emit("conversation:member-left", { conversationId: id, userId: req.user._id });
+  emitToUsers(req.io, [req.user._id], "conversation:removed", { conversationId: id });
+  req.io?.in(`user:${req.user._id}`).socketsLeave?.(`conversation:${id}`);
   res.json({ ok: true });
 }

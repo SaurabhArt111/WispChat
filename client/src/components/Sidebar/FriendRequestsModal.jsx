@@ -4,6 +4,7 @@ import Avatar from "../common/Avatar";
 import Modal from "../common/Modal";
 import { useToast } from "../../context/ToastContext";
 import { CheckIcon, CloseIcon, BellIcon } from "../common/Icons";
+import useLiveRefresh from "../../hooks/useLiveRefresh";
 
 export default function FriendRequestsModal({ onClose, onCountChange }) {
   const [tab, setTab] = useState("incoming");
@@ -24,6 +25,9 @@ export default function FriendRequestsModal({ onClose, onCountChange }) {
   }
 
   useEffect(load, []);
+  useLiveRefresh(load, {
+    events: ["friend-request:new", "friend-request:resolved", "friend-request:changed", "contacts:changed"],
+  });
 
   async function respond(id, accept) {
     setBusyId(id);

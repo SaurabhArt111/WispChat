@@ -16,6 +16,7 @@ import conversationRoutes from "./src/routes/conversation.routes.js";
 import messageRoutes from "./src/routes/message.routes.js";
 import statusRoutes from "./src/routes/status.routes.js";
 import postRoutes from "./src/routes/post.routes.js";
+import callRoutes from "./src/routes/call.routes.js";
 
 dotenv.config();
 
@@ -61,7 +62,30 @@ const io = new Server(server, {
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// API responses are live data — never let a browser, proxy or service
+// worker serve a stale copy. ETags are disabled too, otherwise a 304 can
+// resurrect an old body from an HTTP cache.
+app.set("etag", false);
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  next();
+});
+
+// Uploaded files get unique, timestamped names and never change once
+// written, so they are safe to cache aggressively (and support Range
+// requests so video/audio can stream and seek).
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "uploads"), {
+    maxAge: "30d",
+    immutable: true,
+    acceptRanges: true,
+    setHeaders: (res) => res.set("Cross-Origin-Resource-Policy", "cross-origin"),
+  })
+);
 
 // Attach io to every request so controllers can emit events
 app.use((req, res, next) => {
@@ -81,6 +105,7 @@ app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api/posts", postRoutes);
+app.use("/api/calls", callRoutes);
 
 // Error handling middleware (e.g. Multer file size errors, validation errors)
 app.use((err, req, res, next) => {
