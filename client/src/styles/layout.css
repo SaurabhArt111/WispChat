@@ -28,7 +28,7 @@
   min-width: 0;
   height: 100%;
   background: var(--ink);
-  background-image: 
+  background-image:
     radial-gradient(circle at 10% 5%, rgba(94, 242, 192, 0.04), transparent 45%),
     radial-gradient(circle at 90% 95%, rgba(245, 166, 91, 0.035), transparent 45%);
 }
@@ -38,6 +38,14 @@
 }
 
 .app-shell.is-profile-route .app-main {
+  display: flex;
+}
+
+.app-shell.is-post-route {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.app-shell.is-post-route .app-main {
   display: flex;
 }
 
@@ -51,11 +59,13 @@
     grid-template-columns: 100%;
   }
 
-  .app-shell.is-profile-route {
+  .app-shell.is-profile-route,
+  .app-shell.is-post-route {
     grid-template-columns: 100%;
   }
 
-  .app-shell.is-profile-route:not(.has-active-chat) .app-main {
+  .app-shell.is-profile-route:not(.has-active-chat) .app-main,
+  .app-shell.is-post-route:not(.has-active-chat) .app-main {
     display: flex;
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }

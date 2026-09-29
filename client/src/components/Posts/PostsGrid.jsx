@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext";
 import { fetchUserPosts, MAX_POSTS_PER_USER } from "../../api/posts";
 import PostThumb from "./PostThumb";
-import PostViewerModal from "./PostViewerModal";
 import PostUploadModal from "./PostUploadModal";
 import { PlusIcon } from "../common/Icons";
 import "../../styles/posts.css";
@@ -13,8 +13,9 @@ import "../../styles/posts.css";
 export default function PostsGrid({ userId, editable = false, showLimit = editable, onCountChange }) {
   const { showToast } = useToast();
   const [posts, setPosts] = useState(null);
-  const [viewing, setViewing] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let active = true;
@@ -49,6 +50,11 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
   }
 
   const remaining = MAX_POSTS_PER_USER - posts.length;
+  const openPost = (post) => {
+    const from = `${location.pathname}${location.search}`;
+    sessionStorage.setItem("wisp-return-path", from);
+    navigate(`/post/${post._id}`, { state: { post, from } });
+  };
 
   return (
     <div className="posts-grid-wrap">
@@ -58,7 +64,7 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
       {posts.length === 0 && !editable && <p className="posts-empty">No posts yet.</p>}
       <div className="posts-grid">
         {posts.map((p) => (
-          <PostThumb key={p._id} post={p} onClick={setViewing} />
+          <PostThumb key={p._id} post={p} onClick={openPost} />
         ))}
         {editable && remaining > 0 && (
           <button type="button" className="post-thumb post-thumb-add" onClick={() => setUploading(true)}>
@@ -68,17 +74,6 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
         )}
       </div>
 
-      {viewing && (
-        <PostViewerModal
-          post={viewing}
-          onClose={() => setViewing(null)}
-          onChange={(next) => setPosts((list) => list.map((x) => (x._id === next._id ? next : x)))}
-          onDeleted={(id) => {
-            setPosts((list) => list.filter((x) => x._id !== id));
-            onCountChange?.(Math.max(0, posts.length - 1));
-          }}
-        />
-      )}
       {uploading && (
         <PostUploadModal
           remaining={remaining}

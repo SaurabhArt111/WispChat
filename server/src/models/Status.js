@@ -24,6 +24,15 @@ const statusSchema = new mongoose.Schema(
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         at: { type: Date, default: Date.now },
         count: { type: Number, default: 1, min: 1 },
+        emoji: { type: String, default: null },
+      },
+    ],
+
+    reactions: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        emoji: { type: String, required: true },
+        at: { type: Date, default: Date.now },
       },
     ],
 

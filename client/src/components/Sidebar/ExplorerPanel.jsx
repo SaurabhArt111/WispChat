@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { VirtuosoGrid } from "react-virtuoso";
 import client from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -6,7 +7,6 @@ import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import MobileMoreButton from "./MobileMoreButton";
 import PostThumb from "../Posts/PostThumb";
-import PostViewerModal from "../Posts/PostViewerModal";
 import PostUploadModal from "../Posts/PostUploadModal";
 import ProfileView from "../Profile/ProfileView";
 import { fetchExploreFeed, fetchUserPosts, MAX_POSTS_PER_USER } from "../../api/posts";
@@ -60,12 +60,13 @@ export default function ExplorerPanel({ onOpenMore }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
-  const [viewing, setViewing] = useState(null);
   const [profileUser, setProfileUser] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [myPostCount, setMyPostCount] = useState(0);
   const searchSeq = useRef(0);
   const { startDirectConversation, openConversation } = useChat();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [contactIdSet, setContactIdSet] = useState(() => new Set());
 
   useEffect(() => {
@@ -127,6 +128,11 @@ export default function ExplorerPanel({ onOpenMore }) {
   }, [query]);
 
   const remaining = MAX_POSTS_PER_USER - myPostCount;
+  const openPost = (post) => {
+    const from = `${location.pathname}${location.search}`;
+    sessionStorage.setItem("wisp-return-path", from);
+    navigate(`/post/${post._id}`, { state: { post, from } });
+  };
 
   return (
     <aside className="rail-panel explorer-panel">
@@ -200,7 +206,7 @@ export default function ExplorerPanel({ onOpenMore }) {
             listClassName="explorer-grid"
             itemClassName="explorer-grid-item"
             overscan={400}
-            itemContent={(index, post) => <PostThumb post={post} onClick={setViewing} />}
+            itemContent={(index, post) => <PostThumb post={post} onClick={openPost} />}
             components={{
               Footer: () => (
                 <div className="explorer-footer">
@@ -212,17 +218,6 @@ export default function ExplorerPanel({ onOpenMore }) {
         </div>
       )}
 
-      {viewing && (
-        <PostViewerModal
-          post={viewing}
-          onClose={() => setViewing(null)}
-          onChange={(next) => setPosts((list) => list.map((p) => (p._id === next._id ? next : p)))}
-          onDeleted={(id) => {
-            setPosts((list) => list.filter((p) => p._id !== id));
-            setMyPostCount((c) => Math.max(0, c - 1));
-          }}
-        />
-      )}
       {uploading && (
         <PostUploadModal
           remaining={remaining}

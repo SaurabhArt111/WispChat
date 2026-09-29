@@ -75,6 +75,15 @@ export async function getUserPosts(req, res) {
   res.json({ posts: posts.map((p) => serializePost(p, req.user._id)) });
 }
 
+export async function getPostById(req, res) {
+  const post = await Post.findById(req.params.id)
+    .populate("user", AUTHOR_FIELDS)
+    .populate("comments.user", AUTHOR_FIELDS)
+    .lean();
+  if (!post) return res.status(404).json({ message: "Post not found" });
+  res.json({ post: serializePost(post, req.user._id) });
+}
+
 // The Explorer tab: a random sample of posts from across the app (minus
 // anyone blocked in either direction), refreshed with a new shuffle on
 // every load — same "endless discovery" feel as Instagram's Explore grid,

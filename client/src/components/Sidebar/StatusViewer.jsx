@@ -10,15 +10,19 @@ import { formatClock } from "../../utils/time";
 import "../../styles/status.css";
 
 const IMAGE_DURATION = 5000;
+const STATUS_REACTIONS = ["❤️", "😂", "😮", "🔥", "🎉", "👍"];
 
 export default function StatusViewer({ entry, isOwn, onClose }) {
-  const { markViewed, deleteStatus } = useStatus();
+  const { markViewed, deleteStatus, reactToStatus } = useStatus();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showViewers, setShowViewers] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const [reactionTrayOpen, setReactionTrayOpen] = useState(false);
+  const [reactionTrayOffset, setReactionTrayOffset] = useState(0);
+  const [sentReactions, setSentReactions] = useState({});
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const pausedAtRef = useRef(0);
@@ -62,16 +66,36 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     const dy = e.clientY - g.startY;
     if (!g.direction) {
       if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) return;
-      if (dy > 0 && dy > Math.abs(dx)) {
+      if (Math.abs(dy) > Math.abs(dx)) {
         g.direction = "vertical";
         setPaused(true);
         e.currentTarget.setPointerCapture?.(e.pointerId);
       } else {
-        g.direction = "horizontal"; // sideways or upward drag — not used for anything
+        g.direction = "horizontal";
       }
     }
     if (g.direction === "vertical") {
       e.preventDefault();
+      if (dy < 0) {
+        const nextOffset = Math.min(110, Math.abs(dy));
+        if (isOwn) {
+          setShowViewers(true);
+        } else {
+          setReactionTrayOpen(true);
+          setReactionTrayOffset(nextOffset);
+        }
+        setDragY(0);
+        return;
+      }
+      if (reactionTrayOpen) {
+        const nextOffset = Math.min(110, Math.abs(dy));
+        setReactionTrayOffset(nextOffset);
+        if (dy > 70) {
+          setReactionTrayOpen(false);
+          setReactionTrayOffset(0);
+        }
+        return;
+      }
       setDragY(Math.max(0, dy));
     }
   }
@@ -81,6 +105,13 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     gestureRef.current = null;
     if (g.direction === "vertical") {
       setPaused(false);
+      if (reactionTrayOpen) {
+        const shouldKeepOpen = reactionTrayOffset > 30;
+        if (isOwn && shouldKeepOpen) setShowViewers(true);
+        setReactionTrayOpen(shouldKeepOpen);
+        setReactionTrayOffset(0);
+        return;
+      }
       if (dragY > DISMISS_CLOSE_AT) {
         onClose();
       } else {
@@ -89,12 +120,15 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
       return;
     }
     if (g.direction === null) {
-      // A genuine tap: decide prev/next/no-op from where it landed.
       const rect = contentRef.current?.getBoundingClientRect();
       if (rect) {
         const relX = (e.clientX - rect.left) / rect.width;
         if (relX < 0.35) goPrev();
         else if (relX > 0.65) goNext();
+        else {
+          setPaused((p) => !p);
+          if (isOwn) setShowViewers(true);
+        }
       }
     }
   }
@@ -104,8 +138,23 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     if (g?.direction === "vertical") {
       setPaused(false);
       setDragY(0);
+      setReactionTrayOffset(0);
+      if (reactionTrayOpen && reactionTrayOffset < 30) setReactionTrayOpen(false);
     }
   }
+
+  async function handleReactionPick(emoji) {
+    try {
+      await reactToStatus(item._id, emoji);
+    } catch {
+      return;
+    }
+    setSentReactions((current) => ({ ...current, [item._id]: emoji }));
+    setPaused(true);
+    setReactionTrayOpen(false);
+    setReactionTrayOffset(0);
+  }
+
   function handleWheel(e) {
     if (e.deltaY > 24) onClose();
   }
@@ -188,6 +237,9 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     else goNext();
   }
 
+  const viewerRows = (item.viewers || []).map((viewer) => ({ ...viewer, emoji: viewer.emoji || null }));
+  const myReaction = sentReactions[item._id] || item.myReaction;
+
   return createPortal(
     <div className="status-viewer-overlay" onWheel={handleWheel}>
       <div
@@ -254,6 +306,12 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
             <SafeImage src={mediaUrl(item.url)} alt="" className="status-media" draggable={false} />
           )}
           {item.caption && <div className="status-caption">{item.caption}</div>}
+          {!isOwn && myReaction && (
+            <div className="status-reaction-confirmation">
+              <span>You reacted</span>
+              <span aria-label={`Your reaction: ${myReaction}`}>{myReaction}</span>
+            </div>
+          )}
         </div>
 
         {isOwn && (
@@ -264,10 +322,10 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
 
         {showViewers && (
           <div className="status-viewers-list">
-            {item.viewers?.length ? (
+            {viewerRows.length ? (
               Array.from(
-                item.viewers.reduce((byUser, viewer) => {
-                  const id = String(viewer.user?._id || viewer.user);
+                viewerRows.reduce((byUser, viewer) => {
+                  const id = String(viewer.user?._id || viewer.user || "local-user");
                   const existing = byUser.get(id);
                   byUser.set(
                     id,
@@ -276,15 +334,17 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
                           ...viewer,
                           count: (existing.count || 1) + (viewer.count || 1),
                           at: new Date(existing.at) > new Date(viewer.at) ? existing.at : viewer.at,
+                          emoji: viewer.emoji || existing.emoji || null,
                         }
                       : { ...viewer, count: viewer.count || 1 }
                   );
                   return byUser;
                 }, new Map()).values()
               ).map((v) => (
-                <div className="status-viewers-row" key={v.user?._id || v.user}>
+                <div className="status-viewers-row" key={`${v.user?._id || v.user || "local-user"}-${v.emoji || "view"}`}>
                   <Avatar user={v.user || {}} size={30} />
                   <span className="status-viewers-name">{v.user?.displayName || "Someone"}</span>
+                  {v.emoji && <span className="status-viewers-reaction" aria-label={`Reacted with ${v.emoji}`}>{v.emoji}</span>}
                   <span className="status-viewers-count">
                     {v.count > 1 ? `watched ${v.count}` : "1 view"}
                   </span>
@@ -294,6 +354,20 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
             ) : (
               <div className="status-viewers-row status-viewers-empty">No views yet</div>
             )}
+          </div>
+        )}
+
+        {!isOwn && (
+          <div
+            className={`status-reaction-bar ${reactionTrayOpen ? "open" : ""}`}
+            style={{ transform: `translate(-50%, ${reactionTrayOpen ? 0 : 120 + reactionTrayOffset}px)` }}
+          >
+            <div className="status-reaction-handle" />
+            {STATUS_REACTIONS.map((emoji) => (
+              <button key={emoji} className="status-reaction-pill" onClick={() => handleReactionPick(emoji)}>
+                {emoji}
+              </button>
+            ))}
           </div>
         )}
       </div>

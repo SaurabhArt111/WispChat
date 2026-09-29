@@ -346,6 +346,7 @@
   .auth-shell {
     grid-template-columns: 1fr;
   }
+
   .auth-brand {
     display: none;
   }
@@ -364,4 +365,9 @@
   font-size: 13px;
   line-height: 1.4;
 }
-.auth-notice svg { color: var(--wisp); flex-shrink: 0; margin-top: 1px; }
+
+.auth-notice svg {
+  color: var(--wisp);
+  flex-shrink: 0;
+  margin-top: 1px;
+}

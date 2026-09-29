@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 import {
   createPost,
+  getPostById,
   getUserPosts,
   getExploreFeed,
   likePost,
@@ -18,6 +19,7 @@ router.use(requireAuth);
 
 router.get("/feed", getExploreFeed);
 router.get("/user/:userId", getUserPosts);
+router.get("/:id", getPostById);
 router.post("/", upload.single("file"), createPost);
 router.post("/:id/like", likePost);
 router.post("/:id/comment", commentOnPost);

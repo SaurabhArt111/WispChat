@@ -133,7 +133,7 @@
   box-shadow: var(--shadow-md);
 }
 
-.image-editor-toolbar > button {
+.image-editor-toolbar>button {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-dim);
@@ -145,18 +145,18 @@
   gap: 6px;
 }
 
-.image-editor-toolbar > button:hover:not(:disabled) {
+.image-editor-toolbar>button:hover:not(:disabled) {
   background: var(--surface-3);
   color: var(--text);
 }
 
-.image-editor-toolbar > button.active {
+.image-editor-toolbar>button.active {
   background: var(--wisp-dim);
   color: var(--wisp);
   box-shadow: 0 0 10px var(--wisp-dim);
 }
 
-.image-editor-toolbar > button:disabled {
+.image-editor-toolbar>button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
@@ -328,6 +328,7 @@
   .media-composer-stage {
     padding: 8px 12px;
   }
+
   .media-composer-header,
   .media-composer-strip,
   .media-composer-footer {

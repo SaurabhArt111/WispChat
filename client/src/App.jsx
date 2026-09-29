@@ -20,6 +20,9 @@ export default function App() {
     <>
       <Routes>
         <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
+        <Route path="/post/:postId" element={user ? <ChatApp /> : <Navigate to="/auth" replace />} />
+        <Route path="/profile" element={user ? <ChatApp /> : <Navigate to="/auth" replace />} />
+        <Route path="/settings/*" element={user ? <ChatApp /> : <Navigate to="/auth" replace />} />
         <Route path="/*" element={user ? <ChatApp /> : <Navigate to="/auth" replace />} />
       </Routes>
       <PwaManager />

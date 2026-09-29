@@ -78,6 +78,15 @@ export function StatusProvider({ children }) {
     [refreshFeed]
   );
 
+  const reactToStatus = useCallback(
+    async (statusId, emoji) => {
+      const res = await client.post(`/status/${statusId}/react`, { emoji });
+      await refreshFeed();
+      return res.data;
+    },
+    [refreshFeed]
+  );
+
   const myEntry = feed.find((f) => f.user._id === user?._id);
   const contactEntries = feed.filter((f) => f.user._id !== user?._id);
   const hasUnread = contactEntries.some((f) => f.items.some((i) => !i.viewedByMe));
@@ -93,6 +102,7 @@ export function StatusProvider({ children }) {
     postMediaStatus,
     markViewed,
     deleteStatus,
+    reactToStatus,
   };
 
   return <StatusContext.Provider value={value}>{children}</StatusContext.Provider>;

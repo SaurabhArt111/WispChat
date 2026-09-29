@@ -35,6 +35,7 @@ export async function getFeed(req, res) {
     .sort({ createdAt: 1 })
     .populate("user", "username displayName avatar avatarColor")
     .populate("viewers.user", "username displayName avatar avatarColor")
+    .populate("reactions.user", "username displayName avatar avatarColor")
     .lean();
 
   // Group into one entry per user, each with their ordered slides, so the
@@ -61,7 +62,19 @@ export async function getFeed(req, res) {
         s.viewers?.some(
           (viewer) => String(viewer.user?._id || viewer.user) === String(req.user._id)
         ) || false,
-      viewers: String(s.user._id) === String(req.user._id) ? s.viewers : undefined,
+      viewers: String(s.user._id) === String(req.user._id)
+        ? (s.viewers || []).map((viewer) => {
+            const reaction = (s.reactions || []).find(
+              (entry) => String(entry.user?._id || entry.user) === String(viewer.user?._id || viewer.user)
+            );
+            return { ...viewer, emoji: viewer.emoji || reaction?.emoji || null };
+          })
+        : undefined,
+      myReaction: String(s.user._id) !== String(req.user._id)
+        ? (s.reactions || []).find(
+            (reaction) => String(reaction.user?._id || reaction.user) === String(req.user._id)
+          )?.emoji || null
+        : undefined,
     });
   }
 
@@ -144,4 +157,45 @@ export async function deleteStatus(req, res) {
   }
   await status.deleteOne();
   res.json({ ok: true });
+}
+
+export async function reactToStatus(req, res) {
+  const { emoji } = req.body || {};
+  if (!emoji || !String(emoji).trim()) {
+    return res.status(400).json({ message: "An emoji reaction is required." });
+  }
+
+  const status = await Status.findById(req.params.id).select("_id user reactions viewers");
+  if (!status) return res.status(404).json({ message: "Status not found" });
+  if (String(status.user) === String(req.user._id)) {
+    return res.status(403).json({ message: "You can't react to your own status" });
+  }
+
+  const owner = await User.findById(status.user).select("statusPrivacy contacts");
+  const isMutualContact = owner?.contacts?.some((id) => String(id) === String(req.user._id));
+  if (!owner || !isMutualContact || !canViewStatus(owner, req.user._id)) {
+    return res.status(403).json({ message: "You can't react to this status" });
+  }
+
+  const nextEmoji = String(emoji).trim();
+  const existingReaction = status.reactions.find((reaction) => String(reaction.user) === String(req.user._id));
+  const now = new Date();
+
+  if (existingReaction) {
+    existingReaction.emoji = nextEmoji;
+    existingReaction.at = now;
+  } else {
+    status.reactions.push({ user: req.user._id, emoji: nextEmoji, at: now });
+  }
+
+  const viewer = status.viewers.find((entry) => String(entry.user) === String(req.user._id));
+  if (viewer) {
+    viewer.emoji = nextEmoji;
+    viewer.at = now;
+  } else {
+    status.viewers.push({ user: req.user._id, emoji: nextEmoji, at: now, count: 1 });
+  }
+
+  await status.save();
+  res.json({ ok: true, reaction: { user: req.user._id, emoji: nextEmoji, at: now } });
 }

@@ -140,6 +140,7 @@
     bottom: 120px;
     right: 14px;
   }
+
   .call-controls {
     gap: 16px;
   }
@@ -170,4 +171,3 @@
 .call-summary-pill.completed {
   color: #5ef2c0;
 }
-

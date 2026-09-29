@@ -23,7 +23,7 @@
   animation: pwa-banner-in 0.25s var(--ease, ease) both;
 }
 
-.pwa-banner + .pwa-banner {
+.pwa-banner+.pwa-banner {
   bottom: 74px;
 }
 
@@ -43,6 +43,7 @@
     opacity: 0;
     transform: translate(-50%, 12px);
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, 0);
@@ -57,14 +58,17 @@
     transform: none;
     max-width: none;
   }
-  .pwa-banner + .pwa-banner {
+
+  .pwa-banner+.pwa-banner {
     bottom: 68px;
   }
+
   @keyframes pwa-banner-in {
     from {
       opacity: 0;
       transform: translateY(12px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -91,20 +95,60 @@
   box-shadow: var(--shadow-lg);
   animation: updateCardUp 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+
 .pwa-update-icon {
-  width: 40px; height: 40px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(70, 200, 150, 0.14); color: var(--wisp);
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(70, 200, 150, 0.14);
+  color: var(--wisp);
 }
-.pwa-update-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pwa-update-text strong { font-size: 14.5px; color: var(--text); }
-.pwa-update-text span { font-size: 12.5px; color: var(--text-faint); line-height: 1.35; }
-.pwa-update-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+.pwa-update-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pwa-update-text strong {
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.pwa-update-text span {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  line-height: 1.35;
+}
+
+.pwa-update-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 @keyframes updateCardUp {
-  from { opacity: 0; transform: translate(-50%, 40px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, 40px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
+
 @media (max-width: 768px) {
+
   /* sit above the bottom nav */
-  .pwa-update-card { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .pwa-update-card {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
 }

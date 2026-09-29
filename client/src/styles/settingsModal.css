@@ -275,6 +275,7 @@
     display: inline-flex;
   }
 }
+
 /* --- Wallpaper picker (Settings → Chats, and per-chat "More" menu) --- */
 .wallpaper-picker {
   display: grid;

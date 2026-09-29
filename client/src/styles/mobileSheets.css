@@ -5,16 +5,33 @@
    more specific than the base rules so import order doesn't matter.
 ------------------------------------------------------------------- */
 @keyframes sheetUpIn {
-  from { transform: translate3d(0, 100%, 0); }
-  to { transform: translate3d(0, 0, 0); }
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+  }
 }
+
 @keyframes sheetDownOut {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(0, 100%, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, 100%, 0);
+  }
 }
+
 @keyframes backdropOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -40,6 +57,7 @@
     position: relative;
     padding-top: 24px;
   }
+
   .modal-overlay .modal:not(.settings-modal) .modal-header::before {
     content: "";
     position: absolute;
@@ -60,14 +78,20 @@
     border-radius: 0;
   }
 
-  .modal-overlay.closing { animation: backdropOut 220ms ease-in forwards; }
-  .modal-overlay.closing .modal { animation: sheetDownOut 220ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+  .modal-overlay.closing {
+    animation: backdropOut 220ms ease-in forwards;
+  }
+
+  .modal-overlay.closing .modal {
+    animation: sheetDownOut 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
 
   /* confirm dialogs / action sheets */
   .confirm-overlay {
     align-items: flex-end;
     padding: 0;
   }
+
   .confirm-overlay .confirm-card {
     max-width: 100%;
     border-radius: 22px 22px 0 0;
@@ -84,6 +108,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .modal-overlay .modal,
   .confirm-overlay .confirm-card,
   .status-viewer-overlay,

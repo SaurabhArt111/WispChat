@@ -5,13 +5,13 @@ import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import { mediaUrl } from "../../api/config";
 import { addPostComment, deletePost, deletePostComment, togglePostLike, updatePost, updatePostComment } from "../../api/posts";
-import { CheckIcon, CloseIcon, CommentIcon, EditIcon, HeartIcon, ImageIcon, SendPostIcon, TrashIcon } from "../common/Icons";
+import { BackIcon, CheckIcon, CloseIcon, CommentIcon, EditIcon, HeartIcon, ImageIcon, SendPostIcon, TrashIcon } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
 import "../../styles/posts.css";
 
 // Full post view: media + like + comments. `onChange(post)` lets the parent
 // grid keep its counts in sync; `onDeleted(id)` removes it from the grid.
-export default function PostViewerModal({ post: initial, onClose, onChange, onDeleted }) {
+export default function PostViewerModal({ post: initial, onClose, onChange, onDeleted, isPage = false }) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [post, setPost] = useState(initial);
@@ -148,10 +148,19 @@ export default function PostViewerModal({ post: initial, onClose, onChange, onDe
     }
   }
 
-  return createPortal(
-    <div className="modal-overlay post-viewer-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="post-viewer">
-
+  const viewer = (
+      <div className={`post-viewer ${isPage ? "post-viewer-page" : ""}`}>
+        {isPage && (
+          <header className="post-viewer-routebar">
+            <button className="post-viewer-back" onClick={onClose}>
+              <BackIcon size={19} />
+              <span>Back</span>
+            </button>
+            <strong>Post</strong>
+            <span className="post-viewer-routebar-spacer" />
+          </header>
+        )}
+        <div className="post-viewer-body">
         <div className="post-viewer-media" onDoubleClick={handleMediaDoubleClick}>
           {heartBurst > 0 && (
             <div
@@ -308,10 +317,20 @@ export default function PostViewerModal({ post: initial, onClose, onChange, onDe
             </button>
           </form>
         </div>
-        <button className="icon-btn post-viewer-close" onClick={onClose} title="Close">
-          <CloseIcon size={18} />
-        </button>
+        </div>
+        {!isPage && (
+          <button className="icon-btn post-viewer-close" onClick={onClose} title="Close">
+            <CloseIcon size={20} />
+          </button>
+        )}
       </div>
+  );
+
+  if (isPage) return viewer;
+
+  return createPortal(
+    <div className="modal-overlay post-viewer-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      {viewer}
     </div>,
     document.body
   );

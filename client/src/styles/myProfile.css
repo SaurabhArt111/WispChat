@@ -1,252 +1,252 @@
 .my-profile-route {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
 }
 
 .my-profile-page {
-  width: min(960px, 100%);
-  height: 100%;
-  min-height: 0;
-  margin: 0 auto;
-  padding: 46px 32px 36px;
-  overflow-y: auto;
-  color: var(--text);
+    width: min(960px, 100%);
+    height: 100%;
+    min-height: 0;
+    margin: 0 auto;
+    padding: 46px 32px 36px;
+    overflow-y: auto;
+    color: var(--text);
 }
 
 .my-profile-header {
-  display: grid;
-  grid-template-columns: minmax(190px, 1fr) 2fr;
-  align-items: start;
-  gap: 42px;
-  padding: 6px 0 38px;
+    display: grid;
+    grid-template-columns: minmax(190px, 1fr) 2fr;
+    align-items: start;
+    gap: 42px;
+    padding: 6px 0 38px;
 }
 
 .my-profile-avatar {
-  display: flex;
-  justify-content: center;
-  padding-top: 5px;
+    display: flex;
+    justify-content: center;
+    padding-top: 5px;
 }
 
 .my-profile-avatar .avatar {
-  border: 1px solid var(--border);
+    border: 1px solid var(--border);
 }
 
 .my-profile-details {
-  min-width: 0;
+    min-width: 0;
 }
 
 .my-profile-identity {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .my-profile-identity h1 {
-  min-width: 0;
-  max-width: 100%;
-  margin: 0 8px 0 0;
-  overflow-wrap: anywhere;
-  font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 500;
-  line-height: 1.25;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0 8px 0 0;
+    overflow-wrap: anywhere;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.25;
 }
 
 .my-profile-edit,
 .my-profile-icon-btn {
-  height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface-2);
-  color: var(--text);
-  cursor: pointer;
-  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 
 .my-profile-edit {
-  padding: 0 14px;
-  font-size: 12.5px;
-  font-weight: 650;
+    padding: 0 14px;
+    font-size: 12.5px;
+    font-weight: 650;
 }
 
 .my-profile-icon-btn {
-  width: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    width: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .my-profile-edit:hover,
 .my-profile-icon-btn:hover {
-  background: var(--surface-3);
-  border-color: var(--border-glow);
+    background: var(--surface-3);
+    border-color: var(--border-glow);
 }
 
 .my-profile-stats {
-  display: flex;
-  gap: 28px;
-  margin: 24px 0;
-  color: var(--text-dim);
-  font-size: 13.5px;
+    display: flex;
+    gap: 28px;
+    margin: 24px 0;
+    color: var(--text-dim);
+    font-size: 13.5px;
 }
 
 .my-profile-stats strong {
-  color: var(--text);
-  font-weight: 700;
+    color: var(--text);
+    font-weight: 700;
 }
 
 .my-profile-display-name {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .my-profile-bio {
-  max-width: 560px;
-  margin: 5px 0 0;
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+    max-width: 560px;
+    margin: 5px 0 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .my-profile-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--wisp);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--wisp);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
 }
 
 .my-profile-copy:hover {
-  color: var(--text);
+    color: var(--text);
 }
 
 .my-profile-tabs {
-  display: flex;
-  justify-content: center;
-  border-top: 1px solid var(--border-soft);
+    display: flex;
+    justify-content: center;
+    border-top: 1px solid var(--border-soft);
 }
 
 .my-profile-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-width: 112px;
-  height: 48px;
-  margin-top: -1px;
-  border-top: 1px solid var(--text);
-  color: var(--text);
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 112px;
+    height: 48px;
+    margin-top: -1px;
+    border-top: 1px solid var(--text);
+    color: var(--text);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
 }
 
 .my-profile-posts .posts-grid-wrap {
-  margin-top: 0;
+    margin-top: 0;
 }
 
 .my-profile-posts .posts-count {
-  display: none;
+    display: none;
 }
 
 .my-profile-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 16px 30px;
-  text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 30px;
+    text-align: center;
 }
 
 .my-profile-empty-icon {
-  width: 50px;
-  height: 50px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 12px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  color: var(--text-dim);
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-dim);
 }
 
 .my-profile-empty h2 {
-  margin: 0;
-  color: var(--text);
-  font-size: 17px;
-  font-weight: 650;
+    margin: 0;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 650;
 }
 
 .my-profile-empty p {
-  margin: 6px 0 0;
-  color: var(--text-faint);
-  font-size: 12.5px;
+    margin: 6px 0 0;
+    color: var(--text-faint);
+    font-size: 12.5px;
 }
 
 @media (max-width: 768px) {
-  .my-profile-page {
-    padding: 28px 12px 30px;
-  }
+    .my-profile-page {
+        padding: 28px 12px 30px;
+    }
 
-  .my-profile-header {
-    grid-template-columns: 82px minmax(0, 1fr);
-    gap: 16px;
-    padding: 4px 4px 26px;
-  }
+    .my-profile-header {
+        grid-template-columns: 82px minmax(0, 1fr);
+        gap: 16px;
+        padding: 4px 4px 26px;
+    }
 
-  .my-profile-avatar {
-    justify-content: flex-start;
-    padding-top: 0;
-  }
+    .my-profile-avatar {
+        justify-content: flex-start;
+        padding-top: 0;
+    }
 
-  .my-profile-avatar .avatar {
-    width: 78px !important;
-    height: 78px !important;
-    font-size: 30px !important;
-  }
+    .my-profile-avatar .avatar {
+        width: 78px !important;
+        height: 78px !important;
+        font-size: 30px !important;
+    }
 
-  .my-profile-identity {
-    gap: 7px;
-  }
+    .my-profile-identity {
+        gap: 7px;
+    }
 
-  .my-profile-identity h1 {
-    flex-basis: 100%;
-    margin: 0 0 2px;
-    font-size: 17px;
-  }
+    .my-profile-identity h1 {
+        flex-basis: 100%;
+        margin: 0 0 2px;
+        font-size: 17px;
+    }
 
-  .my-profile-edit {
-    height: 33px;
-    padding: 0 10px;
-    font-size: 11.5px;
-  }
+    .my-profile-edit {
+        height: 33px;
+        padding: 0 10px;
+        font-size: 11.5px;
+    }
 
-  .my-profile-icon-btn {
-    width: 33px;
-    height: 33px;
-  }
+    .my-profile-icon-btn {
+        width: 33px;
+        height: 33px;
+    }
 
-  .my-profile-stats {
-    margin: 14px 0;
-    font-size: 12.5px;
-  }
+    .my-profile-stats {
+        margin: 14px 0;
+        font-size: 12.5px;
+    }
 
-  .my-profile-display-name,
-  .my-profile-bio {
-    font-size: 12px;
-  }
+    .my-profile-display-name,
+    .my-profile-bio {
+        font-size: 12px;
+    }
 
-  .my-profile-tab {
-    height: 44px;
-  }
+    .my-profile-tab {
+        height: 44px;
+    }
 }

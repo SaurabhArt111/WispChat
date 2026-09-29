@@ -15,6 +15,7 @@ import MediaStoragePanel from "../components/Sidebar/MediaStoragePanel";
 import BroadcastPanel from "../components/Sidebar/BroadcastPanel";
 import CallsPanel from "../components/Sidebar/CallsPanel";
 import MyProfilePage from "../components/Profile/MyProfilePage";
+import PostViewerPage from "../components/Posts/PostViewerPage";
 import ProfileModal from "../components/Sidebar/ProfileModal";
 import SettingsModal from "../components/Sidebar/SettingsModal";
 import ChatWindow from "../components/Chat/ChatWindow";
@@ -30,7 +31,7 @@ import "../styles/layout.css";
 // fallback for any path that doesn't match one of these. "Archived" is
 // deliberately left out — it stays a local panel toggle rather than a
 // route, reached only from the link inside the chat list itself.
-const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "profile"];
+const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "profile", "post"];
 
 export default function ChatApp() {
   const { user } = useAuth();
@@ -49,6 +50,7 @@ export default function ChatApp() {
   const routeSegment = location.pathname.split("/")[1] || "";
   const view = ROUTED_VIEWS.includes(routeSegment) ? routeSegment : "chats";
   const isProfilePage = routeSegment === "profile";
+  const isPostPage = routeSegment === "post";
   const showSettings = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
   // Single source of truth for which sidebar-column panel is on screen.
   // Deriving it once here (rather than checking `showArchived` and `view`
@@ -106,7 +108,7 @@ export default function ChatApp() {
   }, [infoRequest, activeId]);
 
   return (
-    <div className={`app-shell ${activeId && !isProfilePage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""}`}>
+    <div className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${isPostPage ? "is-post-route" : ""}`}>
       <ConnectionBanner />
       <AsideRail
         view={activePanel}
@@ -136,7 +138,9 @@ export default function ChatApp() {
       {activePanel === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
 
       <div className="app-main">
-        {isProfilePage ? (
+        {isPostPage ? (
+          <PostViewerPage />
+        ) : isProfilePage ? (
           <MyProfilePage
             user={user}
             onEditProfile={openProfileEditor}

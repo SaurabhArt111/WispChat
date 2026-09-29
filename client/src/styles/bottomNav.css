@@ -124,12 +124,14 @@
   from {
     transform: translateY(100%);
   }
+
   to {
     transform: translateY(0);
   }
 }
 
 @media (max-width: 768px) {
+
   .app-shell:not(.has-active-chat) .sidebar,
   .app-shell:not(.has-active-chat) .rail-panel {
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));

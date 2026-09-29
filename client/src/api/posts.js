@@ -9,6 +9,9 @@ export const fetchExploreFeed = (limit = 60) =>
 export const fetchUserPosts = (userId) =>
   client.get(`/posts/user/${userId}`).then((r) => r.data.posts);
 
+export const fetchPost = (postId) =>
+  client.get(`/posts/${postId}`).then((r) => r.data.post);
+
 export const createPost = (file, caption = "", onUploadProgress) => {
   const fd = new FormData();
   fd.append("file", file);
