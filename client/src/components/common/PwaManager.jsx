@@ -34,6 +34,8 @@ export default function PwaManager() {
   const [installEvent, setInstallEvent] = useState(null);
   const [showIosTip, setShowIosTip] = useState(false);
   const updateSWRef = useRef(null);
+  const cleanupRef = useRef(null);
+  const [updating, setUpdating] = useState(false);
 
   // --- Service worker registration + update detection ---
   useEffect(() => {
@@ -58,6 +60,25 @@ export default function PwaManager() {
           onNeedRefresh() {
             setNeedRefresh(true);
           },
+          // An installed PWA can stay open for days without a navigation, and
+          // browsers only re-check for a new service worker on navigation —
+          // so poll, and also check whenever the app returns to the
+          // foreground. Either finding a new build triggers onNeedRefresh.
+          onRegisteredSW(_url, registration) {
+            if (!registration) return;
+            const check = () => {
+              if (navigator.onLine) registration.update().catch(() => {});
+            };
+            const timer = setInterval(check, 30 * 60 * 1000);
+            const onVisible = () => document.visibilityState === "visible" && check();
+            document.addEventListener("visibilitychange", onVisible);
+            window.addEventListener("online", check);
+            cleanupRef.current = () => {
+              clearInterval(timer);
+              document.removeEventListener("visibilitychange", onVisible);
+              window.removeEventListener("online", check);
+            };
+          },
           onRegisterError(err) {
             console.warn("[pwa] service worker registration failed", err);
           },
@@ -70,6 +91,7 @@ export default function PwaManager() {
 
     return () => {
       cancelled = true;
+      cleanupRef.current?.();
     };
   }, []);
 
@@ -122,21 +144,33 @@ export default function PwaManager() {
   }
 
   function handleReload() {
+    setUpdating(true);
+    // Activates the waiting service worker and reloads the page once it takes
+    // over. If that hand-off ever stalls, fall back to a plain reload so the
+    // button can never appear to do nothing.
     updateSWRef.current?.(true);
+    setTimeout(() => window.location.reload(), 4000);
   }
 
   return (
     <>
       {needRefresh && (
-        <div className="pwa-banner pwa-banner-update" role="status">
-          <RefreshIcon size={16} />
-          <span>A new version of Wisp is ready.</span>
-          <button className="btn btn-primary btn-sm" onClick={handleReload}>
-            Reload
-          </button>
-          <button className="icon-btn btn-sm" onClick={() => setNeedRefresh(false)} title="Dismiss">
-            <CloseIcon size={14} />
-          </button>
+        <div className="pwa-update-card" role="alertdialog" aria-live="polite" aria-label="Update available">
+          <div className="pwa-update-icon">
+            <RefreshIcon size={20} />
+          </div>
+          <div className="pwa-update-text">
+            <strong>Update available</strong>
+            <span>A new version of Wisp is ready. Update now to get the latest features and fixes.</span>
+          </div>
+          <div className="pwa-update-actions">
+            <button className="btn btn-ghost btn-sm" onClick={() => setNeedRefresh(false)} disabled={updating}>
+              Later
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={handleReload} disabled={updating}>
+              {updating ? "Updating…" : "Update now"}
+            </button>
+          </div>
         </div>
       )}
 

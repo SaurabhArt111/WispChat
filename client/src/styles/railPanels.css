@@ -111,9 +111,8 @@
 }
 
 .calls-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  /* NOTE: no display/padding here — react-virtuoso positions rows itself;
+     each row (.call-log-row) already carries its own inset padding. */
 }
 
 .call-log-row {

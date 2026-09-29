@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { mediaUrl } from "../api/config";
+import { peekDecrypted } from "../utils/decryptCache";
 
 /**
  * Decrypts a message's text (if it's encrypted) for display. Non-encrypted
@@ -12,14 +13,23 @@ import { mediaUrl } from "../api/config";
  */
 export function useDecryptedText(message) {
   const { e2ee } = useAuth();
-  const [state, setState] = useState(() =>
-    message?.encrypted ? { text: "", locked: true, loading: true } : { text: message?.text || "", locked: false, loading: false }
-  );
+  // Read the decrypt cache synchronously so a virtualized row that is being
+  // remounted renders its final text (and height) on the very first paint.
+  const [state, setState] = useState(() => {
+    if (!message?.encrypted) return { text: message?.text || "", locked: false, loading: false };
+    const hit = peekDecrypted(message);
+    return hit ? { text: hit.text, locked: false, loading: false } : { text: "", locked: true, loading: true };
+  });
 
   useEffect(() => {
     let cancelled = false;
     if (!message?.encrypted) {
       setState({ text: message?.text || "", locked: false, loading: false });
+      return;
+    }
+    const hit = peekDecrypted(message);
+    if (hit) {
+      setState({ text: hit.text, locked: false, loading: false });
       return;
     }
     setState((s) => ({ ...s, loading: true }));
@@ -47,9 +57,13 @@ const objectUrlCache = new Map(); // attachment url -> blob object URL, for this
 export function useDecryptedMediaUrl(message, attachment) {
   const { e2ee } = useAuth();
   const plainUrl = attachment?.url ? mediaUrl(attachment.url) : null;
-  const [state, setState] = useState(() =>
-    attachment?.encrypted ? { url: null, loading: true, error: false } : { url: plainUrl, loading: false, error: false }
-  );
+  const [state, setState] = useState(() => {
+    if (!attachment?.encrypted) return { url: plainUrl, loading: false, error: false };
+    const cachedUrl = objectUrlCache.get(`${attachment.url}:${attachment.iv}`);
+    return cachedUrl
+      ? { url: cachedUrl, loading: false, error: false }
+      : { url: null, loading: true, error: false };
+  });
 
   useEffect(() => {
     let cancelled = false;

@@ -10,7 +10,11 @@ import Lightbox from "./Lightbox";
 import GroupInfoModal from "./GroupInfoModal";
 import StatusViewer from "../Sidebar/StatusViewer";
 import { formatLastSeen, formatBytes } from "../../utils/time";
-import { BackIcon, CloseIcon, MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon } from "../common/Icons";
+import { MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon, PhoneIcon, VideoIcon, LockIcon, AlertIcon } from "../common/Icons";
+import { useCall } from "../../context/CallContext";
+import ConfirmModal from "../common/ConfirmModal";
+import ProfileHero from "../Profile/ProfileHero";
+import useCollapsingHero from "../../hooks/useCollapsingHero";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import PostsGrid from "../Posts/PostsGrid";
 import "../../styles/contactInfo.css";
@@ -40,6 +44,12 @@ export default function ContactInfoPanel({ conversation, onClose }) {
     () => Number(localStorage.getItem("wisp_contact_panel_width")) || DEFAULT_WIDTH
   );
   const resizing = useRef(false);
+  const panelRef = useRef(null);
+  const scrollRef = useRef(null);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+  const { call: activeCall, startCall } = useCall();
+  // Big avatar → compact toolbar as the page scrolls (see profileHero.css).
+  useCollapsingHero(panelRef, scrollRef);
 
   const startResize = useCallback((e) => {
     e.preventDefault();
@@ -131,51 +141,48 @@ export default function ContactInfoPanel({ conversation, onClose }) {
   }
 
   return (
-    <aside className="contact-info-panel" style={{ width }}>
+    <aside className="contact-info-panel ci-collapse" style={{ width }} ref={panelRef}>
       <div className="contact-info-resize-handle" onMouseDown={startResize} title="Drag to resize" />
-      <div className="contact-info-header">
-        {/* Back button for mobile view */}
-        <button
-          className="icon-btn chat-header-back"
-          onClick={onClose}
-          title="Back to chat"
-        >
-          <BackIcon size={20} />
-        </button>
-        <span>{conversation.isGroup ? "Group info" : "Contact info"}</span>
-        <button className="icon-btn" onClick={onClose} title="Close">
-          <CloseIcon size={18} />
-        </button>
-      </div>
 
-      <div className="contact-info-scroll">
-        <div className="contact-info-hero">
-          {contactStatusEntry ? (
-            <button
-              className="contact-info-avatar-status-btn"
-              onClick={() => setShowStatusViewer(true)}
-              title="View status"
-            >
-              <Avatar user={avatarUser} size={96} showStatus={!conversation.isGroup} online={isOnline} />
-            </button>
-          ) : (
-            <Avatar user={avatarUser} size={96} showStatus={!conversation.isGroup} online={isOnline} />
-          )}
-          <div className="contact-info-name">{label}</div>
-          <div className="contact-info-sub">
-            {conversation.isGroup
-              ? `${conversation.participants?.length || 0} members`
-              : other?.username
-                ? `@${other.username}`
-                : ""}
+      <ProfileHero
+        person={avatarUser}
+        title={label}
+        subtitle={
+          conversation.isGroup
+            ? `${conversation.participants?.length || 0} members`
+            : other?.username
+              ? `@${other.username}`
+              : ""
+        }
+        detail={!conversation.isGroup ? formatLastSeen(lastSeen, isOnline) : ""}
+        onBack={onClose}
+        onClose={onClose}
+        onAvatarClick={contactStatusEntry ? () => setShowStatusViewer(true) : undefined}
+        avatarHint={contactStatusEntry ? "View status" : undefined}
+      />
+
+      <div className="contact-info-scroll" ref={scrollRef}>
+        <div className="ci-hero-spacer" />
+
+        {!conversation.isGroup && other?.about && (
+          <div className="ci-card">
+            <span className="ci-card-label">About</span>
+            <p className="ci-card-text">{other.about}</p>
           </div>
-          {!conversation.isGroup && (
-            <div className="contact-info-status">{formatLastSeen(lastSeen, isOnline)}</div>
-          )}
-          {!conversation.isGroup && other?.about && (
-            <div className="contact-info-about">{other.about}</div>
-          )}
-        </div>
+        )}
+
+        {!conversation.isGroup && (
+          <div className="ci-call-row">
+            <button className="ci-call-tile" disabled={!!activeCall} onClick={() => startCall(conversation, "audio")}>
+              <PhoneIcon size={19} />
+              <span>Audio</span>
+            </button>
+            <button className="ci-call-tile" disabled={!!activeCall} onClick={() => startCall(conversation, "video")}>
+              <VideoIcon size={19} />
+              <span>Video</span>
+            </button>
+          </div>
+        )}
 
         <div className="contact-info-actions-row">
           <button className={`ci-action-btn ${conversation.muted ? "on" : ""}`} onClick={() => flag("mute")}>
@@ -284,7 +291,38 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             ))}
           </div>
         )}
+
+        {!conversation.isGroup && other && (
+          <button className="ci-danger-row" onClick={() => setConfirmBlock(true)}>
+            <AlertIcon size={17} />
+            <span>Block {other.displayName}</span>
+          </button>
+        )}
+        <p className="ci-e2ee-note">
+          <LockIcon size={12} /> This chat is end-to-end encrypted
+        </p>
       </div>
+
+      {confirmBlock && other && (
+        <ConfirmModal
+          title={`Block ${other.displayName}?`}
+          message="They won't be able to message you or see your Status. You can unblock them anytime from Settings → Privacy."
+          confirmLabel="Block"
+          danger
+          onConfirm={async () => {
+            setConfirmBlock(false);
+            try {
+              await client.post(`/users/block/${other._id}`);
+              showToast(`Blocked ${other.displayName}`);
+              onClose();
+              closeActiveChat();
+            } catch {
+              showToast("Could not block contact", "danger");
+            }
+          }}
+          onCancel={() => setConfirmBlock(false)}
+        />
+      )}
 
       {lightboxIndex !== null && (
         <Lightbox

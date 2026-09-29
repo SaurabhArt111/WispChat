@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
-import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import { useDecryptedText } from "../../hooks/useDecryptedMessage";
@@ -105,7 +103,7 @@ function FormattedText({ text }) {
   );
 }
 
-export default function MessageBubble({
+function MessageBubble({
   message,
   isMine,
   grouped,
@@ -114,9 +112,16 @@ export default function MessageBubble({
   onEdit,
   onJumpToMessage,
   isHighlighted,
+  userId,
+  reactToMessage,
+  requestDeleteMessage,
+  undoDeleteMessage,
 }) {
-  const { user } = useAuth();
-  const { reactToMessage, requestDeleteMessage, undoDeleteMessage } = useChat();
+  // NOTE: this component is React.memo'd and deliberately does NOT read
+  // useChat()/useAuth() itself — a context subscription would re-render every
+  // mounted bubble on any chat update (typing, presence, unread counts),
+  // which is what made long chats feel laggy. The few things it needs from
+  // those contexts come in as props from MessageList instead.
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const [showForward, setShowForward] = useState(false);
@@ -233,7 +238,7 @@ export default function MessageBubble({
   ].filter(Boolean);
 
   const myReaction = message.reactions?.find(
-    (r) => (r.user?._id || r.user) === user._id
+    (r) => (r.user?._id || r.user) === userId
   )?.emoji;
 
   function handleContextMenu(e) {
@@ -446,3 +451,5 @@ export default function MessageBubble({
     </div>
   );
 }
+
+export default React.memo(MessageBubble);

@@ -12,6 +12,7 @@ const postSchema = new mongoose.Schema(
     url: { type: String, required: true },
     mimeType: { type: String, default: "" },
     caption: { type: String, default: "", maxlength: 500 },
+    edited: { type: Boolean, default: false },
 
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
@@ -19,6 +20,7 @@ const postSchema = new mongoose.Schema(
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
         text: { type: String, required: true, maxlength: 500 },
+        edited: { type: Boolean, default: false },
         createdAt: { type: Date, default: Date.now },
       },
     ],

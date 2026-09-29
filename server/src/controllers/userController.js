@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
+import Post from "../models/Post.js";
 
 // Backs both the "New chat" people picker and the Explorer search bar —
 // matches by @username, display name, email, or (if the query happens to
@@ -22,6 +23,81 @@ export async function searchUsers(req, res) {
     .select("username displayName avatar avatarColor about isOnline lastSeen e2ee.publicKeyJwk");
 
   res.json({ users });
+}
+
+const PUBLIC_FIELDS = "username displayName avatar avatarColor about isOnline lastSeen";
+
+// Powers the "New chat" page's discovery sections:
+//  • likedAuthors — people whose Explorer posts *you* liked (contacts or not)
+//  • suggested    — people you may know: non-contacts ranked by mutual
+//                   contacts, then padded with the newest accounts.
+// Anyone blocked in either direction, already a contact, or with a pending
+// request is left out of `suggested` (still shown in likedAuthors, flagged
+// with isContact / requestPending so the UI can offer the right action).
+export async function getSuggestions(req, res) {
+  const me = req.user;
+  const myId = me._id;
+
+  const [blockedMe, pending, likedAgg] = await Promise.all([
+    User.find({ blocked: myId }, "_id").lean(),
+    FriendRequest.find({ status: "pending", $or: [{ from: myId }, { to: myId }] }).lean(),
+    Post.aggregate([
+      { $match: { likes: myId, user: { $ne: myId } } },
+      { $group: { _id: "$user", likedCount: { $sum: 1 }, lastAt: { $max: "$updatedAt" } } },
+      { $sort: { lastAt: -1 } },
+      { $limit: 30 },
+    ]),
+  ]);
+
+  const blockedIds = new Set([...(me.blocked || []), ...blockedMe.map((u) => u._id)].map(String));
+  const contactIds = new Set((me.contacts || []).map(String));
+  const pendingIds = new Set(pending.map((r) => String(String(r.from) === String(myId) ? r.to : r.from)));
+
+  // People whose posts I liked
+  const likedIds = likedAgg.map((a) => a._id).filter((id) => !blockedIds.has(String(id)));
+  const likedUsers = await User.find({ _id: { $in: likedIds } }).select(PUBLIC_FIELDS).lean();
+  const likedById = new Map(likedUsers.map((u) => [String(u._id), u]));
+  const likedAuthors = likedAgg
+    .map((a) => {
+      const u = likedById.get(String(a._id));
+      if (!u) return null;
+      return {
+        ...u,
+        likedCount: a.likedCount,
+        isContact: contactIds.has(String(u._id)),
+        requestPending: pendingIds.has(String(u._id)),
+      };
+    })
+    .filter(Boolean);
+
+  // People you may know
+  const skip = new Set([String(myId), ...blockedIds, ...contactIds, ...pendingIds, ...likedIds.map(String)]);
+  const skipObjectIds = [...skip].map((id) => new mongoose.Types.ObjectId(id));
+  const myContacts = me.contacts || [];
+
+  const mutual = myContacts.length
+    ? await User.aggregate([
+        { $match: { _id: { $nin: skipObjectIds }, contacts: { $in: myContacts } } },
+        { $addFields: { mutualCount: { $size: { $setIntersection: ["$contacts", myContacts] } } } },
+        { $sort: { mutualCount: -1 } },
+        { $limit: 20 },
+        { $project: { username: 1, displayName: 1, avatar: 1, avatarColor: 1, about: 1, isOnline: 1, lastSeen: 1, mutualCount: 1 } },
+      ])
+    : [];
+
+  const taken = new Set([...skip, ...mutual.map((u) => String(u._id))]);
+  const newest = await User.find({ _id: { $nin: [...taken].map((id) => new mongoose.Types.ObjectId(id)) } })
+    .sort({ createdAt: -1 })
+    .limit(Math.max(0, 20 - mutual.length))
+    .select(PUBLIC_FIELDS)
+    .lean();
+
+  const suggested = [
+    ...mutual.map((u) => ({ ...u, reason: `${u.mutualCount} mutual contact${u.mutualCount > 1 ? "s" : ""}` })),
+    ...newest.map((u) => ({ ...u, reason: "New on Wisp" })),
+  ];
+
+  res.json({ likedAuthors, suggested });
 }
 
 // Powers Settings/Status > "Status privacy" (see StatusPrivacyModal). `mode`

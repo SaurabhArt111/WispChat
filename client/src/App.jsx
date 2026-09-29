@@ -3,7 +3,6 @@ import { useAuth } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import ChatApp from "./pages/ChatApp";
 import PwaManager from "./components/common/PwaManager";
-import UnlockE2EEModal from "./components/common/UnlockE2EEModal";
 import CallOverlay from "./components/Call/CallOverlay";
 
 export default function App() {
@@ -24,7 +23,6 @@ export default function App() {
         <Route path="/*" element={user ? <ChatApp /> : <Navigate to="/auth" replace />} />
       </Routes>
       <PwaManager />
-      <UnlockE2EEModal />
       <CallOverlay />
     </>
   );

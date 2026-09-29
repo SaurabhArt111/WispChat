@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useMemo, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/contextmenu.css";
 
@@ -46,8 +46,12 @@ export function ContextMenuProvider({ children }) {
     };
   }, [menu, closeMenu]);
 
+  // Stable identity: consumers (every message bubble) shouldn't re-render
+  // just because a menu/toast opened or closed.
+  const api = useMemo(() => ({ openMenu, closeMenu }), [openMenu, closeMenu]);
+
   return (
-    <ContextMenuCtx.Provider value={{ openMenu, closeMenu }}>
+    <ContextMenuCtx.Provider value={api}>
       {children}
       {menu && <RenderedMenu menu={menu} menuRef={menuRef} closeMenu={closeMenu} />}
     </ContextMenuCtx.Provider>

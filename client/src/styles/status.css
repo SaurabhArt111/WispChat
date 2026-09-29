@@ -1,6 +1,14 @@
 /* --- Status list rows --- */
 .status-panel-scroll {
-  padding: 12px 8px;
+  /* NOTE: no padding here — this is the react-virtuoso scroller, which
+     positions rows with a transform; padding on it shifts/clips the whole
+     list instead of insetting each row (the same bug fixed in chat.css for
+     .message-list). The 8px horizontal inset lives on .status-row-gutter
+     (every itemContent row) instead. */
+}
+
+.status-row-gutter {
+  padding: 0 8px;
 }
 
 .status-my-row-wrap {
@@ -301,6 +309,8 @@
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .status-text-view {

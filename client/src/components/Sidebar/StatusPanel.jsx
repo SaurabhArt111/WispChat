@@ -94,11 +94,11 @@ export default function StatusPanel({ onOpenMore }) {
         data={rows}
         computeItemKey={(index, row) => row.key}
         overscan={300}
-        components={{ Footer: () => <div style={{ height: 120 }} /> }}
+        components={{ Header: () => <div style={{ height: 12 }} />, Footer: () => <div style={{ height: 120 }} /> }}
         itemContent={(index, row) => {
           if (row.type === "me") {
             return (
-              <div className="status-my-row-wrap">
+              <div className="status-row-gutter status-my-row-wrap">
                 <button
                   className="status-row"
                   onClick={() => (myEntry ? setViewing(myEntry) : openFilePicker())}
@@ -127,11 +127,11 @@ export default function StatusPanel({ onOpenMore }) {
             );
           }
           if (row.type === "title") {
-            return <div className="rail-panel-section-title status-recent-title">{row.title}</div>;
+            return <div className="status-row-gutter rail-panel-section-title status-recent-title">{row.title}</div>;
           }
           if (row.type === "empty") {
             return (
-              <div className="rail-panel-empty">
+              <div className="status-row-gutter rail-panel-empty">
                 <StatusRingIcon size={30} />
                 <p>
                   When your contacts post updates, they'll show up here. Statuses disappear after 24
@@ -143,6 +143,7 @@ export default function StatusPanel({ onOpenMore }) {
           const { entry, allSeen } = row;
           const latest = entry.items[entry.items.length - 1];
           return (
+            <div className="status-row-gutter">
             <button className="status-row" onClick={() => setViewing(entry)}>
               <span className={`status-ring ${allSeen ? "seen" : "unseen"}`}>
                 <Avatar user={entry.user} size={50} />
@@ -152,6 +153,7 @@ export default function StatusPanel({ onOpenMore }) {
                 <div className="status-row-sub">{formatListTime(latest.createdAt)}</div>
               </div>
             </button>
+            </div>
           );
         }}
       />

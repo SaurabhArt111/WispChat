@@ -9,6 +9,8 @@ import {
   commentOnPost,
   deleteComment,
   deletePost,
+  updatePost,
+  updateComment,
 } from "../controllers/postController.js";
 
 const router = Router();
@@ -19,7 +21,9 @@ router.get("/user/:userId", getUserPosts);
 router.post("/", upload.single("file"), createPost);
 router.post("/:id/like", likePost);
 router.post("/:id/comment", commentOnPost);
+router.patch("/:id/comment/:commentId", updateComment);
 router.delete("/:id/comment/:commentId", deleteComment);
+router.patch("/:id", upload.single("file"), updatePost);
 router.delete("/:id", deletePost);
 
 export default router;

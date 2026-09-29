@@ -33,6 +33,14 @@
     radial-gradient(circle at 90% 95%, rgba(245, 166, 91, 0.035), transparent 45%);
 }
 
+.app-shell.is-profile-route {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.app-shell.is-profile-route .app-main {
+  display: flex;
+}
+
 /* Mobile responsive layout */
 @media (max-width: 768px) {
   .app-shell {
@@ -41,6 +49,15 @@
 
   .app-shell.has-contact-info {
     grid-template-columns: 100%;
+  }
+
+  .app-shell.is-profile-route {
+    grid-template-columns: 100%;
+  }
+
+  .app-shell.is-profile-route:not(.has-active-chat) .app-main {
+    display: flex;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .app-shell.has-active-chat .sidebar,

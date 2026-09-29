@@ -4,16 +4,48 @@ import client from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
-import Modal from "../common/Modal";
 import MobileMoreButton from "./MobileMoreButton";
 import PostThumb from "../Posts/PostThumb";
 import PostViewerModal from "../Posts/PostViewerModal";
 import PostUploadModal from "../Posts/PostUploadModal";
-import PostsGrid from "../Posts/PostsGrid";
+import ProfileView from "../Profile/ProfileView";
 import { fetchExploreFeed, fetchUserPosts, MAX_POSTS_PER_USER } from "../../api/posts";
-import { CloseIcon, CompassIcon, PlusIcon, SearchIcon, UsersIcon } from "../common/Icons";
+import { CloseIcon, CompassIcon, PlusIcon, SearchIcon } from "../common/Icons";
+import { useChat } from "../../context/ChatContext";
 import "../../styles/railPanels.css";
 import "../../styles/posts.css";
+
+// Placeholder tiles shown while the feed loads. Same 3-column geometry as the
+// real grid, so nothing jumps when the posts arrive.
+function ExplorerSkeleton() {
+  return (
+    <div className="explorer-grid-body" aria-busy="true" aria-label="Loading posts">
+      <div className="explorer-grid explorer-skeleton-grid">
+        {Array.from({ length: 21 }).map((_, i) => (
+          <div className="explorer-grid-item" key={i}>
+            <div className="skeleton post-skel-tile" style={{ animationDelay: `${(i % 6) * 60}ms` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SearchSkeleton() {
+  return (
+    <div className="rail-panel-list" aria-busy="true">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div className="explorer-user-row" key={i} style={{ pointerEvents: "none" }}>
+          <span className="skeleton" style={{ width: 42, height: 42, borderRadius: "50%" }} />
+          <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            <span className="skeleton" style={{ width: "45%", height: 13 }} />
+            <span className="skeleton" style={{ width: "28%", height: 10 }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Instagram-style Explore: a random, re-shuffled grid of everyone's posts,
 // with a search bar on top that finds people by @username / name / user ID.
@@ -33,6 +65,25 @@ export default function ExplorerPanel({ onOpenMore }) {
   const [uploading, setUploading] = useState(false);
   const [myPostCount, setMyPostCount] = useState(0);
   const searchSeq = useRef(0);
+  const { startDirectConversation, openConversation } = useChat();
+  const [contactIdSet, setContactIdSet] = useState(() => new Set());
+
+  useEffect(() => {
+    client
+      .get("/users/contacts")
+      .then((r) => setContactIdSet(new Set((r.data.contacts || []).map((c) => String(c._id)))))
+      .catch(() => {});
+  }, []);
+
+  async function openChatWith(userId) {
+    try {
+      const conv = await startDirectConversation(userId);
+      setProfileUser(null);
+      await openConversation(conv._id);
+    } catch {
+      showToast("Could not start conversation", "danger");
+    }
+  }
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -112,21 +163,24 @@ export default function ExplorerPanel({ onOpenMore }) {
       </div>
 
       {results !== null || searching ? (
-        <div className="rail-panel-list">
-          {searching && results === null && <p className="posts-empty">Searching…</p>}
-          {results?.length === 0 && !searching && <p className="posts-empty">No people found.</p>}
-          {results?.map((u) => (
-            <button key={u._id} className="explorer-user-row" onClick={() => setProfileUser(u)}>
-              <Avatar user={u} size={42} />
-              <span className="explorer-user-text">
-                <strong>{u.displayName}</strong>
-                <span>@{u.username}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+        results === null ? (
+          <SearchSkeleton />
+        ) : (
+          <div className="rail-panel-list">
+            {results.length === 0 && <p className="posts-empty">No people found.</p>}
+            {results.map((u) => (
+              <button key={u._id} className="explorer-user-row" onClick={() => setProfileUser(u)}>
+                <Avatar user={u} size={42} />
+                <span className="explorer-user-text">
+                  <strong>{u.displayName}</strong>
+                  <span>@{u.username}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )
       ) : loading ? (
-        <div className="rail-panel-empty rail-panel-empty-tall"><p>Loading posts…</p></div>
+        <ExplorerSkeleton />
       ) : failed ? (
         <div className="rail-panel-empty rail-panel-empty-tall">
           <p>Couldn't load Explore. Check your connection and try again.</p>
@@ -179,41 +233,14 @@ export default function ExplorerPanel({ onOpenMore }) {
           }}
         />
       )}
-      {profileUser && <UserProfileSheet person={profileUser} onClose={() => setProfileUser(null)} />}
+      {profileUser && (
+        <ProfileView
+          person={profileUser}
+          isContact={contactIdSet.has(String(profileUser._id))}
+          onMessage={() => openChatWith(profileUser._id)}
+          onClose={() => setProfileUser(null)}
+        />
+      )}
     </aside>
-  );
-}
-
-// Tapping a search result: their posts, plus an "Add contact" action —
-// people are discovered here but can only be chatted with once added.
-function UserProfileSheet({ person, onClose }) {
-  const { showToast } = useToast();
-  const [sent, setSent] = useState(false);
-
-  async function addContact() {
-    try {
-      await client.post("/users/friend-requests", { userId: person._id });
-      setSent(true);
-      showToast("Request sent", "success");
-    } catch (err) {
-      showToast(err?.response?.data?.message || "Couldn't send request", "danger");
-    }
-  }
-
-  return (
-    <Modal title={person.displayName} onClose={onClose}>
-      <div className="explorer-profile-head">
-        <Avatar user={person} size={64} />
-        <div>
-          <strong>{person.displayName}</strong>
-          <span>@{person.username}</span>
-          {person.about && <p>{person.about}</p>}
-        </div>
-      </div>
-      <button className="btn btn-primary btn-sm" onClick={addContact} disabled={sent}>
-        <UsersIcon size={14} /> {sent ? "Request sent" : "Add contact"}
-      </button>
-      <PostsGrid userId={person._id} />
-    </Modal>
   );
 }

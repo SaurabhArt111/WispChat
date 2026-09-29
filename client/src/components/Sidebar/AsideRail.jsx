@@ -65,7 +65,7 @@ export default function AsideRail({ view, onChangeView, onOpenProfile, onOpenSet
           active={false}
           onClick={onOpenSettings}
         />
-        <button className="aside-rail-avatar-btn" onClick={onOpenProfile} title="Your profile">
+        <button className={`aside-rail-avatar-btn ${view === "profile" ? "active" : ""}`} onClick={onOpenProfile} title="Your profile">
           <Avatar user={user} size={34} />
         </button>
       </div>

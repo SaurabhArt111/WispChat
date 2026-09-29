@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import {
   searchUsers,
+  getSuggestions,
   updateProfile,
   updateStatusPrivacy,
   getContacts,
@@ -16,6 +17,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get("/search", searchUsers);
+router.get("/suggestions", getSuggestions);
 router.patch("/profile", updateProfile);
 router.patch("/status-privacy", updateStatusPrivacy);
 router.get("/contacts", getContacts);

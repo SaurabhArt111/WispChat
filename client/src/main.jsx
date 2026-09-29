@@ -17,6 +17,8 @@ import "./styles/toast.css";
 import "./styles/confirm.css";
 import "./styles/liquidglass.css";
 import "./styles/call.css";
+import "./styles/mobileSheets.css";
+import "./styles/newChat.css";
 
 // Restore stored user accent theme
 const savedAccent = localStorage.getItem("wisp_accent");

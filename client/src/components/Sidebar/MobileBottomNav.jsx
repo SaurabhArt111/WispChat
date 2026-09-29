@@ -23,7 +23,7 @@ export default function MobileBottomNav({ view, onChangeView, hasUnreadStatus })
           onClick={() => onChangeView(t.id)}
         >
           <span className="bottom-nav-icon">
-            <t.icon size={21} />
+            <t.icon size={25} />
             {t.id === "status" && hasUnreadStatus && <span className="bottom-nav-dot" />}
           </span>
           <span className="bottom-nav-label">{t.label}</span>

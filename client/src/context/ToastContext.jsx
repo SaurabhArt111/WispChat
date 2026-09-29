@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useMemo, useContext, useRef, useState } from "react";
 import { CheckIcon, AlertIcon, InfoIcon } from "../components/common/Icons";
 import "../styles/toast.css";
 
@@ -29,8 +29,12 @@ export function ToastProvider({ children }) {
     [dismiss]
   );
 
+  // Stable identity: consumers (every message bubble) shouldn't re-render
+  // just because a menu/toast opened or closed.
+  const api = useMemo(() => ({ showToast, dismiss }), [showToast, dismiss]);
+
   return (
-    <ToastContext.Provider value={{ showToast, dismiss }}>
+    <ToastContext.Provider value={api}>
       {children}
       <div className="toast-stack">
         {toasts.map((t) => (

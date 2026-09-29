@@ -20,6 +20,7 @@ function serializePost(post, viewerId) {
     url: post.url,
     mimeType: post.mimeType,
     caption: post.caption,
+    edited: !!post.edited,
     createdAt: post.createdAt,
     likeCount: likes.length,
     likedByMe: likes.some((id) => String(id?._id || id) === String(viewerId)),
@@ -31,6 +32,7 @@ function serializePost(post, viewerId) {
         _id: c._id,
         user: c.user,
         text: c.text,
+        edited: !!c.edited,
         createdAt: c.createdAt,
         mine: String(c.user?._id || c.user) === String(viewerId),
       })),
@@ -165,4 +167,56 @@ export async function deletePost(req, res) {
   }
   await post.deleteOne();
   res.json({ ok: true });
+}
+
+// Edit your own post: change the caption, and/or swap the photo/video for a
+// new one (multipart `file`). Either or both may be sent.
+export async function updatePost(req, res) {
+  const { id } = req.params;
+  const post = await Post.findById(id);
+  if (!post) return res.status(404).json({ message: "Post not found" });
+  if (String(post.user) !== String(req.user._id)) {
+    return res.status(403).json({ message: "You can only edit your own posts" });
+  }
+
+  let changed = false;
+  if (typeof req.body.caption === "string") {
+    const next = req.body.caption.trim().slice(0, 500);
+    if (next !== post.caption) {
+      post.caption = next;
+      changed = true;
+    }
+  }
+  if (req.file) {
+    post.kind = kindFromMime(req.file.mimetype) === "video" ? "video" : "image";
+    post.url = `/uploads/${req.file.mediaFolder}/${req.file.filename}`;
+    post.mimeType = req.file.mimetype;
+    changed = true;
+  }
+  if (changed) post.edited = true;
+  await post.save();
+  await post.populate([
+    { path: "user", select: AUTHOR_FIELDS },
+    { path: "comments.user", select: AUTHOR_FIELDS },
+  ]);
+  res.json({ post: serializePost(post.toObject(), req.user._id) });
+}
+
+// Edit your own comment.
+export async function updateComment(req, res) {
+  const { id, commentId } = req.params;
+  const text = (req.body.text || "").trim();
+  if (!text) return res.status(400).json({ message: "Comment can't be empty" });
+
+  const post = await Post.findById(id);
+  if (!post) return res.status(404).json({ message: "Post not found" });
+  const comment = post.comments.id(commentId);
+  if (!comment) return res.status(404).json({ message: "Comment not found" });
+  if (String(comment.user) !== String(req.user._id)) {
+    return res.status(403).json({ message: "You can only edit your own comments" });
+  }
+  comment.text = text.slice(0, 500);
+  comment.edited = true;
+  await post.save();
+  res.json({ comment: { _id: comment._id, text: comment.text, edited: true } });
 }

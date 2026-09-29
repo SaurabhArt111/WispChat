@@ -10,7 +10,7 @@ import "../../styles/posts.css";
 // A person's posts (max 6). `editable` = it's my own profile, so show the
 // upload tile and allow deleting. Only ≤6 tiles exist, so this is a plain
 // grid — virtualizing 6 items would only add overhead.
-export default function PostsGrid({ userId, editable = false }) {
+export default function PostsGrid({ userId, editable = false, showLimit = editable, onCountChange }) {
   const { showToast } = useToast();
   const [posts, setPosts] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -20,10 +20,15 @@ export default function PostsGrid({ userId, editable = false }) {
     let active = true;
     setPosts(null);
     fetchUserPosts(userId)
-      .then((p) => active && setPosts(p))
+      .then((p) => {
+        if (!active) return;
+        setPosts(p);
+        onCountChange?.(p.length);
+      })
       .catch(() => {
         if (active) {
           setPosts([]);
+          onCountChange?.(0);
           showToast("Couldn't load posts", "danger");
         }
       });
@@ -33,13 +38,21 @@ export default function PostsGrid({ userId, editable = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  if (posts === null) return <p className="posts-empty">Loading posts…</p>;
+  if (posts === null) {
+    return (
+      <div className="posts-skeleton" aria-busy="true" aria-label="Loading posts">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div className="skeleton" key={i} />
+        ))}
+      </div>
+    );
+  }
 
   const remaining = MAX_POSTS_PER_USER - posts.length;
 
   return (
     <div className="posts-grid-wrap">
-      {editable && (
+      {editable && showLimit && (
         <p className="posts-count">{posts.length}/{MAX_POSTS_PER_USER} posts</p>
       )}
       {posts.length === 0 && !editable && <p className="posts-empty">No posts yet.</p>}
@@ -60,14 +73,20 @@ export default function PostsGrid({ userId, editable = false }) {
           post={viewing}
           onClose={() => setViewing(null)}
           onChange={(next) => setPosts((list) => list.map((x) => (x._id === next._id ? next : x)))}
-          onDeleted={(id) => setPosts((list) => list.filter((x) => x._id !== id))}
+          onDeleted={(id) => {
+            setPosts((list) => list.filter((x) => x._id !== id));
+            onCountChange?.(Math.max(0, posts.length - 1));
+          }}
         />
       )}
       {uploading && (
         <PostUploadModal
           remaining={remaining}
           onClose={() => setUploading(false)}
-          onCreated={(post) => setPosts((list) => [post, ...list])}
+          onCreated={(post) => {
+            setPosts((list) => [post, ...list]);
+            onCountChange?.(posts.length + 1);
+          }}
         />
       )}
     </div>

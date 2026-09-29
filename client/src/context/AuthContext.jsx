@@ -16,6 +16,7 @@ import {
 } from "../utils/crypto";
 import { logError } from "../utils/logger";
 import { clearCache as clearMessageCache } from "../utils/messageCache";
+import { clearDecryptCache, peekDecrypted, storeDecrypted } from "../utils/decryptCache";
 
 const AuthContext = createContext(null);
 
@@ -54,12 +55,16 @@ export function AuthProvider({ children }) {
   // the account's encryption identity is recoverable from the *server*
   // (via the wrapped bundle keyed to this user id) plus the person's
   // password, from any device, rather than being pinned to one device's
-  // storage. The tradeoff is that a page refresh forgets it, so we ask to
-  // unlock again — see `needsUnlock` below.
+  // storage. The tradeoff is that a page refresh forgets it — restoring it
+  // then relies on the local key cache (loadLocalKeyCache below); if that's
+  // missing, the person is sent back to sign in rather than prompted here.
   const privateKeyRef = useRef(null);
   const [e2eeReady, setE2eeReady] = useState(false);
-  const [needsUnlock, setNeedsUnlock] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
+  // Shown on the sign-in screen when a saved session can't be used as-is —
+  // this replaces the old post-login "Unlock your secure chats" popup:
+  // login now unlocks encryption in the same step (see login(), below), so
+  // there's nothing left to prompt for after the app is showing.
+  const [sessionNotice, setSessionNotice] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("wisp_token");
@@ -70,40 +75,60 @@ export function AuthProvider({ children }) {
     client
       .get("/auth/me")
       .then(async (res) => {
-        setUser(res.data.user);
-        if (res.data.needsE2EESetup) {
-          setNeedsSetup(true);
+        // A saved session whose encryption key can't be restored silently
+        // (no local key cache — e.g. the session predates it, or it was
+        // cleared) is sent back to the sign-in screen. The password typed
+        // there unlocks everything in one step, so there is never a second
+        // "unlock your chats" prompt on top of logging in.
+        const backToSignIn = () => {
+          localStorage.removeItem("wisp_token");
+          setUser(null);
+          setSessionNotice("Please sign in again to unlock your encrypted chats on this device.");
+        };
+
+        if (res.data.needsE2EESetup) return backToSignIn();
+        if (!res.data.user?.e2ee?.publicKeyJwk) {
+          setUser(res.data.user);
           return;
         }
-        if (!res.data.user?.e2ee?.publicKeyJwk) return;
 
-        // Try the silent local cache first — this is what lets a page
-        // refresh skip the "enter your password" prompt entirely on a
-        // browser that's already unlocked it once.
         const cached = await loadLocalKeyCache(res.data.user._id, token);
-        if (cached) {
-          privateKeyRef.current = cached;
-          setE2eeReady(true);
-        } else {
-          setNeedsUnlock(true);
-        }
+        if (!cached) return backToSignIn();
+
+        privateKeyRef.current = cached;
+        setUser(res.data.user);
+        setE2eeReady(true);
       })
       .catch(() => localStorage.removeItem("wisp_token"))
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (identifier, password) => {
+    if (!window.crypto?.subtle) {
+      throw new Error(
+        "Secure chats need a secure connection (HTTPS or localhost). Open Wisp over https:// and try again."
+      );
+    }
     const res = await client.post("/auth/login", { identifier, password });
-    localStorage.setItem("wisp_token", res.data.token);
-    setUser(res.data.user);
 
+    // Unlock BEFORE the app sees a signed-in user, so chats never render in
+    // a half-locked state ("Couldn't decrypt") for a moment after login.
+    let ok;
     if (res.data.needsE2EESetup) {
       // Legacy/first-run account with no keypair yet — generate one now
       // and register it, using the password already in hand.
-      await setupEncryption(res.data.user, password, res.data.token);
+      localStorage.setItem("wisp_token", res.data.token);
+      ok = await setupEncryption(res.data.user, password, res.data.token);
     } else {
-      await unlockEncryption(res.data.user, password, res.data.token);
+      ok = await unlockEncryption(res.data.user, password, res.data.token);
     }
+    if (!ok) {
+      localStorage.removeItem("wisp_token");
+      throw new Error("Signed in, but your encrypted chats couldn't be unlocked. Please try again.");
+    }
+    localStorage.setItem("wisp_token", res.data.token);
+    setSessionNotice("");
+    setUser(res.data.user);
     return res.data.user;
   }, []);
 
@@ -118,8 +143,6 @@ export function AuthProvider({ children }) {
     setUser(res.data.user);
     privateKeyRef.current = keyPair.privateKey;
     setE2eeReady(true);
-    setNeedsUnlock(false);
-    setNeedsSetup(false);
     await saveLocalKeyCache(res.data.user._id, keyPair.privateKey, res.data.token);
     return res.data.user;
   }, []);
@@ -131,7 +154,6 @@ export function AuthProvider({ children }) {
       const privateKey = await unwrapPrivateKeyWithPassword(password, bundle);
       privateKeyRef.current = privateKey;
       setE2eeReady(true);
-      setNeedsUnlock(false);
       await saveLocalKeyCache(currentUser._id, privateKey, token || localStorage.getItem("wisp_token"));
       return true;
     } catch (err) {
@@ -147,21 +169,9 @@ export function AuthProvider({ children }) {
     setUser(res.data.user);
     privateKeyRef.current = keyPair.privateKey;
     setE2eeReady(true);
-    setNeedsUnlock(false);
-    setNeedsSetup(false);
     await saveLocalKeyCache(res.data.user._id, keyPair.privateKey, token || localStorage.getItem("wisp_token"));
     return true;
   }, []);
-
-  // Called by the "Unlock secure chats" prompt after a refresh, whichever
-  // case applies.
-  const unlockOrSetup = useCallback(
-    async (password) => {
-      if (needsSetup) return setupEncryption(user, password);
-      return unlockEncryption(user, password);
-    },
-    [needsSetup, user, unlockEncryption, setupEncryption]
-  );
 
   const logout = useCallback(async () => {
     try {
@@ -171,12 +181,11 @@ export function AuthProvider({ children }) {
     }
     if (user?._id) localStorage.removeItem(cacheKeyName(user._id));
     if (user?._id) clearMessageCache(user._id);
+    clearDecryptCache();
     localStorage.removeItem("wisp_token");
     setUser(null);
     privateKeyRef.current = null;
     setE2eeReady(false);
-    setNeedsUnlock(false);
-    setNeedsSetup(false);
   }, [user]);
 
   // ---------------- E2EE message helpers ----------------
@@ -229,6 +238,8 @@ export function AuthProvider({ children }) {
     async (message) => {
       if (!message?.encrypted) return { text: message?.text || "", locked: false };
       if (!privateKeyRef.current || !user) return { text: "", locked: true };
+      const hit = peekDecrypted(message);
+      if (hit) return hit;
       const myEntry = (message.keys || []).find((k) => String(k.user?._id || k.user) === String(user._id));
       const senderPub = message.sender?.e2ee?.publicKeyJwk;
       if (!myEntry || !senderPub) return { text: "", locked: true };
@@ -248,7 +259,9 @@ export function AuthProvider({ children }) {
       // otherwise decrypt just fine.
       try {
         const text = message.iv && message.text ? await decryptTextWithKey(mk, message.text, message.iv) : "";
-        return { text, locked: false, mk };
+        const result = { text, locked: false, mk };
+        storeDecrypted(message, result);
+        return result;
       } catch (err) {
         logError("e2ee decrypt", err);
         return { text: "", locked: false, mk };
@@ -265,15 +278,14 @@ export function AuthProvider({ children }) {
     user,
     setUser,
     loading,
+    sessionNotice,
+    clearSessionNotice: () => setSessionNotice(""),
     login,
     register,
     logout,
     e2ee: {
       ready: e2eeReady,
-      needsUnlock,
-      needsSetup,
       myPublicKeyJwk: user?.e2ee?.publicKeyJwk || null,
-      unlock: unlockOrSetup,
       prepareEnvelope,
       encryptOutgoingText,
       encryptOutgoingBytes,

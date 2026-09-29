@@ -212,15 +212,78 @@
   min-height: 0;
   height: 100%;
   overflow-x: hidden;
-  padding: 0 5%;
   overscroll-behavior-y: contain;
-  /* NOTE: no display:flex / gap / scroll-behavior:smooth here — this element
-     is the react-virtuoso scroller, which positions rows itself and does its
-     own smooth scrolling. */
+  -webkit-overflow-scrolling: touch;
+  /* NOTE: no display:flex / gap / padding / scroll-behavior:smooth here. This
+     element is the react-virtuoso scroller: it lays rows out with absolute
+     positioning, so horizontal padding on it would shift the whole list right
+     and clip every bubble's right edge (the bug in the screenshots). The side
+     gutter lives on each row (.chat-gutter) instead. */
 }
 
+.chat-gutter,
 .message-row-item {
   width: 100%;
+  box-sizing: border-box;
+  padding-left: clamp(10px, 4%, 56px);
+  padding-right: clamp(10px, 4%, 56px);
+}
+
+.chat-footer {
+  padding-bottom: 6px;
+}
+
+/* Rows are laid out by the virtualizer — keep each one an isolated layout
+   context so a bubble changing size doesn't force a re-layout of the rest. */
+.message-row-item {
+  contain: layout style;
+}
+
+.floating-day {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 12;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+}
+
+.floating-day.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.floating-day span {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: var(--radius-round);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, .25));
+}
+
+.scroll-bottom-badge {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--wisp);
+  color: #06120d;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .message-list-inner {
@@ -247,9 +310,6 @@
   display: flex;
   justify-content: center;
   margin: 16px 0 10px;
-  position: sticky;
-  top: 6px;
-  z-index: 10;
   pointer-events: none;
 }
 
@@ -1366,4 +1426,3 @@
     display: none;
   }
 }
-

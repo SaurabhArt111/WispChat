@@ -350,3 +350,18 @@
     display: none;
   }
 }
+
+.auth-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(70, 200, 150, 0.1);
+  border: 1px solid var(--border-glow, rgba(70, 200, 150, 0.35));
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.auth-notice svg { color: var(--wisp); flex-shrink: 0; margin-top: 1px; }

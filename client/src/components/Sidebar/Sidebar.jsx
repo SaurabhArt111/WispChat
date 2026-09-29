@@ -6,7 +6,6 @@ import Avatar from "../common/Avatar";
 import ConversationItem from "./ConversationItem";
 import NewChatModal from "./NewChatModal";
 import NewGroupModal from "./NewGroupModal";
-import ProfileModal from "./ProfileModal";
 import FriendRequestsModal from "./FriendRequestsModal";
 import MobileMoreButton from "./MobileMoreButton";
 import client from "../../api/client";
@@ -17,6 +16,7 @@ import {
   UsersIcon,
   UserPlusIcon,
   PlusIcon,
+  NewChatIcon,
   EditIcon,
   SparklesIcon,
   ArchiveIcon,
@@ -28,7 +28,7 @@ const PILL_REVEAL = 26; // px of downward drag needed to reveal it
 const COLLAPSE_AT = PILL_SPACE * 0.5; // drag back up past this (while revealed) to hide it again
 const PULL_MAX = 90;
 
-export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenMore }) {
+export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenMore, onOpenProfile }) {
   const { user, logout } = useAuth();
   const { conversations, activeId, openConversation, loadingConversations } = useChat();
   const { openMenu } = useContextMenu();
@@ -36,7 +36,6 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
   const [filter, setFilter] = useState("all");
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
   // Whether the "Archived" pill is currently pinned above the list. Unlike
@@ -243,7 +242,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
         {
           label: "Profile & settings",
           icon: <EditIcon size={15} />,
-          onClick: () => setShowProfile(true),
+          onClick: onOpenProfile,
         },
         {
           label: "Friend requests" + (requestCount ? ` (${requestCount})` : ""),
@@ -284,7 +283,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
             <UsersIcon size={18} />
           </button>
           <button
-            className="icon-btn primary-icon-btn"
+            className="icon-btn primary-icon-btn new-chat-topbtn"
             title="New conversation"
             onClick={() => (onOpenNewChat ? onOpenNewChat() : setShowNewChat(true))}
           >
@@ -429,6 +428,16 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
         </div>
       </div>
 
+      {/* Floating "new chat" button — phones only (the topbar + is hidden there) */}
+      <button
+        className="new-chat-fab"
+        title="New chat"
+        aria-label="New chat"
+        onClick={() => (onOpenNewChat ? onOpenNewChat() : setShowNewChat(true))}
+      >
+        <NewChatIcon size={26} />
+      </button>
+
       {showNewChat && (
         <NewChatModal
           onClose={() => setShowNewChat(false)}
@@ -439,7 +448,6 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
         />
       )}
       {showNewGroup && <NewGroupModal onClose={() => setShowNewGroup(false)} />}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {showRequests && (
         <FriendRequestsModal
           onClose={() => setShowRequests(false)}

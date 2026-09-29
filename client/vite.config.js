@@ -10,7 +10,12 @@ export default defineConfig({
       // build output and lets us layer on a few runtimeCaching rules for
       // API calls and uploaded media, without hand-writing a service worker.
       strategy: "generateSW",
-      registerType: "autoUpdate",
+      // "prompt" (not "autoUpdate"): only in prompt mode does the generated
+      // registration code fire onNeedRefresh when a new version is waiting,
+      // which is what drives the in-app "Update available" popup
+      // (components/common/PwaManager.jsx). With "autoUpdate" that callback
+      // never runs, so people never saw an update notice.
+      registerType: "prompt",
       // We call the registration hook ourselves (see src/pwa.js) so we can
       // show a custom "update available" toast instead of the plugin's
       // default silent/prompt behavior.

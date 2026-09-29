@@ -7,12 +7,13 @@ import {
   EyeIcon,
   EyeOffIcon,
   AlertIcon,
+  LockIcon,
 } from "../components/common/Icons";
 import "../styles/auth.css";
 
 export default function AuthPage() {
   const [mode, setMode] = useState("login");
-  const { login, register } = useAuth();
+  const { login, register, sessionNotice, clearSessionNotice } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -45,7 +46,7 @@ export default function AuthPage() {
       }
       navigate("/");
     } catch (err) {
-      setError(err?.response?.data?.message || "Something went wrong. Please check your details.");
+      setError(err?.response?.data?.message || err?.message || "Something went wrong. Please check your details.");
     } finally {
       setBusy(false);
     }
@@ -108,7 +109,14 @@ export default function AuthPage() {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="auth-form">
+          {sessionNotice && (
+            <div className="auth-notice" role="status">
+              <LockIcon size={15} />
+              <span>{sessionNotice}</span>
+            </div>
+          )}
+
+          <form onSubmit={(e) => { clearSessionNotice(); handleSubmit(e); }} className="auth-form">
             {mode === "login" ? (
               <div className="field">
                 <label>Username or email</label>

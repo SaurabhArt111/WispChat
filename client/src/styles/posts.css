@@ -221,17 +221,18 @@
 
 .post-upload-caption {
   width: 100%;
-  margin-top: 8px;
+  margin-top: 12px;
   resize: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
   background: var(--surface-3);
-  border-radius: 12px;
   border: 1px solid var(--border);
-  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--text);
+  outline: none;
 }
 
 /* Viewer */
@@ -260,12 +261,39 @@
 }
 
 .post-viewer-media {
+  position: relative;
   flex: 1.4;
   min-width: 0;
   background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.post-viewer-heart-burst {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, .45));
+  animation: post-viewer-heart-burst 850ms ease-out both;
+}
+
+@keyframes post-viewer-heart-burst {
+  0% { opacity: 0; transform: scale(.2) rotate(-12deg); }
+  28% { opacity: 1; transform: scale(1.12) rotate(0); }
+  55% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-viewer-heart-burst {
+    animation-duration: 1ms;
+  }
 }
 
 .post-viewer-media img, .post-viewer-media video {
@@ -370,8 +398,16 @@
 }
 
 .post-viewer-form .input {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
   flex: 1;
-  min-width: 0;
+  font-size: 13.5px;
+  color: var(--text);
+  outline: none;
 }
 
 @media (max-width: 768px) {
@@ -397,4 +433,64 @@
   .post-thumb-overlay {
     display: none;
   }
+}
+
+/* Post editing */
+.post-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.post-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.post-edit-spacer {
+  flex: 1;
+}
+
+.post-edited-tag {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.post-comment-edit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.post-comment-edit .input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+}
+
+/* Explorer / posts skeletons */
+.post-skel-tile {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+}
+
+.explorer-skeleton-grid {
+  overflow: hidden;
+}
+
+.posts-skeleton {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  margin-top: 12px;
+}
+
+.posts-skeleton .skeleton {
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
 }

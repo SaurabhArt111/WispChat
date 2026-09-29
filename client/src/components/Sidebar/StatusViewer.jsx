@@ -131,14 +131,13 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     pausedAtRef.current = 0;
     startRef.current = null;
     setDragY(0);
-    if (item?.kind === "video") return; // driven by the <video> timeupdate instead
+  }, [index, item?.kind]);
+
+  useEffect(() => {
+    if (item?.kind === "video" || paused) return; // video progress is driven by timeupdate
     const duration = IMAGE_DURATION;
 
     function tick(ts) {
-      if (paused) {
-        rafRef.current = requestAnimationFrame(tick);
-        return;
-      }
       if (startRef.current === null) startRef.current = ts - pausedAtRef.current;
       const elapsed = ts - startRef.current;
       const pct = Math.min(1, elapsed / duration);
@@ -151,13 +150,13 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     }
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, item?.kind]);
+  }, [index, item?.kind, paused]);
 
   useEffect(() => {
     if (paused) {
-      cancelAnimationFrame(rafRef.current);
-      pausedAtRef.current = progress * IMAGE_DURATION;
+      pausedAtRef.current = startRef.current === null
+        ? progress * IMAGE_DURATION
+        : performance.now() - startRef.current;
       startRef.current = null;
       videoRef.current?.pause();
     } else {
@@ -252,7 +251,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
               onEnded={goNext}
             />
           ) : (
-            <SafeImage src={mediaUrl(item.url)} alt="" className="status-media" />
+            <SafeImage src={mediaUrl(item.url)} alt="" className="status-media" draggable={false} />
           )}
           {item.caption && <div className="status-caption">{item.caption}</div>}
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 import { useStatus } from "../context/StatusContext";
 import AsideRail from "../components/Sidebar/AsideRail";
@@ -13,6 +14,7 @@ import StatusPanel from "../components/Sidebar/StatusPanel";
 import MediaStoragePanel from "../components/Sidebar/MediaStoragePanel";
 import BroadcastPanel from "../components/Sidebar/BroadcastPanel";
 import CallsPanel from "../components/Sidebar/CallsPanel";
+import MyProfilePage from "../components/Profile/MyProfilePage";
 import ProfileModal from "../components/Sidebar/ProfileModal";
 import SettingsModal from "../components/Sidebar/SettingsModal";
 import ChatWindow from "../components/Chat/ChatWindow";
@@ -28,16 +30,17 @@ import "../styles/layout.css";
 // fallback for any path that doesn't match one of these. "Archived" is
 // deliberately left out — it stays a local panel toggle rather than a
 // route, reached only from the link inside the chat list itself.
-const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore"];
+const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "profile"];
 
 export default function ChatApp() {
+  const { user } = useAuth();
   const { activeId, activeConversation, infoRequest } = useChat();
   const { hasUnread } = useStatus();
   const location = useLocation();
   const navigate = useNavigate();
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -45,6 +48,7 @@ export default function ChatApp() {
 
   const routeSegment = location.pathname.split("/")[1] || "";
   const view = ROUTED_VIEWS.includes(routeSegment) ? routeSegment : "chats";
+  const isProfilePage = routeSegment === "profile";
   const showSettings = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
   // Single source of truth for which sidebar-column panel is on screen.
   // Deriving it once here (rather than checking `showArchived` and `view`
@@ -76,6 +80,16 @@ export default function ChatApp() {
     navigate(settingsReturnRef.current || "/");
   }
 
+  function openProfile() {
+    setShowArchived(false);
+    setShowContactInfo(false);
+    navigate("/profile");
+  }
+
+  function openProfileEditor() {
+    setShowProfileEditor(true);
+  }
+
   useEffect(() => {
     setShowContactInfo(false);
   }, [activeId]);
@@ -92,12 +106,12 @@ export default function ChatApp() {
   }, [infoRequest, activeId]);
 
   return (
-    <div className={`app-shell ${activeId ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""}`}>
+    <div className={`app-shell ${activeId && !isProfilePage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""}`}>
       <ConnectionBanner />
       <AsideRail
         view={activePanel}
         onChangeView={changeView}
-        onOpenProfile={() => setShowProfile(true)}
+        onOpenProfile={openProfile}
         onOpenSettings={openSettings}
         hasUnreadStatus={hasUnread}
       />
@@ -108,6 +122,7 @@ export default function ChatApp() {
           onOpenNewGroup={() => setShowNewGroup(true)}
           onOpenArchived={() => setShowArchived(true)}
           onOpenMore={() => setShowMoreMenu(true)}
+          onOpenProfile={openProfile}
         />
       )}
       {activePanel === "archived" && (
@@ -121,7 +136,13 @@ export default function ChatApp() {
       {activePanel === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
 
       <div className="app-main">
-        {activeId ? (
+        {isProfilePage ? (
+          <MyProfilePage
+            user={user}
+            onEditProfile={openProfileEditor}
+            onOpenSettings={openSettings}
+          />
+        ) : activeId ? (
           <ChatWindow
             key={activeId}
             onOpenContactInfo={() => setShowContactInfo((open) => !open)}
@@ -186,13 +207,13 @@ export default function ChatApp() {
         />
       )}
       {showNewGroup && <NewGroupModal onClose={() => setShowNewGroup(false)} />}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showProfileEditor && <ProfileModal onClose={() => setShowProfileEditor(false)} />}
       {showSettings && (
         <SettingsModal
           onClose={closeSettings}
           onOpenProfile={() => {
             closeSettings();
-            setShowProfile(true);
+            openProfileEditor();
           }}
         />
       )}
