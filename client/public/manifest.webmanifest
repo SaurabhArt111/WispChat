@@ -29,7 +29,32 @@
     {
       "name": "New conversation",
       "url": "/?action=new-chat",
-      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+      "icons": [{ "src": "/icons/shortcut-message-square-plus.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "New group",
+      "url": "/?action=new-group",
+      "icons": [{ "src": "/icons/shortcut-users.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Status",
+      "url": "/status",
+      "icons": [{ "src": "/icons/shortcut-circle.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Explore",
+      "url": "/explore",
+      "icons": [{ "src": "/icons/shortcut-compass.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Recent user chats",
+      "url": "/",
+      "icons": [{ "src": "/icons/shortcut-message-circle.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Calls",
+      "url": "/calls",
+      "icons": [{ "src": "/icons/shortcut-phone.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]
 }

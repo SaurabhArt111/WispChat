@@ -96,6 +96,15 @@ export default function ChatApp() {
     setShowContactInfo(false);
   }, [activeId]);
 
+  useEffect(() => {
+    const action = new URLSearchParams(location.search).get("action");
+    if (action === "new-chat") setShowNewChat(true);
+    if (action === "new-group") setShowNewGroup(true);
+    if (action === "new-chat" || action === "new-group") {
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
+
   // Long-press → "View info" (see ChatContext.viewConversationInfo). Declared
   // after the reset effect above so that, when the chat switch and the
   // request land in the same commit, opening wins over resetting.
