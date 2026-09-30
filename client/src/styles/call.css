@@ -195,15 +195,24 @@
 }
 
 @media (max-width: 640px) {
+  .call-remote-video {
+    object-fit: contain;
+  }
+
+  .call-topbar {
+    padding-top: calc(48px + env(safe-area-inset-top));
+  }
+
   .call-local-video {
     width: 84px;
     height: 116px;
-    bottom: 120px;
-    right: 14px;
+    bottom: calc(112px + env(safe-area-inset-bottom));
+    right: calc(14px + env(safe-area-inset-right));
   }
 
   .call-controls {
     gap: 16px;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom));
   }
 }
 

@@ -145,7 +145,10 @@ Server (`server/.env`)
 | `JWT_SECRET` | Long random string for signing sessions |
 | `CLIENT_ORIGIN` | Comma-separated allowed browser origins |
 | `NODE_ENV` | `production` makes CORS strict (dev auto-allows localhost/LAN) |
+| `UPLOAD_DIR` | Directory for uploaded media; point this at persistent storage in production (for Render, e.g. `/var/data/uploads` on a disk mounted at `/var/data`) |
 | `TURN_URLS`, `TURN_SECRET` *or* `TURN_USERNAME` + `TURN_CREDENTIAL` | Optional TURN relay for calls |
+
+On Render, attach a persistent disk to the server service (for example, mount it at `/var/data`) and set `UPLOAD_DIR=/var/data/uploads`. Without a persistent disk or external object storage, uploaded files on Render's filesystem disappear when the service restarts or redeploys. Previously lost files cannot be restored by changing this setting; they must be uploaded again.
 
 Client (`client/.env`): `VITE_BACKEND_URL` — origin of the API/socket server.
 

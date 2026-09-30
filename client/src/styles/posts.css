@@ -70,6 +70,13 @@
   display: block;
 }
 
+.post-thumb > .media-broken,
+.post-feed-media > .media-broken,
+.post-viewer-media > .media-broken {
+  width: 100%;
+  height: 100%;
+}
+
 .post-thumb-badge {
   position: absolute;
   top: 6px;

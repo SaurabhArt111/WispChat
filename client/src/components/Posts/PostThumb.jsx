@@ -1,4 +1,5 @@
 import { mediaUrl } from "../../api/config";
+import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { HeartIcon, CommentIcon, PlayIcon } from "../common/Icons";
 
 // Square grid tile used by Explorer, profile grids and the user-posts
@@ -8,9 +9,9 @@ export default function PostThumb({ post, onClick, showAuthor = false }) {
   return (
     <button type="button" className="post-thumb" onClick={() => onClick?.(post)}>
       {post.kind === "video" ? (
-        <video src={mediaUrl(post.url)} preload="metadata" muted playsInline />
+        <SafeVideo src={mediaUrl(post.url)} preload="metadata" muted playsInline />
       ) : (
-        <img src={mediaUrl(post.url)} alt={post.caption || "Post"} loading="lazy" />
+        <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} loading="lazy" />
       )}
       {post.kind === "video" && (
         <span className="post-thumb-badge">

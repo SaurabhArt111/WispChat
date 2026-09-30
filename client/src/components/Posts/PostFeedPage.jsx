@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
+import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { mediaUrl } from "../../api/config";
 import { addPostComment, deletePost, deletePostComment, updatePost, updatePostComment } from "../../api/posts";
 import usePostLike from "../../hooks/usePostLike";
@@ -246,7 +247,7 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
       <div className="post-feed-media" {...doubleTap}>
         {isNear ? (
           post.kind === "video" ? (
-            <video
+            <SafeVideo
               ref={videoRef}
               src={mediaUrl(post.url)}
               loop
@@ -255,7 +256,7 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
               preload={isActive ? "auto" : "metadata"}
             />
           ) : (
-            <img src={mediaUrl(post.url)} alt={post.caption || "Post"} draggable={false} />
+            <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} draggable={false} />
           )
         ) : (
           <div className="post-feed-placeholder" />

@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOAD_DIR = path.join(__dirname, "..", "..", "uploads");
+export const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, "..", "..", "uploads"));
 
 // Media library structure: instead of dumping every upload flat into
 // /uploads, files are sorted into type-specific subfolders. This keeps the

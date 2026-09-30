@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
+import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { mediaUrl } from "../../api/config";
 import { addPostComment, deletePost, deletePostComment, updatePost, updatePostComment } from "../../api/posts";
 import usePostLike from "../../hooks/usePostLike";
@@ -211,9 +212,9 @@ export default function PostViewerModal({
               <img src={previewUrl} alt="New media preview" />
             )
           ) : post.kind === "video" ? (
-            <video src={mediaUrl(post.url)} controls autoPlay playsInline />
+            <SafeVideo src={mediaUrl(post.url)} controls autoPlay playsInline />
           ) : (
-            <img src={mediaUrl(post.url)} alt={post.caption || "Post"} />
+            <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} />
           )}
         </div>
 

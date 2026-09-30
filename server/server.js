@@ -9,6 +9,7 @@ import { Server } from "socket.io";
 
 import { connectDB } from "./src/config/db.js";
 import { initSockets } from "./src/sockets/index.js";
+import { UPLOAD_DIR } from "./src/middleware/upload.js";
 
 import authRoutes from "./src/routes/auth.routes.js";
 import userRoutes from "./src/routes/user.routes.js";
@@ -79,7 +80,7 @@ app.use("/api", (req, res, next) => {
 // requests so video/audio can stream and seek).
 app.use(
   "/uploads",
-  express.static(path.join(__dirname, "uploads"), {
+  express.static(UPLOAD_DIR, {
     maxAge: "30d",
     immutable: true,
     acceptRanges: true,
