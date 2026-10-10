@@ -50,7 +50,7 @@
 }
 
 /* Mobile responsive layout */
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .app-shell {
     grid-template-columns: 100%;
   }
@@ -204,7 +204,7 @@
   animation: pulseGlow 1.4s ease-in-out infinite;
 }
 /* Mobile post feed uses the whole screen (no bottom nav). */
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .app-shell.is-post-route:not(.has-active-chat) .app-main {
     padding-bottom: 0;
   }

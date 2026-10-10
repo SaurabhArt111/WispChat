@@ -183,25 +183,32 @@ export async function updateAdmins(req, res) {
 
 export async function toggleConvoFlag(req, res) {
   const { id } = req.params;
-  const { flag } = req.body; // 'mute' | 'pin' | 'archive'
+  // `value` (optional boolean) sets the flag explicitly instead of toggling,
+  // so optimistic UI + "Undo" can never get out of sync with the server.
+  const { flag, value } = req.body; // flag: 'mute' | 'pin' | 'archive'
   const field = { mute: "mutedBy", pin: "pinnedBy", archive: "archivedBy" }[flag];
   if (!field) return res.status(400).json({ message: "Invalid flag" });
 
   const conv = await Conversation.findById(id);
   if (!conv) return res.status(404).json({ message: "Not found" });
+  if (!conv.participants.some((p) => String(p) === String(req.user._id))) {
+    return res.status(403).json({ message: "Not a participant" });
+  }
 
   const idx = conv[field].findIndex((u) => String(u) === String(req.user._id));
-  if (idx >= 0) conv[field].splice(idx, 1);
-  else conv[field].push(req.user._id);
-  await conv.save();
+  const has = idx >= 0;
+  const want = typeof value === "boolean" ? value : !has;
+  if (want && !has) conv[field].push(req.user._id);
+  else if (!want && has) conv[field].splice(idx, 1);
+  if (want !== has) await conv.save();
 
   // Mute/pin/archive are per-person — mirror them to that person's other
   // tabs and devices right away.
   emitToUsers(req.io, [req.user._id], "conversation:flags", {
     conversationId: id,
-    patch: { [{ mute: "muted", pin: "pinned", archive: "archived" }[flag]]: idx < 0 },
+    patch: { [{ mute: "muted", pin: "pinned", archive: "archived" }[flag]]: want },
   });
-  res.json({ [flag + "d"]: idx < 0 });
+  res.json({ [flag + "d"]: want });
 }
 
 export async function clearConversation(req, res) {

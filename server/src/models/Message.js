@@ -59,6 +59,27 @@ const messageSchema = new mongoose.Schema(
     ],
 
     replyTo: { type: mongoose.Schema.Types.ObjectId, ref: "Message", default: null },
+
+    // Set when this message is a comment/emoji reaction sent *to a status*
+    // (WhatsApp "reply to status"). It is a server-built snapshot of the
+    // slide that was replied to, so the quote keeps rendering in the chat
+    // after the 24 h status itself has expired and been deleted.
+    statusReply: {
+      type: new mongoose.Schema(
+        {
+          statusId: { type: mongoose.Schema.Types.ObjectId },
+          owner: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          kind: { type: String, enum: ["image", "video", "text"] },
+          url: { type: String, default: "" },
+          text: { type: String, default: "" },
+          bgColor: { type: String, default: "" },
+          caption: { type: String, default: "" },
+          isReaction: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
     // Present only on the system-style summary message logged when a
@@ -92,5 +113,10 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, clientId: 1 });
+// Call log lookups only ever touch the (few) call-summary messages.
+messageSchema.index(
+  { conversation: 1, createdAt: -1 },
+  { name: "call_logs", partialFilterExpression: { "callInfo.kind": { $exists: true } } }
+);
 
 export default mongoose.model("Message", messageSchema);

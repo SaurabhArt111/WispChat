@@ -79,7 +79,7 @@ function RenderedMenu({ menu, menuRef, closeMenu }) {
   // folder / View info / Delete chat) render as a bottom sheet over a dimmed
   // backdrop, like WhatsApp/Arattai. Menus with a reaction strip (message
   // bubbles) keep the floating popover anchored to the finger.
-  const asSheet = !menu.reactions && window.matchMedia?.("(max-width: 768px)").matches;
+  const asSheet = !menu.reactions && window.matchMedia?.("(max-width: 858px)").matches;
   if (asSheet) {
     return createPortal(
       <div className="ctx-sheet-backdrop">

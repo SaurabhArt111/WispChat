@@ -15,7 +15,7 @@ import {
   ExternalLinkIcon,
   InfoIcon,
 } from "../common/Icons";
-import { SafeAudio, SafeImage, SafeVideo } from "../common/SafeMedia";
+import { MediaUnavailable, SafeAudio, SafeImage, SafeVideo } from "../common/SafeMedia";
 
 function getExtensionBadge(name = "") {
   const ext = name.split(".").pop()?.toUpperCase().slice(0, 4) || "FILE";
@@ -91,7 +91,7 @@ function PendingGeneric({ a }) {
 function AttachmentImage({ message, a, onClick, onContextMenu, overlay }) {
   const { url, loading, error } = useDecryptedMediaUrl(message, a);
   if (loading) return <div className="image-grid-item attachment-decrypting"><LockIcon size={18} /></div>;
-  if (error || !url) return <div className="image-grid-item attachment-decrypt-error">Couldn't decrypt</div>;
+  if (error || !url) return <MediaUnavailable className="image-grid-item attachment-media-not-found" />;
   return (
     <div className="image-grid-item" onClick={() => onClick(url)} onContextMenu={(e) => onContextMenu(e, url)}>
       <SafeImage src={url} alt={a.name} loading="lazy" className="image-grid-img" />
@@ -107,7 +107,7 @@ function AttachmentVideo({ message, a, onContextMenu }) {
       {loading ? (
         <div className="attachment-decrypting"><LockIcon size={18} /> Decrypting…</div>
       ) : error || !url ? (
-        <div className="attachment-decrypt-error">Couldn't decrypt video</div>
+        <MediaUnavailable className="attachment-media-not-found" onContextMenu={(e) => onContextMenu(e, null)} />
       ) : (
         <SafeVideo src={url} controls className="attachment-video" />
       )}
@@ -122,7 +122,7 @@ function AttachmentAudio({ message, a }) {
       {loading ? (
         <div className="attachment-decrypting"><LockIcon size={14} /> Decrypting…</div>
       ) : error || !url ? (
-        <div className="attachment-decrypt-error">Couldn't decrypt audio</div>
+        <MediaUnavailable className="attachment-media-not-found" />
       ) : (
         <SafeAudio src={url} controls className="attachment-audio" />
       )}
@@ -148,7 +148,7 @@ function AttachmentFile({ message, a, onContextMenu }) {
             {a.name}
           </div>
           <div className="attachment-file-size">
-            {loading ? "Decrypting…" : error ? "Couldn't decrypt" : formatBytes(a.size)}
+            {loading ? "Decrypting…" : error ? "Media not found" : formatBytes(a.size)}
           </div>
         </div>
       </button>

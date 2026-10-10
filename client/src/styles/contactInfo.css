@@ -363,7 +363,7 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .contact-info-panel {
     width: 100% !important;
     /* Opens from the bottom, like the other mobile sheets/modules. */

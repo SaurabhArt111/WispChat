@@ -1,12 +1,13 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStatus } from "../../context/StatusContext";
 import { useToast } from "../../context/ToastContext";
 import ImageEditor from "../MediaComposer/ImageEditor";
+import StatusCropper from "../MediaComposer/StatusCropper";
 import ConfirmModal from "../common/ConfirmModal";
 import { kindFromMime } from "../../utils/fileKind";
 import { compressMedia, needsCompression, STATUS_IMAGE_TARGET_BYTES, STATUS_GIF_TARGET_BYTES } from "../../utils/mediaCompressor";
-import { CloseIcon, SendIcon } from "../common/Icons";
+import { CloseIcon, SendIcon, BackIcon } from "../common/Icons";
 import "../../styles/mediaComposer.css";
 import "../../styles/status.css";
 import "../../styles/e2ee.css";
@@ -23,12 +24,45 @@ export default function StatusEditor({ mode, file, onClose }) {
   const [compressState, setCompressState] = useState(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const editorRef = useRef(null);
+  const cropperRef = useRef({ ready: false, getBlob: async () => null });
+  const [cropped, setCropped] = useState(null); // { blob, url } once the 9:16 crop is confirmed
+  const [videoFit, setVideoFit] = useState("cover");
+  const [cropping, setCropping] = useState(false);
 
   const fileKind = file ? kindFromMime(file.type) : null;
   const fileUrl = useRef(file ? URL.createObjectURL(file) : null).current;
+  // Animated GIFs can't be cropped on a canvas without freezing them, so they
+  // skip the cropper and are letterboxed in the 9:16 viewer instead.
+  const needsCrop = mode !== "text" && fileKind === "image" && file?.type !== "image/gif";
+  const stage = mode === "text" ? "text" : needsCrop && !cropped ? "crop" : fileKind === "image" ? "edit" : "video";
+
+  const onCropperChange = useCallback((api) => {
+    cropperRef.current = api;
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (cropped?.url) URL.revokeObjectURL(cropped.url);
+    },
+    [cropped]
+  );
+
+  async function confirmCrop() {
+    if (cropping) return;
+    setCropping(true);
+    try {
+      const blob = await cropperRef.current.getBlob();
+      if (!blob) throw new Error("empty");
+      setCropped({ blob, url: URL.createObjectURL(blob) });
+    } catch {
+      showToast("Couldn't crop that photo — try another one", "danger");
+    } finally {
+      setCropping(false);
+    }
+  }
 
   function requestClose() {
-    if (text.trim() || caption.trim()) {
+    if (text.trim() || caption.trim() || cropped) {
       setShowDiscardConfirm(true);
     } else {
       onClose();
@@ -43,8 +77,13 @@ export default function StatusEditor({ mode, file, onClose }) {
         if (!text.trim()) return;
         await postTextStatus(text.trim(), bgColor);
       } else {
-        let blob = file;
-        let name = file.name;
+        if (stage === "crop") {
+          // Posting straight from the crop step: use the crop as-is.
+          await confirmCrop();
+          return;
+        }
+        let blob = cropped?.blob || file;
+        let name = cropped ? "status.jpg" : file.name;
         if (fileKind === "image" && editorRef.current?.isEdited()) {
           blob = await editorRef.current.getFinalBlob();
           name = "status.png";
@@ -59,7 +98,7 @@ export default function StatusEditor({ mode, file, onClose }) {
           blob = await compressMedia(blob, { targetBytes, onProgress: (p) => setCompressState((s) => ({ ...s, progress: p })) });
         }
         setCompressState(null);
-        await postMediaStatus(blob, name, caption.trim());
+        await postMediaStatus(blob, name, caption.trim(), fileKind === "video" ? videoFit : file?.type === "image/gif" ? "contain" : "cover");
       }
       showToast("Status posted");
       onClose();
@@ -81,7 +120,13 @@ export default function StatusEditor({ mode, file, onClose }) {
           <div className="media-composer-title">
             {mode === "text" ? "Text status" : "Add to status"}
           </div>
-          <div style={{ width: 36 }} />
+          {stage === "edit" && cropped ? (
+            <button className="icon-btn" onClick={() => setCropped(null)} title="Back to crop">
+              <BackIcon size={18} />
+            </button>
+          ) : (
+            <div style={{ width: 36 }} />
+          )}
         </div>
 
         <div className="media-composer-stage">
@@ -105,10 +150,18 @@ export default function StatusEditor({ mode, file, onClose }) {
                 autoFocus
               />
             </div>
-          ) : fileKind === "image" ? (
-            <ImageEditor key={fileUrl} ref={editorRef} originalUrl={fileUrl} />
+          ) : stage === "crop" ? (
+            <StatusCropper key={fileUrl} src={fileUrl} onChange={onCropperChange} />
+          ) : stage === "edit" ? (
+            <ImageEditor key={cropped?.url || fileUrl} ref={editorRef} originalUrl={cropped?.url || fileUrl} />
           ) : (
-            <video src={fileUrl} controls className="media-composer-preview-video" />
+            <div className="status-video-frame">
+              <video src={fileUrl} controls playsInline className="media-composer-preview-video" style={{ objectFit: videoFit }} />
+              <div className="status-cropper-modes video-fit" role="tablist" aria-label="Framing">
+                <button type="button" className={videoFit === "cover" ? "active" : ""} onClick={() => setVideoFit("cover")}>Fill 9:16</button>
+                <button type="button" className={videoFit === "contain" ? "active" : ""} onClick={() => setVideoFit("contain")}>Fit</button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -126,7 +179,7 @@ export default function StatusEditor({ mode, file, onClose }) {
         ) : null}
 
         <div className="media-composer-footer">
-          {mode !== "text" && (
+          {mode !== "text" && stage !== "crop" && (
             <input
               className="media-composer-caption"
               placeholder="Add a caption…"
@@ -136,11 +189,21 @@ export default function StatusEditor({ mode, file, onClose }) {
           )}
           <button
             className="btn btn-primary media-composer-send"
-            disabled={posting || (mode === "text" && !text.trim())}
-            onClick={handlePost}
+            disabled={posting || cropping || (mode === "text" && !text.trim())}
+            onClick={stage === "crop" ? confirmCrop : handlePost}
           >
-            <SendIcon size={16} />
-            <span>{posting ? (compressState ? "Optimizing…" : "Posting…") : "Share status"}</span>
+            {stage !== "crop" && <SendIcon size={16} />}
+            <span>
+              {stage === "crop"
+                ? cropping
+                  ? "Cropping…"
+                  : "Next"
+                : posting
+                ? compressState
+                  ? "Optimizing…"
+                  : "Posting…"
+                : "Share status"}
+            </span>
           </button>
         </div>
       </div>

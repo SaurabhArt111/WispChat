@@ -2,7 +2,7 @@
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .bottom-nav {
     display: flex;
     align-items: stretch;
@@ -130,7 +130,7 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
 
   .app-shell:not(.has-active-chat) .sidebar,
   .app-shell:not(.has-active-chat) .rail-panel {
@@ -145,7 +145,7 @@
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .mobile-more-btn {
     display: inline-flex;
   }

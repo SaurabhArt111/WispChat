@@ -59,6 +59,7 @@ export async function getFeed(req, res) {
       text: s.text,
       bgColor: s.bgColor,
       caption: s.caption,
+      fit: s.fit || "cover",
       createdAt: s.createdAt,
       // The footer counts people, while each person's row separately shows
       // how many times they viewed this slide.
@@ -89,7 +90,7 @@ export async function getFeed(req, res) {
 }
 
 export async function createStatus(req, res) {
-  const { kind, text, bgColor, caption } = req.body;
+  const { kind, text, bgColor, caption, fit } = req.body;
 
   const activeCount = await Status.countDocuments({ user: req.user._id, expiresAt: { $gt: new Date() } });
   if (activeCount >= MAX_ACTIVE_STATUSES) {
@@ -119,6 +120,7 @@ export async function createStatus(req, res) {
     url: `/uploads/${file.mediaFolder}/${file.filename}`,
     mimeType: file.mimetype,
     caption: (caption || "").trim(),
+    fit: fit === "contain" ? "contain" : "cover",
   });
   notifyStatusChange(req, req.user, { action: "created" });
   res.status(201).json({ status });

@@ -10,18 +10,20 @@ import Lightbox from "./Lightbox";
 import GroupInfoModal from "./GroupInfoModal";
 import StatusViewer from "../Sidebar/StatusViewer";
 import { formatLastSeen, formatBytes } from "../../utils/time";
-import { MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon, PhoneIcon, VideoIcon, LockIcon, AlertIcon } from "../common/Icons";
+import { MuteIcon, PinIcon, ArchiveIcon, UsersIcon, ImageIcon, FileIcon, LocateIcon, PhoneIcon, VideoIcon, LockIcon, AlertIcon, LinkIcon } from "../common/Icons";
 import { useCall } from "../../context/CallContext";
 import ConfirmModal from "../common/ConfirmModal";
 import ProfileHero from "../Profile/ProfileHero";
 import useCollapsingHero from "../../hooks/useCollapsingHero";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import PostsGrid from "../Posts/PostsGrid";
+import { extractUrls, hostOf } from "../../utils/linkify";
 import "../../styles/contactInfo.css";
 
 const TABS = [
   { id: "media", label: "Media" },
-  { id: "files", label: "Files" },
+  { id: "files", label: "Docs" },
+  { id: "links", label: "Links" },
 ];
 
 // Direct chats also get a "Posts" tab (that person's Explorer posts).
@@ -30,6 +32,45 @@ const POSTS_TAB = { id: "posts", label: "Posts" };
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 520;
 const DEFAULT_WIDTH = 320;
+
+// Links shared in this chat (Media · Docs · Links, like WhatsApp's "All media").
+// Message text is end-to-end encrypted, so links are pulled out by decrypting
+// the messages already loaded in this chat, on this device.
+function useChatLinks(messages) {
+  const { e2ee } = useAuth();
+  const [links, setLinks] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const found = [];
+      const seen = new Set();
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const m = messages[i];
+        if (!m.text || m.deletedForEveryone || m.callInfo) continue;
+        let text = m.text;
+        if (m.encrypted) {
+          try {
+            text = (await e2ee.decryptMessageText(m)).text;
+          } catch {
+            continue;
+          }
+        }
+        for (const href of extractUrls(text)) {
+          const key = `${m._id}|${href}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push({ href, messageId: m._id, createdAt: m.createdAt });
+        }
+      }
+      if (!cancelled) setLinks(found);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, e2ee.ready]);
+  return links;
+}
 
 export default function ContactInfoPanel({ conversation, onClose }) {
   const { user } = useAuth();
@@ -103,6 +144,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
         .filter((a) => a.kind === "image" || a.kind === "video"),
     [messages]
   );
+  const chatLinks = useChatLinks(messages);
   const files = useMemo(
     () =>
       messages
@@ -225,7 +267,7 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             >
               {t.label}
               {t.id !== "posts" && (
-                <span className="ci-tab-count">{t.id === "media" ? media.length : files.length}</span>
+                <span className="ci-tab-count">{t.id === "media" ? media.length : t.id === "links" ? chatLinks.length : files.length}</span>
               )}
             </button>
           ))}
@@ -266,10 +308,36 @@ export default function ContactInfoPanel({ conversation, onClose }) {
               )}
             </div>
           )
+        ) : tab === "links" ? (
+          chatLinks.length === 0 ? (
+            <div className="ci-empty">
+              <LinkIcon size={26} />
+              <p>No links shared yet.</p>
+            </div>
+          ) : (
+            <div className="ci-files-list">
+              {chatLinks.map((l) => (
+                <div key={`${l.messageId}-${l.href}`} className="ci-file-row">
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="ci-file-link">
+                    <div className="ci-file-icon">
+                      <LinkIcon size={16} />
+                    </div>
+                    <div className="ci-file-meta">
+                      <div className="ci-file-name">{hostOf(l.href)}</div>
+                      <div className="ci-file-size ci-link-url">{l.href}</div>
+                    </div>
+                  </a>
+                  <button className="ci-locate-btn static" title="Go to message" onClick={() => jumpToMessage(l.messageId)}>
+                    <LocateIcon size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         ) : files.length === 0 ? (
           <div className="ci-empty">
             <FileIcon size={26} />
-            <p>No shared files yet.</p>
+            <p>No shared docs yet.</p>
           </div>
         ) : (
           <div className="ci-files-list">

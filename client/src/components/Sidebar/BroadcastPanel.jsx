@@ -3,8 +3,8 @@ import client from "../../api/client";
 import { useChat } from "../../context/ChatContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
-import MobileMoreButton from "./MobileMoreButton";
-import { MegaphoneIcon, SendIcon, CheckIcon } from "../common/Icons";
+import PanelMenuButton from "./PanelMenuButton";
+import { MegaphoneIcon, SendIcon, CheckIcon, SettingsIcon } from "../common/Icons";
 import "../../styles/railPanels.css";
 
 /**
@@ -14,7 +14,7 @@ import "../../styles/railPanels.css";
  * group, and recipients can't see who else got it, matching how broadcast
  * lists work in most chat apps.
  */
-export default function BroadcastPanel({ onOpenMore }) {
+export default function BroadcastPanel({ onOpenSettings }) {
   const { startDirectConversation, sendMessage } = useChat();
   const { showToast } = useToast();
   const [contacts, setContacts] = useState([]);
@@ -42,7 +42,7 @@ export default function BroadcastPanel({ onOpenMore }) {
     for (const userId of selected) {
       try {
         const conv = await startDirectConversation(userId);
-        await sendMessage(conv._id, { text: text.trim() });
+        await sendMessage(conv._id, { text: text.trim(), conversation: conv });
         okCount++;
       } catch {
         // continue broadcasting to the rest even if one recipient fails
@@ -62,7 +62,18 @@ export default function BroadcastPanel({ onOpenMore }) {
     <aside className="rail-panel">
       <div className="rail-panel-header">
         <h2>Broadcast Lists</h2>
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+        <PanelMenuButton
+          title="Broadcast menu"
+          items={[
+            contacts.length > 0 && {
+              label: selected.size === contacts.length ? "Clear selection" : "Select all contacts",
+              icon: <CheckIcon size={15} />,
+              onClick: () => setSelected(selected.size === contacts.length ? new Set() : new Set(contacts.map((c) => c._id))),
+            },
+            { divider: true },
+            { label: "Settings", icon: <SettingsIcon size={15} />, onClick: onOpenSettings },
+          ]}
+        />
       </div>
 
       {contacts.length === 0 ? (

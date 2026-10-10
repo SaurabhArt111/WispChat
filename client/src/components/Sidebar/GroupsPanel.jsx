@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { useChat } from "../../context/ChatContext";
 import ConversationItem from "./ConversationItem";
 import NewGroupModal from "./NewGroupModal";
-import MobileMoreButton from "./MobileMoreButton";
-import { UsersIcon, PlusIcon } from "../common/Icons";
+import PanelMenuButton from "./PanelMenuButton";
+import { UsersIcon, PlusIcon, SettingsIcon } from "../common/Icons";
 import "../../styles/railPanels.css";
 
-export default function GroupsPanel({ onOpenMore }) {
+export default function GroupsPanel({ onOpenSettings }) {
   const { conversations, activeId, openConversation } = useChat();
   const [showNewGroup, setShowNewGroup] = useState(false);
   const groups = useMemo(
@@ -21,7 +21,14 @@ export default function GroupsPanel({ onOpenMore }) {
           <PlusIcon size={17} />
         </button>
         <h2>Groups</h2>
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+        <PanelMenuButton
+          title="Groups menu"
+          items={[
+            { label: "New group", icon: <PlusIcon size={15} />, onClick: () => setShowNewGroup(true) },
+            { divider: true },
+            { label: "Settings", icon: <SettingsIcon size={15} />, onClick: onOpenSettings },
+          ]}
+        />
       </div>
       {groups.length === 0 ? (
         <div className="rail-panel-empty">

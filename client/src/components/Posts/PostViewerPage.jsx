@@ -20,7 +20,7 @@ export default function PostViewerPage() {
   const { postId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const isDesktop = useMediaQuery("(min-width: 769px)");
+  const isDesktop = useMediaQuery("(min-width: 859px)");
 
   const seeded = location.state?.post?._id === postId ? location.state.post : null;
   const queueSeed = location.state?.post?._id === postId ? location.state.queue || [] : [];

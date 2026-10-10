@@ -86,11 +86,16 @@ export default function SettingsModal({ onClose, onOpenProfile }) {
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal settings-modal">
         <div className="modal-header">
-          {active && (
-            <button className="icon-btn btn-sm settings-back-btn" onClick={() => navigate("/settings")} title="Back">
-              <BackIcon size={18} />
-            </button>
-          )}
+          {/* Always present: inside a category it goes back to the list, on the
+              list itself it leaves Settings and returns to the previous page. */}
+          <button
+            className="icon-btn btn-sm settings-back-btn"
+            onClick={() => (active ? navigate("/settings") : onClose())}
+            title="Back"
+            aria-label="Back"
+          >
+            <BackIcon size={18} />
+          </button>
           <h2>{activeCategory ? activeCategory.label : "Settings"}</h2>
           <button className="icon-btn btn-sm" onClick={onClose} title="Close (Esc)">
             <CloseIcon size={18} />
@@ -271,6 +276,12 @@ function ChatsPanel() {
     return saved !== null ? saved === "true" : true;
   });
 
+  const [linkPreviews, setLinkPreviews] = useState(() => localStorage.getItem("wisp_link_previews") !== "false");
+  function handleToggleLinkPreviews(e) {
+    setLinkPreviews(e.target.checked);
+    localStorage.setItem("wisp_link_previews", String(e.target.checked));
+  }
+
   function handleSetWallpaper(value) {
     setCurrentWallpaper(value || "none");
     setGlobalWallpaper(value || "none");
@@ -299,6 +310,17 @@ function ChatsPanel() {
           <div className="preference-desc">
             When checked, Enter sends messages and Shift+Enter adds a new line. Uncheck to use
             Ctrl+Enter to send.
+          </div>
+        </div>
+      </label>
+
+      <label className="preference-toggle-row compact">
+        <input type="checkbox" checked={linkPreviews} onChange={handleToggleLinkPreviews} />
+        <div>
+          <div className="preference-title">Link previews</div>
+          <div className="preference-desc">
+            Show a title, description and picture under links. To build the card, Wisp's server fetches the page
+            (it sees the link, but never the rest of your message). Turn off to keep links fully private.
           </div>
         </div>
       </label>

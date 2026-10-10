@@ -50,11 +50,12 @@ export function StatusProvider({ children }) {
   );
 
   const postMediaStatus = useCallback(
-    async (blob, name, caption) => {
+    async (blob, name, caption, fit = "cover") => {
       const form = new FormData();
       form.append("kind", "media");
       form.append("file", blob, name);
       if (caption) form.append("caption", caption);
+      form.append("fit", fit);
       await client.post("/status", form, { headers: { "Content-Type": "multipart/form-data" } });
       await refreshFeed();
     },

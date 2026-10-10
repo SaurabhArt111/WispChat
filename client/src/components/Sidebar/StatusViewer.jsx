@@ -1,28 +1,47 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStatus } from "../../context/StatusContext";
+import { useChat } from "../../context/ChatContext";
+import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { mediaUrl } from "../../api/config";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
-import { CloseIcon, TrashIcon, EyeIcon } from "../common/Icons";
+import { CloseIcon, TrashIcon, EyeIcon, SendIcon, PauseIcon } from "../common/Icons";
 import { formatClock } from "../../utils/time";
 import "../../styles/status.css";
 
 const IMAGE_DURATION = 5000;
-const STATUS_REACTIONS = ["❤️", "😂", "😮", "🔥", "🎉", "👍"];
+// "Tap to send" grid (WhatsApp-style): one tap sends the emoji to the owner as
+// a reaction message that is tagged with this status.
+const QUICK_GRID = ["😍", "😂", "😮", "😢", "🤣", "😅", "🎉", "💯", "❤️", "🔥", "👍", "🙏"];
+const HOLD_MS = 200;
 
 export default function StatusViewer({ entry, isOwn, onClose }) {
   const { markViewed, deleteStatus, reactToStatus } = useStatus();
   const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [showViewers, setShowViewers] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [reactionTrayOpen, setReactionTrayOpen] = useState(false);
   const [reactionTrayOffset, setReactionTrayOffset] = useState(0);
+  const [showViewers, setShowViewers] = useState(false);
   const [sentReactions, setSentReactions] = useState({});
+  const [tapPaused, setTapPaused] = useState(false);
+  const [holding, setHolding] = useState(false); // finger/mouse held down on the status
+  const [replyOpen, setReplyOpen] = useState(false); // reply field focused / emoji panel open
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const holdTimerRef = useRef(null);
+  const holdActiveRef = useRef(false);
+  const replyOpenRef = useRef(false);
+  const { startDirectConversation, sendMessage } = useChat();
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  // The status is paused by ANY of: a tap-pause, a press-and-hold, typing a
+  // reply, or looking at the viewer list. It resumes only when none apply.
+  const paused = tapPaused || holding || replyOpen || showViewers;
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const pausedAtRef = useRef(0);
@@ -58,6 +77,29 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
       direction: null, // 'tap' | 'vertical' | 'horizontal' once decided
       startTime: performance.now(),
     };
+    // Press-and-hold pauses the status (and the video) until you let go —
+    // works for mouse, pen and touch since it rides on Pointer Events.
+    clearTimeout(holdTimerRef.current);
+    holdActiveRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+      const g = gestureRef.current;
+      if (!g || g.direction) return;
+      holdActiveRef.current = true;
+      setHolding(true);
+      try {
+        // Keep receiving pointerup even if the cursor leaves the status.
+        e.currentTarget?.setPointerCapture?.(g.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }, HOLD_MS);
+  }
+  function releaseHold() {
+    clearTimeout(holdTimerRef.current);
+    if (holdActiveRef.current) {
+      holdActiveRef.current = false;
+      setHolding(false);
+    }
   }
   function gestureMove(e) {
     const g = gestureRef.current;
@@ -66,9 +108,11 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     const dy = e.clientY - g.startY;
     if (!g.direction) {
       if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) return;
+      // Real movement → it's a swipe, not a hold.
+      releaseHold();
       if (Math.abs(dy) > Math.abs(dx)) {
         g.direction = "vertical";
-        setPaused(true);
+        setTapPaused(true);
         e.currentTarget.setPointerCapture?.(e.pointerId);
       } else {
         g.direction = "horizontal";
@@ -78,12 +122,8 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
       e.preventDefault();
       if (dy < 0) {
         const nextOffset = Math.min(110, Math.abs(dy));
-        if (isOwn) {
-          setShowViewers(true);
-        } else {
-          setReactionTrayOpen(true);
-          setReactionTrayOffset(nextOffset);
-        }
+        if (isOwn) setShowViewers(true);
+        else setReplyOpen(true);
         setDragY(0);
         return;
       }
@@ -103,8 +143,14 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
     const g = gestureRef.current;
     if (!g || g.pointerId !== e.pointerId) return;
     gestureRef.current = null;
+    // Let go after a hold → just resume; never treat it as a tap.
+    if (holdActiveRef.current) {
+      releaseHold();
+      return;
+    }
+    clearTimeout(holdTimerRef.current);
     if (g.direction === "vertical") {
-      setPaused(false);
+      setTapPaused(false);
       if (reactionTrayOpen) {
         const shouldKeepOpen = reactionTrayOffset > 30;
         if (isOwn && shouldKeepOpen) setShowViewers(true);
@@ -120,13 +166,19 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
       return;
     }
     if (g.direction === null) {
+      // A tap while the reply field/emoji panel is open just closes it.
+      if (replyOpenRef.current) {
+        setReplyOpen(false);
+        document.activeElement?.blur?.();
+        return;
+      }
       const rect = contentRef.current?.getBoundingClientRect();
       if (rect) {
         const relX = (e.clientX - rect.left) / rect.width;
         if (relX < 0.35) goPrev();
         else if (relX > 0.65) goNext();
         else {
-          setPaused((p) => !p);
+          setTapPaused((p) => !p);
           if (isOwn) setShowViewers(true);
         }
       }
@@ -135,29 +187,92 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
   function gestureCancel() {
     const g = gestureRef.current;
     gestureRef.current = null;
+    releaseHold();
     if (g?.direction === "vertical") {
-      setPaused(false);
+      setTapPaused(false);
       setDragY(0);
       setReactionTrayOffset(0);
       if (reactionTrayOpen && reactionTrayOffset < 30) setReactionTrayOpen(false);
     }
   }
 
+  // Comments and reactions are delivered as normal (end-to-end encrypted)
+  // chat messages from you to the status owner, tagged with the status — the
+  // owner sees them in the chat with a quote of the status, like WhatsApp.
+  async function sendStatusMessage(text, isReaction) {
+    const conversation = await startDirectConversation(entry.user._id);
+    await sendMessage(conversation._id, {
+      text,
+      conversation,
+      selfPreview: user,
+      statusReplyId: item._id,
+      statusReplyIsReaction: isReaction,
+    });
+  }
+
   async function handleReactionPick(emoji) {
     try {
       await reactToStatus(item._id, emoji);
     } catch {
+      showToast("Couldn't send your reaction", "danger");
       return;
     }
     setSentReactions((current) => ({ ...current, [item._id]: emoji }));
-    setPaused(true);
-    setReactionTrayOpen(false);
-    setReactionTrayOffset(0);
+    setReplyOpen(false);
+    document.activeElement?.blur?.();
+    try {
+      await sendStatusMessage(emoji, true);
+      showToast("Reaction sent");
+    } catch {
+      showToast("Reacted, but the chat message didn't send", "danger");
+    }
+  }
+
+  async function sendReply(e) {
+    e.preventDefault();
+    const text = replyText.trim();
+    if (!text || sendingReply) return;
+    setSendingReply(true);
+    try {
+      await sendStatusMessage(text, false);
+      setReplyText("");
+      setReplyOpen(false);
+      document.activeElement?.blur?.();
+      showToast("Reply sent");
+    } catch {
+      showToast("Couldn't send your reply", "danger");
+    } finally {
+      setSendingReply(false);
+    }
   }
 
   function handleWheel(e) {
     if (e.deltaY > 24) onClose();
   }
+
+  replyOpenRef.current = replyOpen;
+
+  // Safety net: if the pointer is released/cancelled anywhere (or the window
+  // loses focus) never leave the status stuck paused.
+  useEffect(() => {
+    const release = () => releaseHold();
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", release);
+      clearTimeout(holdTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // New slide → drop any half-typed reply state.
+  useEffect(() => {
+    setReplyOpen(false);
+    setReplyText("");
+  }, [item?._id]);
 
   useEffect(() => {
     if (item && !isOwn) markViewed(item._id);
@@ -166,9 +281,21 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === "Escape") onClose();
+      const typing = e.target?.tagName === "INPUT" || e.target?.tagName === "TEXTAREA";
+      if (e.key === "Escape") {
+        if (replyOpenRef.current) {
+          setReplyOpen(false);
+          document.activeElement?.blur?.();
+        } else onClose();
+        return;
+      }
+      if (typing) return;
       if (e.key === "ArrowRight") goNext();
       if (e.key === "ArrowLeft") goPrev();
+      if (e.key === " ") {
+        e.preventDefault();
+        setTapPaused((p) => !p);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -243,7 +370,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
   return createPortal(
     <div className="status-viewer-overlay" onWheel={handleWheel}>
       <div
-        className="status-viewer-stage"
+        className={`status-viewer-stage ${holding ? "holding" : ""} ${paused ? "is-paused" : ""}`}
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           opacity: dragY ? Math.max(0.4, 1 - dragY / 260) : 1,
@@ -260,6 +387,12 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
             </div>
           ))}
         </div>
+
+        {holding && (
+          <div className="status-hold-badge" aria-live="polite">
+            <PauseIcon size={14} /> Paused
+          </div>
+        )}
 
         <div className="status-viewer-header">
           <Avatar user={entry.user} size={36} />
@@ -286,6 +419,7 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
           onPointerMove={gestureMove}
           onPointerUp={gestureEnd}
           onPointerCancel={gestureCancel}
+          onContextMenu={(e) => e.preventDefault()}
           style={{ touchAction: "pan-x" }}
         >
           {item.kind === "text" ? (
@@ -297,13 +431,14 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
               ref={videoRef}
               src={mediaUrl(item.url)}
               className="status-media"
+              style={{ objectFit: item.fit === "contain" ? "contain" : "cover" }}
               autoPlay
               playsInline
               onTimeUpdate={onVideoTimeUpdate}
               onEnded={goNext}
             />
           ) : (
-            <SafeImage src={mediaUrl(item.url)} alt="" className="status-media" draggable={false} />
+            <SafeImage src={mediaUrl(item.url)} alt="" className="status-media" style={{ objectFit: item.fit === "contain" ? "contain" : "cover" }} draggable={false} />
           )}
           {item.caption && <div className="status-caption">{item.caption}</div>}
           {!isOwn && myReaction && (
@@ -358,16 +493,39 @@ export default function StatusViewer({ entry, isOwn, onClose }) {
         )}
 
         {!isOwn && (
-          <div
-            className={`status-reaction-bar ${reactionTrayOpen ? "open" : ""}`}
-            style={{ transform: `translate(-50%, ${reactionTrayOpen ? 0 : 120 + reactionTrayOffset}px)` }}
-          >
-            <div className="status-reaction-handle" />
-            {STATUS_REACTIONS.map((emoji) => (
-              <button key={emoji} className="status-reaction-pill" onClick={() => handleReactionPick(emoji)}>
-                {emoji}
-              </button>
-            ))}
+          <div className={`status-reply ${replyOpen ? "open" : ""}`} onPointerDown={(e) => e.stopPropagation()}>
+            {replyOpen && (
+              <div className="status-quick-panel">
+                <div className="status-quick-title">Tap to send</div>
+                <div className="status-quick-grid">
+                  {QUICK_GRID.map((emoji) => (
+                    <button key={emoji} type="button" onClick={() => handleReactionPick(emoji)} aria-label={`Send ${emoji}`}>
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <form className="status-reply-form" onSubmit={sendReply}>
+              <input
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onFocus={() => setReplyOpen(true)}
+                placeholder={`Reply to ${entry.user.displayName}…`}
+                maxLength={500}
+                enterKeyHint="send"
+                aria-label="Reply to status"
+              />
+              {replyText.trim() ? (
+                <button type="submit" className="status-reply-send" disabled={sendingReply} aria-label="Send reply">
+                  <SendIcon size={17} />
+                </button>
+              ) : (
+                <button type="button" className="status-reply-emoji" onClick={() => setReplyOpen((o) => !o)} aria-label="Quick reactions">
+                  😊
+                </button>
+              )}
+            </form>
           </div>
         )}
       </div>

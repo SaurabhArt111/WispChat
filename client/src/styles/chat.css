@@ -38,7 +38,7 @@
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .chat-header-back {
     display: inline-flex;
   }
@@ -120,7 +120,7 @@
   gap: 4px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
 
   .chat-header-actions .icon-btn[title="Search in chat"],
   .chat-header-actions .icon-btn[title="Contact info"],
@@ -395,7 +395,7 @@
   position: relative;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .bubble-stack {
     max-width: 74%;
   }
@@ -832,6 +832,12 @@
   background: var(--surface-3);
 }
 
+.attachment-media-not-found {
+  width: 100%;
+  min-height: 90px;
+  cursor: default;
+}
+
 .image-grid.count-1 .image-grid-item {
   aspect-ratio: 4/3;
 }
@@ -1217,7 +1223,7 @@
   animation: modalSlideUp 160ms var(--ease-spring);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .composer-layout {
     padding: 14px 12px;
   }
@@ -1421,7 +1427,7 @@
   font-size: 12.5px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .enter-send-toggle {
     display: none;
   }

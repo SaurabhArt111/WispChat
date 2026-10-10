@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import User from "../models/User.js";
 import { signToken } from "../utils/jwt.js";
 
@@ -121,5 +122,110 @@ export async function logout(req, res) {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ message: "Logout failed" });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Google sign-in
+//
+// The browser gets a Google ID token (Google Identity Services) and posts it
+// here. We verify it with Google, check it was issued for OUR client id, then
+// find the account by googleId / verified email — or create one.
+//
+// Encryption note: chats are end-to-end encrypted with a private key that is
+// wrapped by a secret only the person knows. Google accounts have no Wisp
+// password, so the client asks for a separate "encryption passcode" (set once,
+// re-entered on each new device). The response tells it which step is needed
+// via `needsE2EESetup` (first time) vs. an existing wrapped key (unlock).
+// ---------------------------------------------------------------------------
+async function verifyGoogleIdToken(idToken) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    const err = new Error("Google sign-in isn't configured on this server (GOOGLE_CLIENT_ID is missing).");
+    err.status = 501;
+    throw err;
+  }
+  const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  if (!res.ok) {
+    const err = new Error("Google sign-in failed — the token was rejected.");
+    err.status = 401;
+    throw err;
+  }
+  const info = await res.json();
+  const allowed = clientId.split(",").map((c) => c.trim());
+  if (!allowed.includes(info.aud)) {
+    const err = new Error("Google sign-in failed — token was issued for a different app.");
+    err.status = 401;
+    throw err;
+  }
+  if (!["accounts.google.com", "https://accounts.google.com"].includes(info.iss)) {
+    const err = new Error("Google sign-in failed — unexpected issuer.");
+    err.status = 401;
+    throw err;
+  }
+  if (String(info.email_verified) !== "true") {
+    const err = new Error("Your Google email address isn't verified.");
+    err.status = 401;
+    throw err;
+  }
+  return info;
+}
+
+async function uniqueUsername(base) {
+  const root = (base || "user").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20) || "user";
+  let candidate = root;
+  for (let i = 0; i < 20; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await User.exists({ username: candidate }))) return candidate;
+    candidate = `${root}${Math.floor(100 + Math.random() * 9000)}`;
+  }
+  return `${root}${Date.now().toString(36)}`;
+}
+
+export async function googleLogin(req, res) {
+  try {
+    const { credential } = req.body || {};
+    if (!credential) return res.status(400).json({ message: "Missing Google credential" });
+    const info = await verifyGoogleIdToken(credential);
+
+    const email = String(info.email).toLowerCase();
+    const select = "+e2ee.wrappedPrivateKey +e2ee.wrapIv +e2ee.kdfSalt +e2ee.kdfIterations";
+    let user = await User.findOne({ $or: [{ googleId: info.sub }, { email }] }).select(select);
+    let isNewUser = false;
+
+    if (!user) {
+      isNewUser = true;
+      // Random, never-disclosed password — the account can still add a
+      // real password later via reset; Google is its sign-in method.
+      const hashed = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+      user = await User.create({
+        username: await uniqueUsername(email.split("@")[0]),
+        displayName: info.name || email.split("@")[0],
+        email,
+        password: hashed,
+        googleId: info.sub,
+        authProvider: "google",
+        avatar: "",
+        avatarColor: pickColor(),
+      });
+      user = await User.findById(user._id).select(select);
+    } else if (!user.googleId) {
+      user.googleId = info.sub;
+    }
+
+    user.isOnline = true;
+    await user.save();
+
+    const token = signToken(user._id);
+    res.json({
+      token,
+      user: user.toPrivateJSON(),
+      isNewUser,
+      authProvider: user.authProvider,
+      needsE2EESetup: !user.e2ee?.publicKeyJwk,
+    });
+  } catch (err) {
+    console.error("[google login]", err.message);
+    res.status(err.status || 500).json({ message: err.message || "Google sign-in failed" });
   }
 }

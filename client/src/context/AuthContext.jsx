@@ -17,6 +17,7 @@ import {
 import { logError } from "../utils/logger";
 import { clearCache as clearMessageCache } from "../utils/messageCache";
 import { clearDecryptCache, peekDecrypted, storeDecrypted } from "../utils/decryptCache";
+import { clearDrafts } from "../utils/drafts";
 
 const AuthContext = createContext(null);
 
@@ -173,6 +174,46 @@ export function AuthProvider({ children }) {
     return true;
   }, []);
 
+  // ---------------- Google sign-in ----------------
+  // Step 1: verify the Google credential with our server. It does NOT sign the
+  // person in yet — end-to-end encryption still needs a secret only they know.
+  // Google accounts have no Wisp password, so they choose an "encryption
+  // passcode" once (stage "setup") and re-enter it on each new device
+  // (stage "unlock"). Step 2 is finishGoogleEncryption().
+  const googleLogin = useCallback(async (credential) => {
+    if (!window.crypto?.subtle) {
+      throw new Error("Secure chats need a secure connection (HTTPS or localhost).");
+    }
+    const res = await client.post("/auth/google", { credential });
+    return {
+      stage: res.data.needsE2EESetup ? "setup" : "unlock",
+      token: res.data.token,
+      user: res.data.user,
+      isNewUser: !!res.data.isNewUser,
+    };
+  }, []);
+
+  const finishGoogleEncryption = useCallback(
+    async ({ stage, token, user: googleUser }, passcode) => {
+      localStorage.setItem("wisp_token", token);
+      let ok = false;
+      try {
+        if (stage === "setup") ok = await setupEncryption(googleUser, passcode, token);
+        else ok = await unlockEncryption(googleUser, passcode, token);
+      } catch (err) {
+        logError("google e2ee", err);
+      }
+      if (!ok) {
+        localStorage.removeItem("wisp_token");
+        throw new Error("That passcode didn't unlock your encrypted chats. Try again.");
+      }
+      setSessionNotice("");
+      if (stage !== "setup") setUser(googleUser);
+      return googleUser;
+    },
+    [setupEncryption, unlockEncryption]
+  );
+
   const logout = useCallback(async () => {
     try {
       await client.post("/auth/logout");
@@ -181,6 +222,7 @@ export function AuthProvider({ children }) {
     }
     if (user?._id) localStorage.removeItem(cacheKeyName(user._id));
     if (user?._id) clearMessageCache(user._id);
+    if (user?._id) clearDrafts(user._id);
     clearDecryptCache();
     localStorage.removeItem("wisp_token");
     setUser(null);
@@ -282,6 +324,8 @@ export function AuthProvider({ children }) {
     clearSessionNotice: () => setSessionNotice(""),
     login,
     register,
+    googleLogin,
+    finishGoogleEncryption,
     logout,
     e2ee: {
       ready: e2eeReady,

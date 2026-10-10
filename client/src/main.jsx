@@ -10,6 +10,7 @@ import { CallProvider } from "./context/CallContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { ContextMenuProvider } from "./context/ContextMenuContext.jsx";
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
+import { installMediaFallbacks } from "./lib/mediaFallback";
 
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -19,6 +20,9 @@ import "./styles/liquidglass.css";
 import "./styles/call.css";
 import "./styles/mobileSheets.css";
 import "./styles/newChat.css";
+import "./styles/improvements.css";
+
+installMediaFallbacks();
 
 // Restore stored user accent theme
 const savedAccent = localStorage.getItem("wisp_accent");

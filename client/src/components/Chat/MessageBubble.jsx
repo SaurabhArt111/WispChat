@@ -9,6 +9,9 @@ import ActionSheetModal from "../common/ActionSheetModal";
 import AttachmentView from "./AttachmentView";
 import QuickReactions from "./QuickReactions";
 import ForwardModal from "./ForwardModal";
+import LinkPreviewCard, { linkPreviewsEnabled } from "./LinkPreviewCard";
+import { mediaUrl } from "../../api/config";
+import { extractUrls, isEmojiOnly, isUrlToken, makeUrlRegex, splitTrailing, toHref } from "../../utils/linkify";
 import {
   ReplyIcon,
   CopyIcon,
@@ -24,6 +27,7 @@ import {
   VideoIcon,
 } from "../common/Icons";
 
+const URL_SRC = makeUrlRegex().source;
 const QUICK_EMOJI = ["❤️", "😂", "👍", "🔥", "😮", "🙏"];
 
 function FormattedText({ text }) {
@@ -61,24 +65,27 @@ function FormattedText({ text }) {
         }
 
         // Inline formatting: links, `inline code`, *bold*, _italic_
-        const inlineRegex = /(https?:\/\/[^\s]+|`[^`]+`|\*[^*]+\*|_[^_]+_)/g;
+        const inlineRegex = new RegExp(`(${URL_SRC}|\`[^\`]+\`|\\*[^*]+\\*|_[^_]+_)`, "gi");
         const inlineParts = part.split(inlineRegex);
 
         return (
           <span key={index}>
             {inlineParts.map((sub, i) => {
-              if (sub.startsWith("http://") || sub.startsWith("https://")) {
+              if (isUrlToken(sub)) {
+                const { url, trailing } = splitTrailing(sub);
                 return (
-                  <a
-                    key={i}
-                    href={sub}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bubble-link"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {sub}
-                  </a>
+                  <React.Fragment key={i}>
+                    <a
+                      href={toHref(url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bubble-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {url}
+                    </a>
+                    {trailing}
+                  </React.Fragment>
                 );
               }
               if (sub.startsWith("`") && sub.endsWith("`") && sub.length > 2) {
@@ -99,6 +106,30 @@ function FormattedText({ text }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+// "Replying to status" quote shown on top of a comment/reaction that was sent
+// to someone's status — a snapshot, so it still renders after the 24 h status
+// has expired.
+function StatusReplyQuote({ reply, isMine }) {
+  const label = isMine ? "You replied to a status" : "Replied to your status";
+  return (
+    <div className="bubble-status-quote" title="Status">
+      <div className="bubble-status-quote-text">
+        <span className="bubble-status-quote-label">{label}</span>
+        <span className="bubble-status-quote-body">
+          {reply.kind === "text" ? reply.text : reply.caption || (reply.kind === "video" ? "🎥 Video" : "📷 Photo")}
+        </span>
+      </div>
+      {reply.kind === "text" ? (
+        <div className="bubble-status-quote-thumb text" style={{ background: reply.bgColor || "#5ef2c0" }}>Aa</div>
+      ) : reply.kind === "video" ? (
+        <video className="bubble-status-quote-thumb" src={`${mediaUrl(reply.url)}#t=0.1`} preload="metadata" muted playsInline />
+      ) : (
+        <img className="bubble-status-quote-thumb" src={mediaUrl(reply.url)} alt="" loading="lazy" />
+      )}
     </div>
   );
 }
@@ -130,6 +161,11 @@ function MessageBubble({
   const reactPopRef = useRef(null);
   const { text: decryptedText, locked: textLocked } = useDecryptedText(message);
   const { text: replyDecryptedText, locked: replyLocked } = useDecryptedText(message.replyTo);
+  // The first link in a message gets a rich preview card (WhatsApp-style).
+  const linkPreview = React.useMemo(
+    () => (decryptedText && linkPreviewsEnabled() ? extractUrls(decryptedText)[0] || null : null),
+    [decryptedText]
+  );
 
   useEffect(() => {
     if (!showQuickReact) return;
@@ -312,6 +348,8 @@ function MessageBubble({
             </button>
           )}
 
+          {message.statusReply && <StatusReplyQuote reply={message.statusReply} isMine={isMine} />}
+
           {message.attachments?.length > 0 && (
             <AttachmentView
               message={message}
@@ -326,9 +364,15 @@ function MessageBubble({
             <div className="bubble-text encrypted-locked-text">
               <LockIcon size={12} /> Encrypted message — unlock to view
             </div>
+          ) : message.statusReply?.isReaction && decryptedText ? (
+            <div className="status-reaction-bubble">{decryptedText}</div>
+          ) : isEmojiOnly(decryptedText) && !message.attachments?.length ? (
+            <div className="bubble-emoji-only">{decryptedText.trim()}</div>
           ) : (
             decryptedText && <FormattedText text={decryptedText} />
           )}
+
+          {!textLocked && decryptedText && linkPreview && <LinkPreviewCard href={linkPreview} />}
 
           <div className="bubble-meta">
             {message.encrypted && (

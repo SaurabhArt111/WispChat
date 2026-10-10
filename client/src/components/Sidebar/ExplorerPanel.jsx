@@ -5,12 +5,12 @@ import client from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
-import MobileMoreButton from "./MobileMoreButton";
+import PanelMenuButton from "./PanelMenuButton";
 import PostThumb from "../Posts/PostThumb";
 import PostUploadModal from "../Posts/PostUploadModal";
 import ProfileView from "../Profile/ProfileView";
 import { fetchExploreFeed, fetchUserPosts, MAX_POSTS_PER_USER } from "../../api/posts";
-import { CloseIcon, CompassIcon, PlusIcon, RefreshIcon, SearchIcon } from "../common/Icons";
+import { CloseIcon, CompassIcon, PlusIcon, RefreshIcon, SearchIcon, SettingsIcon } from "../common/Icons";
 import useLivePosts from "../../hooks/useLivePosts";
 import useLiveRefresh from "../../hooks/useLiveRefresh";
 import { openPostRoute } from "../../utils/openPost";
@@ -81,7 +81,7 @@ const SCOPES = [
   { id: "discover", label: "Discover" },
 ];
 const PAGE_SIZE = 24;
-export default function ExplorerPanel({ onOpenMore }) {
+export default function ExplorerPanel({ onOpenSettings }) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [posts, setPosts] = useState([]);
@@ -261,7 +261,17 @@ export default function ExplorerPanel({ onOpenMore }) {
           >
             <PlusIcon size={18} />
           </button>
-          {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+          <PanelMenuButton
+            title="Explore menu"
+            items={[
+              { label: "Shuffle posts", icon: <RefreshIcon size={15} />, onClick: () => loadFeed() },
+              { label: "Show everything", onClick: () => setScope("all") },
+              { label: "Friends only", onClick: () => setScope("contacts") },
+              { label: "Discover new people", onClick: () => setScope("discover") },
+              { divider: true },
+              { label: "Settings", icon: <SettingsIcon size={15} />, onClick: onOpenSettings },
+            ]}
+          />
         </div>
       </div>
 
@@ -364,7 +374,6 @@ export default function ExplorerPanel({ onOpenMore }) {
           remaining={remaining}
           onClose={() => setUploading(false)}
           onCreated={(post) => {
-            setPosts((list) => (list.some((p) => p._id === post._id) ? list : [{ ...post, isMine: true }, ...list]));
             setMyPostCount((c) => c + 1);
           }}
         />

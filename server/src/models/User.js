@@ -6,6 +6,9 @@ const userSchema = new mongoose.Schema(
     displayName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, trim: true, lowercase: true },
     password: { type: String, required: true, select: false },
+    // Set for accounts created/linked through "Continue with Google".
+    googleId: { type: String, default: undefined, index: { unique: true, sparse: true } },
+    authProvider: { type: String, enum: ["password", "google"], default: "password" },
     avatar: { type: String, default: "" },
     avatarColor: { type: String, default: "#6EE7B7" },
     about: { type: String, default: "Available", maxlength: 140 },

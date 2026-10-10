@@ -8,6 +8,7 @@ import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
 import AddToFolderSheet from "./AddToFolderSheet";
 import { formatListTime } from "../../utils/time";
+import { getDraft, subscribeDrafts } from "../../utils/drafts";
 import client from "../../api/client";
 import {
   PinIcon,
@@ -24,6 +25,18 @@ import {
   FolderIcon,
   InfoIcon,
 } from "../common/Icons";
+
+// Live draft text for one chat (updates when the Composer saves/clears it).
+function useDraft(userId, conversationId) {
+  const [draft, setDraft] = useState(() => getDraft(userId, conversationId));
+  useEffect(() => {
+    setDraft(getDraft(userId, conversationId));
+    return subscribeDrafts((id) => {
+      if (id === null || id === conversationId) setDraft(getDraft(userId, conversationId));
+    });
+  }, [userId, conversationId]);
+  return draft;
+}
 
 // A component (not a plain function) specifically so it can decrypt the
 // last message's text via a hook before showing it — an encrypted
@@ -89,20 +102,29 @@ export default function ConversationItem({ conversation, active, onClick }) {
   // reveal an Archive button docked behind it; releasing past halfway
   // snaps it fully open, releasing before that snaps it back closed —
   // the same interaction Telegram/WhatsApp mobile use.
-  const REVEAL_WIDTH = 84;
-  // A real drag only starts once the pointer has moved a few px — a plain
-  // tap (or the start of a long-press) must not be swallowed by the swipe
-  // handler, and a plain tap must not be swallowed by the long-press timer
-  // either. Both are decided lazily off the same pointerdown.
-  const DRAG_SLOP = 6;
+  // Left swipe reveals [Pin | Archive] — keep dragging past FULL_TRIGGER and
+  // letting go archives the chat outright (Telegram-style, with Undo). Right
+  // swipe reveals [Mute]. Fast, light flicks are ignored by a higher slop and
+  // a "must be clearly horizontal" check so scrolling the list never opens
+  // a row by accident.
+  const ACTION_W = 80;
+  const REVEAL_LEFT = ACTION_W * 2; // Pin + Archive
+  const REVEAL_RIGHT = ACTION_W; // Mute
+  const FULL_TRIGGER = 230;
+  const MAX_LEFT = 300;
+  const DRAG_SLOP = 8;
   const LONG_PRESS_MS = 480;
   const [dragX, setDragX] = useState(0);
-  const [revealed, setRevealed] = useState(false);
+  const [rest, setRest] = useState(0); // resting offset: 0 | -REVEAL_LEFT | +REVEAL_RIGHT
   const [dragging, setDragging] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [pressed, setPressed] = useState(false);
   const dragStartRef = useRef(null); // { startX, startY, baseX, dragging }
   const longPressTimerRef = useRef(null);
   const suppressClickRef = useRef(false);
+  const dragXRef = useRef(0);
+  const revealed = rest !== 0;
+  const draftText = useDraft(user._id, conversation._id);
 
   function clearLongPressTimer() {
     if (longPressTimerRef.current) {
@@ -132,14 +154,13 @@ export default function ConversationItem({ conversation, active, onClick }) {
     dragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      baseX: revealed ? -REVEAL_WIDTH : 0,
+      baseX: rest,
       dragging: false,
       pointerId: e.pointerId,
     };
     setPressed(true);
     // Only touch/pen get the long-press-for-menu gesture — desktop already
-    // has right-click for that, and holding the mouse button down is a
-    // completely different (and much more common) motion to leave alone.
+    // has right-click for that.
     if (e.pointerType !== "mouse") {
       clearLongPressTimer();
       longPressTimerRef.current = setTimeout(() => {
@@ -156,23 +177,25 @@ export default function ConversationItem({ conversation, active, onClick }) {
     const deltaX = e.clientX - drag.startX;
     const deltaY = e.clientY - drag.startY;
     if (!drag.dragging) {
-      // Any real movement cancels a pending long-press — it's a scroll or
-      // a swipe now, not a hold. Only commit to the horizontal swipe once
-      // the motion is clearly more horizontal than vertical, so a vertical
-      // list-scroll started on top of a row doesn't get hijacked into it.
       if (Math.abs(deltaX) < DRAG_SLOP && Math.abs(deltaY) < DRAG_SLOP) return;
       clearLongPressTimer();
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      // Commit to a swipe only when it is clearly horizontal.
+      if (Math.abs(deltaY) * 1.4 > Math.abs(deltaX)) {
         dragStartRef.current = null;
         setPressed(false);
-        return; // vertical scroll — let the list handle it natively
+        return;
       }
       drag.dragging = true;
       setDragging(true);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     }
     e.preventDefault();
-    const next = Math.min(0, Math.max(-REVEAL_WIDTH, drag.baseX + deltaX));
+    let next = drag.baseX + deltaX;
+    // Rubber-band beyond the reveal width so it feels physical.
+    if (next < -REVEAL_LEFT) next = -REVEAL_LEFT + (next + REVEAL_LEFT) * 0.75;
+    if (next > REVEAL_RIGHT) next = REVEAL_RIGHT + (next - REVEAL_RIGHT) * 0.3;
+    next = Math.max(-MAX_LEFT, Math.min(REVEAL_RIGHT + 24, next));
+    dragXRef.current = next;
     setDragX(next);
   }
   function endDrag(e) {
@@ -189,22 +212,32 @@ export default function ConversationItem({ conversation, active, onClick }) {
     try {
       e?.currentTarget?.releasePointerCapture?.(drag.pointerId);
     } catch {}
-    setDragX((x) => {
-      const open = x < -REVEAL_WIDTH / 2;
-      setRevealed(open);
-      return open ? -REVEAL_WIDTH : 0;
-    });
+    const x = dragXRef.current;
+    if (x <= -FULL_TRIGGER) {
+      // Full swipe → archive (or unarchive from the Archived page).
+      setLeaving(true);
+      setDragX(-480);
+      setTimeout(() => handleSwipeArchive(), 180);
+      return;
+    }
+    const target = x < -REVEAL_LEFT / 2 ? -REVEAL_LEFT : x > REVEAL_RIGHT / 2 ? REVEAL_RIGHT : 0;
+    setRest(target);
+    setDragX(target);
   }
   function closeSwipe() {
-    setRevealed(false);
+    setRest(0);
     setDragX(0);
   }
   useEffect(() => clearLongPressTimer, []);
+  // If the row is reused for another chat (virtual lists), reset it.
+  useEffect(() => {
+    setRest(0);
+    setDragX(0);
+    setLeaving(false);
+  }, [conversation._id, conversation.archived]);
 
   function handleRowPointerLeave() {
-    // A pointer that wanders off the row (drags outside, browser-cancels
-    // the pointer, etc.) should drop a pending long-press rather than let
-    // it fire on an element the finger isn't over anymore.
+    // A pointer that wanders off the row should drop a pending long-press.
     if (dragStartRef.current && !dragStartRef.current.dragging) {
       clearLongPressTimer();
       dragStartRef.current = null;
@@ -226,20 +259,51 @@ export default function ConversationItem({ conversation, active, onClick }) {
     ? Object.values(typing[conversation._id]).join(", ")
     : null;
 
-  async function flag(name) {
+  const FLAG_KEY = { mute: "muted", pin: "pinned", archive: "archived" };
+
+  // Optimistic: the list updates the instant you act (no waiting on the
+  // network), and rolls back with a message if the server says no.
+  async function setFlag(name, value) {
+    const key = FLAG_KEY[name];
+    const previous = !!conversation[key];
+    upsertConversation({ _id: conversation._id, [key]: value });
     try {
-      const res = await client.post(`/conversations/${conversation._id}/flag`, { flag: name });
-      const key = { mute: "muted", pin: "pinned", archive: "archived" }[name];
-      upsertConversation({ ...conversation, [key]: res.data[name + "d"] });
-      showToast(`Chat ${res.data[name + "d"] ? name + "d" : "un" + name + "d"}`);
-    } catch (err) {
-      showToast("Action failed", "danger");
+      await client.post(`/conversations/${conversation._id}/flag`, { flag: name, value });
+      return true;
+    } catch {
+      upsertConversation({ _id: conversation._id, [key]: previous });
+      showToast("Action failed — please try again", "danger");
+      return false;
     }
   }
 
+  async function flag(name) {
+    const key = FLAG_KEY[name];
+    const next = !conversation[key];
+    const ok = await setFlag(name, next);
+    if (!ok) return;
+    const verb = { pin: next ? "Chat pinned" : "Chat unpinned", mute: next ? "Chat muted" : "Chat unmuted", archive: next ? "Chat archived" : "Chat unarchived" }[name];
+    showToast(verb, "default", {
+      actionLabel: "Undo",
+      duration: 4500,
+      onAction: () => setFlag(name, !next),
+    });
+  }
+
   function handleSwipeArchive() {
+    setLeaving(false);
     closeSwipe();
     flag("archive");
+  }
+
+  function handleSwipePin() {
+    closeSwipe();
+    flag("pin");
+  }
+
+  function handleSwipeMute() {
+    closeSwipe();
+    flag("mute");
   }
 
   function handleRowClick(e) {
@@ -322,16 +386,37 @@ export default function ConversationItem({ conversation, active, onClick }) {
 
   return (
     <>
-    <div className="conv-swipe-wrap">
-      <button
-        className="conv-swipe-archive-btn"
-        style={{ width: REVEAL_WIDTH }}
-        onClick={handleSwipeArchive}
-        title={conversation.archived ? "Unarchive" : "Archive"}
+    <div className={`conv-swipe-wrap ${leaving ? "is-leaving" : ""}`}>
+      {/* Right-swipe action: Mute */}
+      <div
+        className={`conv-swipe-actions left ${rest > 0 || (dragging && dragX > 0) ? "visible" : ""}`}
+        style={{ width: Math.max(REVEAL_RIGHT, dragX) }}
+        aria-hidden={rest <= 0}
       >
-        <ArchiveIcon size={20} />
-        <span>{conversation.archived ? "Unarchive" : "Archive"}</span>
-      </button>
+        <button className="conv-swipe-btn mute" onClick={handleSwipeMute} tabIndex={rest > 0 ? 0 : -1}>
+          <MuteIcon size={20} />
+          <span>{conversation.muted ? "Unmute" : "Mute"}</span>
+        </button>
+      </div>
+      {/* Left-swipe actions: Pin + Archive (archive grows as you drag further) */}
+      <div
+        className={`conv-swipe-actions right ${rest < 0 || (dragging && dragX < 0) ? "visible" : ""}`}
+        style={{ width: Math.max(REVEAL_LEFT, -dragX) }}
+        aria-hidden={rest >= 0}
+      >
+        <button className="conv-swipe-btn pin" onClick={handleSwipePin} tabIndex={rest < 0 ? 0 : -1}>
+          <PinIcon size={20} filled={conversation.pinned} />
+          <span>{conversation.pinned ? "Unpin" : "Pin"}</span>
+        </button>
+        <button
+          className={`conv-swipe-btn archive ${-dragX >= FULL_TRIGGER ? "armed" : ""}`}
+          onClick={handleSwipeArchive}
+          tabIndex={rest < 0 ? 0 : -1}
+        >
+          <ArchiveIcon size={20} />
+          <span>{conversation.archived ? "Unarchive" : "Archive"}</span>
+        </button>
+      </div>
       <button
         className={`conv-item ${active ? "active" : ""} ${conversation.pinned ? "is-pinned" : ""} ${
           pressed ? "is-pressed" : ""
@@ -345,7 +430,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
         onPointerLeave={handleRowPointerLeave}
         style={{
           transform: `translateX(${dragX}px)`,
-          transition: dragging ? "none" : "transform 220ms var(--ease, ease)",
+          transition: dragging ? "none" : "transform 240ms cubic-bezier(.2,.8,.2,1)",
           touchAction: "pan-y",
         }}
       >
@@ -365,7 +450,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
           </div>
           <div className="conv-item-row">
             <span className={`conv-item-preview ${conversation.unreadCount ? "unread" : ""}`}>
-              {isMineLast && !conversation.unreadCount && (
+              {isMineLast && !conversation.unreadCount && !(draftText && !active) && (
                 <span className="preview-ticks">
                   {conversation.lastMessage?.readBy?.length > 1 ? (
                     <DoubleCheckIcon size={13} read />
@@ -374,7 +459,13 @@ export default function ConversationItem({ conversation, active, onClick }) {
                   )}
                 </span>
               )}
-              <ConversationPreview conv={conversation} selfId={user._id} isTyping={isTyping} />
+              {draftText && !active && !isTyping ? (
+                <span className="conv-draft">
+                  <span className="conv-draft-label">Draft:</span> {draftText}
+                </span>
+              ) : (
+                <ConversationPreview conv={conversation} selfId={user._id} isTyping={isTyping} />
+              )}
             </span>
             <div className="conv-item-badges">
               {conversation.muted && (

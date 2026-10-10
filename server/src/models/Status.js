@@ -19,6 +19,10 @@ const statusSchema = new mongoose.Schema(
 
     caption: { type: String, default: "", maxlength: 300 },
 
+    // How media is framed in the 9:16 viewer: "cover" fills the frame (images
+    // are pre-cropped to 9:16 by the editor), "contain" letterboxes it.
+    fit: { type: String, enum: ["cover", "contain"], default: "cover" },
+
     viewers: [
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

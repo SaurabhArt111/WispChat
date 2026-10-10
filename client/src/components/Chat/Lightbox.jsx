@@ -287,7 +287,7 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
           }}
         />
         {loading && <div className="lightbox-zoom-hint">Decrypting…</div>}
-        {error && <div className="lightbox-zoom-hint">Couldn't decrypt this image</div>}
+        {error && <div className="lightbox-zoom-hint">Media not found</div>}
       </div>
 
       {index < images.length - 1 && (

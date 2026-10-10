@@ -1,21 +1,26 @@
 import { forwardRef, useEffect, useState } from "react";
-import { ImageIcon, VideoIcon, AlertIcon } from "./Icons";
+import { AlertIcon } from "./Icons";
+
+export function MediaUnavailable({ className = "", onContextMenu }) {
+  return (
+    <div className={`media-broken ${className}`} onContextMenu={onContextMenu}>
+      <AlertIcon size={18} />
+      <span>Media not found</span>
+    </div>
+  );
+}
 
 export function SafeImage({ src, alt, className = "", onClick, onContextMenu, ...rest }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
 
   if (failed) {
-    return (
-      <div className={`media-broken ${className}`} onContextMenu={onContextMenu}>
-        <AlertIcon size={18} />
-        <span>File unavailable</span>
-      </div>
-    );
+    return <MediaUnavailable className={className} onContextMenu={onContextMenu} />;
   }
 
   return (
     <img
+      data-no-fallback
       src={src}
       alt={alt}
       className={className}
@@ -32,16 +37,12 @@ export const SafeVideo = forwardRef(function SafeVideo({ src, className = "", on
   useEffect(() => setFailed(false), [src]);
 
   if (failed) {
-    return (
-      <div className={`media-broken ${className}`} onContextMenu={onContextMenu}>
-        <AlertIcon size={18} />
-        <span>File unavailable</span>
-      </div>
-    );
+    return <MediaUnavailable className={className} onContextMenu={onContextMenu} />;
   }
 
   return (
     <video
+      data-no-fallback
       ref={ref}
       src={src}
       className={className}
@@ -57,13 +58,8 @@ export function SafeAudio({ src, className = "", ...rest }) {
   useEffect(() => setFailed(false), [src]);
 
   if (failed) {
-    return (
-      <div className={`media-broken ${className}`}>
-        <AlertIcon size={18} />
-        <span>Audio unavailable</span>
-      </div>
-    );
+    return <MediaUnavailable className={className} />;
   }
 
-  return <audio src={src} className={className} onError={() => setFailed(true)} {...rest} />;
+  return <audio data-no-fallback src={src} className={className} onError={() => setFailed(true)} {...rest} />;
 }

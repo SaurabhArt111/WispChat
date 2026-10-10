@@ -24,7 +24,7 @@
   border-bottom: 1px solid var(--border-soft);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .rail-panel-header {
     padding-top: calc(18px + env(safe-area-inset-top, 0px));
   }
@@ -181,7 +181,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .rail-panel {
     width: 100%;
   }

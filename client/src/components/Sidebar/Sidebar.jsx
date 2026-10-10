@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useContextMenu } from "../../context/ContextMenuContext";
+import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import ConversationItem from "./ConversationItem";
 import NewChatModal from "./NewChatModal";
 import NewGroupModal from "./NewGroupModal";
 import FriendRequestsModal from "./FriendRequestsModal";
-import MobileMoreButton from "./MobileMoreButton";
+import PanelMenuButton from "./PanelMenuButton";
 import client from "../../api/client";
 import useLiveRefresh from "../../hooks/useLiveRefresh";
 import {
@@ -21,18 +23,30 @@ import {
   EditIcon,
   SparklesIcon,
   ArchiveIcon,
+  ArrowDownIcon,
+  CheckIcon,
+  SettingsIcon,
+  ImageIcon,
 } from "../common/Icons";
 import "../../styles/sidebar.css";
 
-const PILL_SPACE = 52; // px reserved above the list once the Archived pill is revealed/pinned
-const PILL_REVEAL = 26; // px of downward drag needed to reveal it
-const COLLAPSE_AT = PILL_SPACE * 0.5; // drag back up past this (while revealed) to hide it again
-const PULL_MAX = 90;
+// Telegram-style pull-down-to-archive. The pull has real resistance: you must
+// drag the list down roughly 2x ROW_H before the bar flips from "Pull down for
+// archive" to "Release for archive" — a casual scroll bounce never triggers it.
+const ROW_H = 66; // px reserved above the list once the "Archived chats" row is revealed
+const PILL_SPACE = ROW_H;
+const PILL_REVEAL = 68; // list offset (after resistance) needed to arm the release
+const COLLAPSE_AT = ROW_H * 0.5; // drag back up past this (while revealed) to hide it again
+const PULL_MAX = 120;
+const PULL_RESISTANCE = 0.5;
+const REVEALED_KEY = "wisp_archive_row_revealed";
 
-export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenMore, onOpenProfile }) {
+export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenProfile, onOpenSettings }) {
   const { user, logout } = useAuth();
-  const { conversations, activeId, openConversation, loadingConversations } = useChat();
+  const { conversations, activeId, openConversation, loadingConversations, upsertConversation } = useChat();
   const { openMenu } = useContextMenu();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [showNewChat, setShowNewChat] = useState(false);
@@ -43,7 +57,21 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
   // a momentary pull-to-refresh, this persists after the finger/mouse lets
   // go — it only goes away again once the person deliberately drags the
   // list back up (see pullEnd), or taps the pill to actually open Archived.
-  const [revealed, setRevealed] = useState(false);
+  const [revealed, setRevealedState] = useState(() => {
+    try {
+      return localStorage.getItem(REVEALED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setRevealed = (value) => {
+    setRevealedState(value);
+    try {
+      localStorage.setItem(REVEALED_KEY, value ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
   // Only non-null while a drag is actively in progress, so the list can
   // track the finger/mouse live; falls back to the resting position
   // (0 or PILL_SPACE, depending on `revealed`) the rest of the time.
@@ -53,10 +81,37 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
   const dragRef = useRef(null);
   const pullStateRef = useRef(null);
 
-  const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
-  const restingOffset = revealed ? PILL_SPACE : 0;
+  const archivedList = useMemo(() => conversations.filter((c) => c.archived), [conversations]);
+  const archivedCount = archivedList.length;
+  const archivedUnread = useMemo(
+    () => archivedList.reduce((n, c) => n + (c.muted ? 0 : c.unreadCount || 0), 0),
+    [archivedList]
+  );
+  // The row only makes sense while there is something archived.
+  const rowShown = revealed && archivedCount > 0;
+  const restingOffset = rowShown ? PILL_SPACE : 0;
+  const armedRef = useRef(false);
   const displayOffset = liveOffset ?? restingOffset;
-  pullStateRef.current = { revealed, restingOffset };
+  pullStateRef.current = { revealed: rowShown, restingOffset, archivedCount };
+
+  // Pulled far enough to reveal, or (when already revealed) not pulled back
+  // up far enough to hide. Nothing to reveal when there are no archived chats.
+  function decideReveal(isRevealed, offset) {
+    if (isRevealed) return offset >= COLLAPSE_AT;
+    return archivedCount > 0 && offset >= PILL_REVEAL;
+  }
+
+  // A small haptic tick when the pull crosses the "release to archive" line.
+  useEffect(() => {
+    if (liveOffset === null) return;
+    const armed = !rowShown && liveOffset >= PILL_REVEAL;
+    if (armed && !armedRef.current && navigator.vibrate) {
+      try {
+        navigator.vibrate(8);
+      } catch {}
+    }
+    armedRef.current = armed;
+  }, [liveOffset, rowShown]);
 
   // Pull-to-reveal-Archived, mirroring Telegram: dragging down from the
   // top of the list reveals a persistent "Archived" pill pinned above it —
@@ -93,7 +148,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
       e.currentTarget.setPointerCapture?.(e.pointerId);
     }
     e.preventDefault();
-    const next = drag.baseOffset + delta * 0.6;
+    const next = drag.baseOffset + delta * PULL_RESISTANCE;
     drag.finalOffset = Math.max(0, Math.min(PULL_MAX, next));
     setLiveOffset(drag.finalOffset);
   }
@@ -101,9 +156,10 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
     const drag = dragRef.current;
     if (!drag || drag.source !== "pointer") return;
     if (drag.engaged) {
-      setRevealed(revealed ? drag.finalOffset >= COLLAPSE_AT : drag.finalOffset >= PILL_REVEAL);
+      setRevealed(decideReveal(rowShown, drag.finalOffset));
     }
     dragRef.current = null;
+    armedRef.current = false;
     setLiveOffset(null);
     try {
       e?.currentTarget?.releasePointerCapture?.(e.pointerId);
@@ -140,7 +196,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
         drag.engaged = true;
       }
       if (e.cancelable) e.preventDefault();
-      drag.finalOffset = Math.max(0, Math.min(PULL_MAX, drag.baseOffset + delta * 0.6));
+      drag.finalOffset = Math.max(0, Math.min(PULL_MAX, drag.baseOffset + delta * PULL_RESISTANCE));
       setLiveOffset(drag.finalOffset);
     }
 
@@ -151,9 +207,16 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
       if (!touchEnded) return;
       if (drag.engaged) {
         const { revealed: isRevealed } = pullStateRef.current;
-        setRevealed(isRevealed ? drag.finalOffset >= COLLAPSE_AT : drag.finalOffset >= PILL_REVEAL);
+        // This effect only runs once, so read the *current* values via the
+        // ref rather than the closure's first-render copies.
+        setRevealed(
+          isRevealed
+            ? drag.finalOffset >= COLLAPSE_AT
+            : pullStateRef.current.archivedCount > 0 && drag.finalOffset >= PILL_REVEAL
+        );
       }
       dragRef.current = null;
+      armedRef.current = false;
       setLiveOffset(null);
     }
 
@@ -246,6 +309,28 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
   const pinnedList = useMemo(() => filtered.filter((c) => c.pinned), [filtered]);
   const regularList = useMemo(() => filtered.filter((c) => !c.pinned), [filtered]);
 
+  // This page's own menu (each page has its own — see PanelMenuButton).
+  const chatsMenuItems = [
+    { label: "New chat", icon: <NewChatIcon size={15} />, onClick: () => (onOpenNewChat ? onOpenNewChat() : setShowNewChat(true)) },
+    { label: "New group", icon: <UsersIcon size={15} />, onClick: () => (onOpenNewGroup ? onOpenNewGroup() : setShowNewGroup(true)) },
+    { label: "Friend requests" + (requestCount ? ` (${requestCount})` : ""), icon: <BellIcon size={15} />, onClick: () => setShowRequests(true) },
+    { divider: true },
+    { label: "Groups", icon: <UsersIcon size={15} />, onClick: () => navigate("/groups") },
+    { label: "Media & storage", icon: <ImageIcon size={15} />, onClick: () => navigate("/media") },
+    { label: "Broadcast lists", icon: <BellIcon size={15} />, onClick: () => navigate("/broadcast") },
+    { label: archivedCount ? `Archived chats (${archivedCount})` : "Archived chats", icon: <ArchiveIcon size={15} />, onClick: onOpenArchived },
+    unreadTotal > 0 && { label: "Mark all as read", icon: <CheckIcon size={15} />, onClick: markAllRead },
+    { divider: true },
+    { label: "Settings", icon: <SettingsIcon size={15} />, onClick: onOpenSettings },
+  ];
+
+  async function markAllRead() {
+    const unread = conversations.filter((c) => (c.unreadCount || 0) > 0);
+    unread.forEach((c) => upsertConversation({ _id: c._id, unreadCount: 0 }));
+    await Promise.allSettled(unread.map((c) => client.post(`/messages/${c._id}/read`)));
+    showToast?.(`Marked ${unread.length} chat${unread.length === 1 ? "" : "s"} as read`);
+  }
+
   function openSelfMenu(e) {
     openMenu(
       e,
@@ -300,7 +385,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
           >
             <PlusIcon size={18} />
           </button>
-          {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+          <PanelMenuButton title="Chats menu" items={chatsMenuItems} />
         </div>
       </div>
 
@@ -351,21 +436,58 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
       </div>
 
       <div className="conversation-list-wrap">
-        {displayOffset > PILL_REVEAL * 0.6 && (
-          <button
-            className={`archived-pull-pill entering ${revealed && !dragRef.current?.engaged ? "pinned" : ""} ${
-              displayOffset >= (revealed ? COLLAPSE_AT : PILL_REVEAL) ? "ready" : ""
+        {displayOffset > 2 && (
+          <div
+            className={`archive-pull ${rowShown && !dragRef.current?.engaged ? "pinned" : ""} ${
+              displayOffset >= (rowShown ? COLLAPSE_AT : PILL_REVEAL) ? "ready" : ""
             }`}
             style={{
-              opacity: Math.min(1, displayOffset / PILL_REVEAL),
-              transition: dragRef.current?.engaged ? "none" : "opacity 160ms var(--ease)",
+              height: displayOffset,
+              transition: dragRef.current?.engaged ? "none" : "height 260ms cubic-bezier(.2,.8,.2,1)",
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={onOpenArchived}
           >
-            <ArchiveIcon size={15} />
-            Archived{archivedCount ? ` (${archivedCount})` : ""}
-          </button>
+            {rowShown && !dragRef.current?.engaged ? (
+              <button className="archived-row" onClick={onOpenArchived}>
+                <span className="archived-row-icon">
+                  <ArchiveIcon size={22} />
+                </span>
+                <span className="archived-row-main">
+                  <span className="archived-row-title">Archived chats</span>
+                  <span className="archived-row-sub">
+                    {archivedList
+                      .slice(0, 3)
+                      .map((c) => (c.isGroup ? c.name : c.participants?.find((p) => p._id !== user._id)?.displayName) || "Chat")
+                      .join(", ")}
+                  </span>
+                </span>
+                <span className="archived-row-meta">
+                  {archivedUnread > 0 && <span className="unread-badge muted">{archivedUnread}</span>}
+                  <span className="archived-row-count">{archivedCount}</span>
+                </span>
+              </button>
+            ) : (
+              <div className="archive-pull-bar" aria-live="polite">
+                <span
+                  className="archive-pull-arrow"
+                  style={{ transform: `rotate(${displayOffset >= (rowShown ? COLLAPSE_AT : PILL_REVEAL) ? 180 : Math.min(180, (displayOffset / PILL_REVEAL) * 180)}deg)` }}
+                >
+                  <ArrowDownIcon size={18} />
+                </span>
+                <span className="archive-pull-text">
+                  {rowShown
+                    ? displayOffset >= COLLAPSE_AT
+                      ? "Archived chats"
+                      : "Release to hide archive"
+                    : archivedCount === 0
+                    ? "No archived chats"
+                    : displayOffset >= PILL_REVEAL
+                    ? "Release for archive"
+                    : "Pull down for archive"}
+                </span>
+              </div>
+            )}
+          </div>
         )}
         <div
           className="conversation-list"

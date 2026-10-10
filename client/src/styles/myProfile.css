@@ -193,7 +193,7 @@
     font-size: 12.5px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
     .my-profile-page {
         padding: 28px 12px 30px;
     }

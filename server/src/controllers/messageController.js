@@ -1,5 +1,6 @@
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
+import Status from "../models/Status.js";
 import { kindFromMime } from "../middleware/upload.js";
 
 // Recipients need the sender's public key to unwrap the per-message
@@ -55,32 +56,46 @@ export async function getMessages(req, res) {
   res.json({ messages: messages.reverse(), hasMore: messages.length === Number(limit) });
 }
 
+// Light author projection for the call log — the full SENDER_FIELDS also pulls
+// every person's E2EE public key JWK, which the Calls tab never needs and
+// which made this endpoint noticeably slow for people with many chats.
+const CALL_USER_FIELDS = "username displayName avatar avatarColor isOnline";
+
 export async function getCallLogs(req, res) {
-  const conversations = await Conversation.find({ participants: req.user._id }).select("_id");
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
+  const { before } = req.query;
+
+  const conversations = await Conversation.find({ participants: req.user._id }).select("_id").lean();
   const conversationIds = conversations.map((conversation) => conversation._id);
 
-  const calls = await Message.find({
+  const query = {
     conversation: { $in: conversationIds },
-    callInfo: { $exists: true },
+    // Matches the partial index declared on the Message model ("call_logs").
+    "callInfo.kind": { $exists: true },
     deletedFor: { $ne: req.user._id },
-  })
+  };
+  if (before) query.createdAt = { $lt: new Date(before) };
+
+  const calls = await Message.find(query)
+    .select("conversation sender callInfo createdAt")
     .sort({ createdAt: -1 })
-    .limit(100)
+    .limit(limit)
     .populate([
-      { path: "sender", select: SENDER_FIELDS },
+      { path: "sender", select: CALL_USER_FIELDS },
       {
         path: "conversation",
-        select: "name isGroup participants",
-        populate: { path: "participants", select: SENDER_FIELDS },
+        select: "name avatar isGroup participants",
+        populate: { path: "participants", select: CALL_USER_FIELDS },
       },
-    ]);
+    ])
+    .lean();
 
-  res.json({ calls });
+  res.json({ calls, hasMore: calls.length === limit });
 }
 
 export async function sendMessage(req, res) {
   const { conversationId } = req.params;
-  const { text = "", replyTo = null, clientId, attachments = [], encrypted = false, iv = null, keys = [] } = req.body;
+  const { text = "", replyTo = null, clientId, attachments = [], encrypted = false, iv = null, keys = [], statusReplyId = null, statusReplyIsReaction = false } = req.body;
 
   const conv = await Conversation.findById(conversationId);
   if (!conv || !conv.participants.some((p) => String(p) === String(req.user._id))) {
@@ -104,6 +119,31 @@ export async function sendMessage(req, res) {
     return res.status(400).json({ message: "Empty message" });
   }
 
+  // Reply-to-status: build the quote snapshot from the real Status document
+  // (never trust client-supplied content for it) and make sure the status
+  // actually belongs to the other person in this conversation.
+  let statusReply;
+  if (statusReplyId) {
+    const status = await Status.findById(statusReplyId).lean();
+    if (
+      status &&
+      !conv.isGroup &&
+      conv.participants.some((p) => String(p) === String(status.user)) &&
+      String(status.user) !== String(req.user._id)
+    ) {
+      statusReply = {
+        statusId: status._id,
+        owner: status.user,
+        kind: status.kind,
+        url: status.url || "",
+        text: status.kind === "text" ? status.text : "",
+        bgColor: status.bgColor || "",
+        caption: status.caption || "",
+        isReaction: !!statusReplyIsReaction,
+      };
+    }
+  }
+
   let msg = await Message.create({
     conversation: conversationId,
     sender: req.user._id,
@@ -113,6 +153,7 @@ export async function sendMessage(req, res) {
     iv,
     keys,
     replyTo: replyTo || null,
+    statusReply,
     clientId,
     deliveredTo: [req.user._id],
     readBy: [req.user._id],

@@ -6,14 +6,14 @@ import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import StatusEditor from "./StatusEditor";
 import StatusViewer from "./StatusViewer";
-import MobileMoreButton from "./MobileMoreButton";
+import PanelMenuButton from "./PanelMenuButton";
 import StatusPrivacyModal from "./StatusPrivacyModal";
-import { PlusIcon, StatusRingIcon, CameraIcon, TypeIcon, ShieldIcon } from "../common/Icons";
+import { PlusIcon, StatusRingIcon, CameraIcon, TypeIcon, ShieldIcon, SettingsIcon } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
 import "../../styles/railPanels.css";
 import "../../styles/status.css";
 
-export default function StatusPanel({ onOpenMore }) {
+export default function StatusPanel({ onOpenSettings }) {
   const { user } = useAuth();
   const { myEntry, contactEntries, loading } = useStatus();
   const { showToast } = useToast();
@@ -81,7 +81,16 @@ export default function StatusPanel({ onOpenMore }) {
           <button className="icon-btn" title="Status privacy" onClick={() => setShowPrivacy(true)}>
             <ShieldIcon size={18} />
           </button>
-          {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+          <PanelMenuButton
+            title="Status menu"
+            items={[
+              { label: "Photo / video status", icon: <CameraIcon size={15} />, onClick: openFilePicker },
+              { label: "Text status", icon: <TypeIcon size={15} />, onClick: openTextEditor },
+              { divider: true },
+              { label: "Status privacy", icon: <ShieldIcon size={15} />, onClick: () => setShowPrivacy(true) },
+              { label: "Settings", icon: <SettingsIcon size={15} />, onClick: onOpenSettings },
+            ]}
+          />
         </div>
       </div>
 

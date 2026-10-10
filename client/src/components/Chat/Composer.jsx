@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
+import EmojiPanel from "./EmojiPanel";
+import { clearDraft, getDraft, saveDraft } from "../../utils/drafts";
 import { useChat } from "../../context/ChatContext";
 import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
@@ -25,7 +26,9 @@ export default function Composer({
   onSend,
   onAttachFiles,
 }) {
-  const [text, setText] = useState("");
+  const { user } = useAuth();
+  // Restore whatever was typed here but never sent (see utils/drafts.js).
+  const [text, setText] = useState(() => getDraft(user._id, conversation._id));
   const [showEmoji, setShowEmoji] = useState(false);
   const [enterToSend, setEnterToSend] = useState(() => {
     const saved = localStorage.getItem("wisp_enter_send");
@@ -34,11 +37,44 @@ export default function Composer({
 
   const { editMessage } = useChat();
   const { socket } = useSocket();
-  const { user } = useAuth();
   const { text: replyPreviewText, locked: replyLocked } = useDecryptedText(replyTo);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPopRef = useRef(null);
+  const textRef = useRef(text);
+  textRef.current = text;
+  const editingRef = useRef(false);
+  editingRef.current = !!editingMessage;
+  const draftBeforeEditRef = useRef(null);
+  const convId = conversation._id;
+
+  // Persist the draft as you type (debounced), and flush it synchronously when
+  // you leave — back button, switching chats, tab close — so nothing typed is
+  // ever lost. Editing an old message never overwrites the draft.
+  useEffect(() => {
+    if (editingMessage) return undefined;
+    const t = setTimeout(() => saveDraft(user._id, convId, text), 250);
+    return () => clearTimeout(t);
+  }, [text, editingMessage, user._id, convId]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (!editingRef.current) saveDraft(user._id, convId, textRef.current);
+    };
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+  }, [user._id, convId]);
+
+  // The textarea's height must match a restored multi-line draft.
+  useEffect(() => {
+    if (textareaRef.current) autoGrow(textareaRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isLockedForMe =
     conversation.isGroup &&
@@ -58,10 +94,22 @@ export default function Composer({
   // Focus textarea when editing or replying
   useEffect(() => {
     if (editingMessage) {
+      if (draftBeforeEditRef.current === null) draftBeforeEditRef.current = textRef.current;
       setText(editingMessage.text || "");
       textareaRef.current?.focus();
     }
   }, [editingMessage]);
+
+  // Leaving edit mode puts the in-progress draft back instead of wiping it.
+  function endEdit() {
+    const restored = draftBeforeEditRef.current ?? "";
+    draftBeforeEditRef.current = null;
+    setText(restored);
+    if (textareaRef.current) {
+      textareaRef.current.value = restored;
+      autoGrow(textareaRef.current);
+    }
+  }
 
   useEffect(() => {
     if (replyTo) textareaRef.current?.focus();
@@ -103,12 +151,13 @@ export default function Composer({
     if (editingMessage) {
       await editMessage(editingMessage._id, value);
       onCancelEdit();
-      setText("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      endEdit();
       return;
     }
 
+    // Sent → the draft is done with.
     setText("");
+    clearDraft(user._id, convId);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     socket?.emit("typing:stop", { conversationId: conversation._id });
     await onSend({ text: value, attachments: [], selfPreview: user });
@@ -132,7 +181,7 @@ export default function Composer({
     if (e.key === "Escape") {
       if (editingMessage) {
         onCancelEdit();
-        setText("");
+        endEdit();
       }
       if (replyTo) onCancelReply();
       if (showEmoji) setShowEmoji(false);
@@ -203,7 +252,7 @@ export default function Composer({
             className="icon-btn btn-sm"
             onClick={() => {
               onCancelEdit();
-              setText("");
+              endEdit();
             }}
             title="Cancel edit (Esc)"
           >
@@ -285,21 +334,25 @@ export default function Composer({
 
       {showEmoji && (
         <div className="emoji-popover" ref={emojiPopRef}>
-          <EmojiPicker
-            theme="dark"
-            // "native" renders the OS/browser's own emoji glyphs instead of
-            // fetching PNGs from jsdelivr's CDN — avoids the picker being
-            // silently broken by browser tracking-prevention (which blocks
-            // that third-party CDN in Edge/Safari/Brave) and works offline
-            // in the PWA build, since there's nothing left to fetch.
-            emojiStyle={EmojiStyle.NATIVE}
-            onEmojiClick={(e) => {
-              setText((t) => t + e.emoji);
+          <EmojiPanel
+            onEmoji={(emoji) => {
+              setText((t) => t + emoji);
               textareaRef.current?.focus();
             }}
-            width={340}
-            height={390}
-            previewConfig={{ showPreview: false }}
+            onSticker={async (emoji) => {
+              // Stickers go out immediately as a big, bubble-less emoji.
+              setShowEmoji(false);
+              await onSend({ text: emoji, attachments: [], selfPreview: user });
+            }}
+            onGif={async (url, title) => {
+              try {
+                const blob = await (await fetch(url)).blob();
+                setShowEmoji(false);
+                onAttachFiles([new File([blob], `${(title || "gif").replace(/[^\w-]+/g, "_").slice(0, 40)}.gif`, { type: blob.type || "image/gif" })]);
+              } catch {
+                /* network error — leave the panel open so they can retry */
+              }
+            }}
           />
         </div>
       )}

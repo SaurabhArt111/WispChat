@@ -154,6 +154,9 @@ export function CallProvider({ children }) {
   const [call, setCallState] = useState(null);
   const callRef = useRef(null);
   const pcRef = useRef(null);
+  const screenTrackRef = useRef(null); // active screen-share track, if any
+  const cameraTrackRef = useRef(null); // camera track parked while sharing
+  const stopShareRef = useRef(() => {});
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]); // remote candidates that arrived before we could apply them
@@ -220,6 +223,13 @@ export function CallProvider({ children }) {
   }
 
   const cleanup = useCallback(() => {
+    try {
+      screenTrackRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    screenTrackRef.current = null;
+    cameraTrackRef.current = null;
     clearInterval(ringIntervalRef.current);
     clearTimeout(ringTimeoutRef.current);
     clearTimeout(disconnectTimerRef.current);
@@ -573,6 +583,57 @@ export function CallProvider({ children }) {
     }
   }, [patchCall, showToast]);
 
+  // Screen sharing (video calls). Swaps the outgoing video track for the
+  // display track in place — same trick as flipCamera, so no renegotiation —
+  // and puts the camera back when sharing stops (button, or the browser's own
+  // "Stop sharing" bar).
+  const toggleScreenShare = useCallback(async () => {
+    const pc = pcRef.current;
+    const stream = localStreamRef.current;
+    const sender = pc?.getSenders().find((s) => s.track?.kind === "video");
+    if (!pc || !stream || !sender) {
+      showToast("Screen sharing is available during video calls");
+      return;
+    }
+    if (callRef.current?.sharing) {
+      stopShareRef.current();
+      return;
+    }
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      showToast("Your browser can't share the screen");
+      return;
+    }
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const track = display.getVideoTracks()[0];
+      cameraTrackRef.current = stream.getVideoTracks()[0] || null;
+      await sender.replaceTrack(track);
+      screenTrackRef.current = track;
+      stopShareRef.current = async () => {
+        const cam = cameraTrackRef.current;
+        try {
+          if (cam) await sender.replaceTrack(cam);
+        } catch {
+          /* ignore */
+        }
+        screenTrackRef.current?.stop();
+        screenTrackRef.current = null;
+        patchCall({ sharing: false, mirrored: true, localStream: new MediaStream(stream.getTracks()) });
+      };
+      track.onended = () => {
+        if (callRef.current?.sharing) stopShareRef.current();
+      };
+      patchCall({
+        sharing: true,
+        mirrored: false,
+        localStream: new MediaStream([track, ...stream.getAudioTracks()]),
+      });
+    } catch (err) {
+      // NotAllowedError = person dismissed the picker; not worth a toast.
+      if (err?.name !== "NotAllowedError") showToast("Couldn't start screen sharing");
+    }
+  }, [patchCall, showToast]);
+
   // ---------------- socket wiring ----------------
   // Handlers read `callRef` so this effect only re-runs when the socket
   // itself changes.
@@ -756,6 +817,7 @@ export function CallProvider({ children }) {
         toggleMute,
         toggleCamera,
         flipCamera,
+        toggleScreenShare,
       }}
     >
       {children}

@@ -210,7 +210,10 @@ export function ChatProvider({ children }) {
         // Media sends build their own envelope earlier (so the same key can
         // encrypt the attachment bytes before upload); a text-only send
         // builds one here.
-        const conversation = conversations.find((c) => c._id === conversationId);
+        // `payload.conversation` is passed when the chat was only just created
+        // (e.g. replying to a status), so it isn't in this closure's list yet —
+        // without it the message would be encrypted for the wrong recipients.
+        const conversation = payload.conversation || conversations.find((c) => c._id === conversationId);
         const envelope = payload.envelope || (await e2ee.prepareEnvelope(conversation));
         const { text, encrypted, iv, keys } = await e2ee.encryptOutgoingText(envelope, payload.text || "");
 
@@ -222,13 +225,16 @@ export function ChatProvider({ children }) {
           encrypted,
           iv,
           keys,
+          statusReplyId: payload.statusReplyId,
+          statusReplyIsReaction: payload.statusReplyIsReaction,
         });
         setMessagesByConv((prev) => ({
           ...prev,
           [conversationId]: (prev[conversationId] || []).map((m) => (m._id === optimisticId ? res.data.message : m)),
         }));
         upsertConversation({
-          ...conversations.find((c) => c._id === conversationId),
+          ...(payload.conversation || conversations.find((c) => c._id === conversationId)),
+          _id: conversationId,
           lastMessage: res.data.message,
           lastMessageAt: res.data.message.createdAt,
         });

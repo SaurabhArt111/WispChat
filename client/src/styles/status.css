@@ -154,7 +154,7 @@
   color: #04211a;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .status-fab-stack {
     bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }

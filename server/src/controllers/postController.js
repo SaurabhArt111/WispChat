@@ -114,10 +114,11 @@ export async function getPostById(req, res) {
 // direction. It's cursor-less infinite scroll: the client passes back the
 // ids it has already seen (`exclude`) and gets a new batch each time.
 //
-//   scope=all       (default) roughly half from your contacts, half from
-//                   everyone else, interleaved so the grid feels varied
-//   scope=contacts  only people in your contact list
+//   scope=all       (default) friends mixed with people you don't know yet,
+//                   interleaved so the grid feels varied
+//   scope=contacts  only people in your contact list (friends)
 //   scope=discover  only people you're NOT connected with
+// Your own posts are never returned.
 export async function getExploreFeed(req, res) {
   const limit = Math.max(1, Math.min(60, Number(req.query.limit) || 24));
   const scope = ["all", "contacts", "discover"].includes(req.query.scope) ? req.query.scope : "all";
@@ -145,29 +146,33 @@ export async function getExploreFeed(req, res) {
           { $sample: { size } },
         ]);
 
+  // Your own posts never show up in Explore — it's for seeing *other*
+  // people. "Friends" = people you know, "Discover" = people you don't,
+  // "For you" = a mix of both.
+  const selfId = new mongoose.Types.ObjectId(String(req.user._id));
   let batch = [];
   if (scope === "contacts") {
-    batch = await sample({ $in: contactIds }, limit);
+    batch = await sample({ $in: contactIds.filter((id) => String(id) !== String(selfId)) }, limit);
   } else if (scope === "discover") {
-    const skip = [...blockedIds, ...contactIds, req.user._id];
-    batch = await sample({ $nin: skip }, limit);
+    batch = await sample({ $nin: [...blockedIds, ...contactIds, selfId] }, limit);
   } else {
-    const skipOthers = [...blockedIds, ...contactIds];
-    const wantKnown = Math.ceil(limit / 2);
-    const [known, others] = await Promise.all([
-      sample({ $in: [...contactIds, req.user._id] }, wantKnown),
-      sample({ $nin: skipOthers }, limit),
-    ]);
-    // `others` may include my own posts / repeats of `known`; de-dupe, then
-    // top up from whichever bucket still has posts so the page stays full.
-    const seen = new Set(known.map((p) => String(p._id)));
-    const rest = others.filter((p) => !seen.has(String(p._id)) && !contactSet.has(String(p.user)));
-    batch = [...known, ...rest].slice(0, limit);
-    if (batch.length < limit) {
-      const have = new Set(batch.map((p) => String(p._id)));
-      const filler = others.filter((p) => !have.has(String(p._id)));
-      batch = [...batch, ...filler].slice(0, limit);
+    // Roughly 60% from friends / 40% from people you don't know yet, topping
+    // up from whichever bucket still has posts so the page stays full.
+    const wantKnown = Math.ceil(limit * 0.6);
+    const wantNew = limit - wantKnown;
+    const knownMatch = { $in: contactIds.filter((id) => String(id) !== String(selfId)) };
+    const newMatch = { $nin: [...blockedIds, ...contactIds, selfId] };
+    let [known, others] = await Promise.all([sample(knownMatch, wantKnown), sample(newMatch, wantNew)]);
+    if (known.length < wantKnown) {
+      const more = await sample(newMatch, wantNew + (wantKnown - known.length));
+      const have = new Set(others.map((p) => String(p._id)));
+      others = [...others, ...more.filter((p) => !have.has(String(p._id)))];
+    } else if (others.length < wantNew) {
+      const have = new Set(known.map((p) => String(p._id)));
+      const more = await sample(knownMatch, wantKnown + (wantNew - others.length));
+      known = [...known, ...more.filter((p) => !have.has(String(p._id)))];
     }
+    batch = [...known, ...others].slice(0, limit);
   }
 
   // Fisher-Yates so known/unknown posts are interleaved rather than clumped.

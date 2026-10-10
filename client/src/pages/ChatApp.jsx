@@ -6,7 +6,6 @@ import { useStatus } from "../context/StatusContext";
 import AsideRail from "../components/Sidebar/AsideRail";
 import MobileBottomNav from "../components/Sidebar/MobileBottomNav";
 import ExplorerPanel from "../components/Sidebar/ExplorerPanel";
-import MoreMenuSheet from "../components/Sidebar/MoreMenuSheet";
 import Sidebar from "../components/Sidebar/Sidebar";
 import ArchivedPanel from "../components/Sidebar/ArchivedPanel";
 import GroupsPanel from "../components/Sidebar/GroupsPanel";
@@ -29,10 +28,10 @@ import "../styles/layout.css";
 
 // Views that get their own URL. "chats" (the default sidebar + chat window)
 // covers both "/" and "/chat/:id", and isn't listed here since it's the
-// fallback for any path that doesn't match one of these. "Archived" is
-// deliberately left out — it stays a local panel toggle rather than a
-// route, reached only from the link inside the chat list itself.
-const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "profile", "post"];
+// fallback for any path that doesn't match one of these. "Archived" is now a
+// real route (/archived) so it can be linked to, bookmarked and reached with
+// the browser back button.
+const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "archived", "profile", "post"];
 
 export default function ChatApp() {
   const { user } = useAuth();
@@ -43,13 +42,11 @@ export default function ChatApp() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showProfileEditor, setShowProfileEditor] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const settingsReturnRef = useRef("/");
 
   const routeSegment = location.pathname.split("/")[1] || "";
-  const isDesktop = useMediaQuery("(min-width: 769px)");
+  const isDesktop = useMediaQuery("(min-width: 859px)");
   const isPostPage = routeSegment === "post";
   // A post opens as a modal over where you came from on desktop, and as its
   // own full page on mobile — both on the same /post/:id route.
@@ -72,24 +69,11 @@ export default function ChatApp() {
   const effectiveSegment = postOverlay ? postOriginSegment : routeSegment;
   const view = ROUTED_VIEWS.includes(effectiveSegment) && effectiveSegment !== "post" ? effectiveSegment : postFullPage ? "post" : "chats";
   const showSettings = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
-  // Single source of truth for which sidebar-column panel is on screen.
-  // Deriving it once here (rather than checking `showArchived` and `view`
-  // independently at each render site) makes it structurally impossible
-  // for two panels to render at once — e.g. opening Archived from the More
-  // sheet while already on a routed view like /media used to leave `view`
-  // still equal to "media" and `showArchived` true at the same time, so
-  // both panels rendered stacked on top of each other.
-  const activePanel = showArchived ? "archived" : view;
+  // Single source of truth for which sidebar-column panel is on screen —
+  // derived purely from the URL, so two panels can never render at once.
+  const activePanel = view;
 
   function changeView(id) {
-    if (id === "archived") {
-      setShowArchived(true);
-      // Clear whatever routed view we might have been on so it can't
-      // still be "active" underneath Archived (see activePanel above).
-      if (view !== "chats") navigate("/");
-      return;
-    }
-    setShowArchived(false);
     navigate(id === "chats" ? "/" : `/${id}`);
   }
 
@@ -103,7 +87,6 @@ export default function ChatApp() {
   }
 
   function openProfile() {
-    setShowArchived(false);
     setShowContactInfo(false);
     navigate("/profile");
   }
@@ -142,20 +125,20 @@ export default function ChatApp() {
         <Sidebar
           onOpenNewChat={() => setShowNewChat(true)}
           onOpenNewGroup={() => setShowNewGroup(true)}
-          onOpenArchived={() => setShowArchived(true)}
-          onOpenMore={() => setShowMoreMenu(true)}
+          onOpenArchived={() => navigate("/archived")}
+          onOpenSettings={openSettings}
           onOpenProfile={openProfile}
         />
       )}
       {activePanel === "archived" && (
-        <ArchivedPanel onBack={() => setShowArchived(false)} onOpenMore={() => setShowMoreMenu(true)} />
+        <ArchivedPanel onBack={() => navigate("/")} onOpenSettings={openSettings} />
       )}
-      {activePanel === "groups" && <GroupsPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {activePanel === "status" && <StatusPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {activePanel === "media" && <MediaStoragePanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {activePanel === "calls" && <CallsPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {activePanel === "explore" && <ExplorerPanel onOpenMore={() => setShowMoreMenu(true)} />}
-      {activePanel === "broadcast" && <BroadcastPanel onOpenMore={() => setShowMoreMenu(true)} />}
+      {activePanel === "groups" && <GroupsPanel onOpenSettings={openSettings} />}
+      {activePanel === "status" && <StatusPanel onOpenSettings={openSettings} />}
+      {activePanel === "media" && <MediaStoragePanel onOpenSettings={openSettings} />}
+      {activePanel === "calls" && <CallsPanel onOpenSettings={openSettings} />}
+      {activePanel === "explore" && <ExplorerPanel onOpenSettings={openSettings} />}
+      {activePanel === "broadcast" && <BroadcastPanel onOpenSettings={openSettings} />}
 
       <div className="app-main">
         {postFullPage ? (
@@ -216,13 +199,6 @@ export default function ChatApp() {
         view={activePanel}
         onChangeView={changeView}
         hasUnreadStatus={hasUnread}
-      />
-
-      <MoreMenuSheet
-        open={showMoreMenu}
-        onClose={() => setShowMoreMenu(false)}
-        onChangeView={changeView}
-        onOpenSettings={openSettings}
       />
 
       {showNewChat && (

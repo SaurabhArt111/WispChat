@@ -7,7 +7,7 @@ import Lightbox from "../Chat/Lightbox";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { LockIcon } from "../common/Icons";
 import MediaStatsChart from "./MediaStatsChart";
-import MobileMoreButton from "./MobileMoreButton";
+import PanelMenuButton from "./PanelMenuButton";
 import { LayersIcon, ImageIcon, VideoIcon, AudioIcon, FileIcon as DocIcon } from "../common/Icons";
 import { formatBytes, formatListTime } from "../../utils/time";
 import "../../styles/railPanels.css";
@@ -101,7 +101,7 @@ function PanelFooter({ context }) {
 
 const PAGE = 60;
 
-export default function MediaStoragePanel({ onOpenMore }) {
+export default function MediaStoragePanel({ onOpenSettings }) {
   const { openConversation } = useChat();
   const [stats, setStats] = useState(null);
   const [kind, setKind] = useState("image");
@@ -173,7 +173,17 @@ export default function MediaStoragePanel({ onOpenMore }) {
     <aside className="rail-panel">
       <div className="rail-panel-header">
         <h2>Media & Storage</h2>
-        {onOpenMore && <MobileMoreButton onClick={onOpenMore} />}
+        <PanelMenuButton
+          title="Media menu"
+          items={[
+            { label: "Photos", onClick: () => setKind("image") },
+            { label: "Videos", onClick: () => setKind("video") },
+            { label: "Documents & audio", onClick: () => setKind("file") },
+            { divider: true },
+            { label: "Refresh storage stats", onClick: () => client.get("/messages/media/stats").then((res) => setStats(res.data)).catch(() => {}) },
+            { label: "Settings", onClick: onOpenSettings },
+          ]}
+        />
       </div>
       {kind === "image" || kind === "video" ? (
         <VirtuosoGrid

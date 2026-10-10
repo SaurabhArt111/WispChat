@@ -91,7 +91,7 @@
   transform: scale(1.06);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .aside-rail {
     display: none;
   }

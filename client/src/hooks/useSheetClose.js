@@ -11,7 +11,7 @@ export default function useSheetClose(onClose) {
   useEffect(() => () => clearTimeout(timer.current), []);
   const requestClose = useCallback(() => {
     if (closing) return;
-    if (window.matchMedia?.("(max-width: 768px)").matches) {
+    if (window.matchMedia?.("(max-width: 858px)").matches) {
       setClosing(true);
       timer.current = setTimeout(onClose, 220);
     } else {

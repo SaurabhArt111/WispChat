@@ -257,7 +257,7 @@
   transform: scale(0.95);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .newchat-overlay {
     align-items: stretch;
     background: var(--surface);
@@ -305,7 +305,7 @@
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 858px) {
   .new-chat-fab {
     position: absolute;
     right: 18px;
