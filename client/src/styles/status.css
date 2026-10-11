@@ -115,6 +115,7 @@
   align-items: center;
   gap: 16px;
   z-index: 20;
+  animation: fabPop 320ms var(--ease-spring) both;
 }
 
 .status-fab {
@@ -156,7 +157,7 @@
 
 @media (max-width: 858px) {
   .status-fab-stack {
-    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -578,8 +579,35 @@
   text-align: left;
 }
 
-.privacy-contact span {
+.privacy-contact .privacy-contact-name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The avatar is also a <span>; never let a row's flex rules stretch it. */
+.privacy-contact .avatar {
+  flex: 0 0 auto;
+}
+
+.privacy-check {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong, #3b4350);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #06110d;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.privacy-contact.selected .privacy-check {
+  background: var(--wisp);
+  border-color: var(--wisp);
 }
 
 .privacy-contact:hover {

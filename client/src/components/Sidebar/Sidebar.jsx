@@ -125,8 +125,12 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
     if (e.pointerType === "touch") return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (listRef.current?.scrollTop > 0) return;
+    // Never start a pull from the row-swipe zone of a chat row that is
+    // already open/being dragged horizontally.
     dragRef.current = {
+      startX: e.clientX,
       startY: e.clientY,
+      lock: null, // "vertical" | "horizontal" once the direction is decided
       baseOffset: restingOffset,
       finalOffset: restingOffset,
       engaged: false,
@@ -138,11 +142,18 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
     const drag = dragRef.current;
     if (!drag || drag.source !== "pointer" || drag.pointerId !== e.pointerId) return;
     const delta = e.clientY - drag.startY;
-    // Ignore upward drags entirely if the list can still scroll up itself;
-    // only a genuine pull *past* the top should engage the reveal gesture,
-    // so a small dead-zone keeps ordinary scroll flicks from misfiring it.
+    // Direction lock: a gesture belongs to the row-swipe (horizontal) OR the
+    // archive pull (vertical), never both. Without this a slightly diagonal
+    // row swipe also dragged the "Release for archive" bar down.
+    if (!drag.lock) {
+      const dx = Math.abs(e.clientX - drag.startX);
+      const dy = Math.abs(delta);
+      if (dx < 8 && dy < 8) return;
+      drag.lock = dy > dx * 1.6 ? "vertical" : "horizontal";
+    }
+    if (drag.lock === "horizontal") return;
     if (!drag.engaged) {
-      if (Math.abs(delta) < 6) return;
+      if (Math.abs(delta) < 10) return;
       if (delta < 0 && !revealed) return; // nothing to collapse yet, let it scroll
       drag.engaged = true;
       e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -175,7 +186,9 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
       const touch = e.touches[0];
       const { restingOffset: baseOffset } = pullStateRef.current;
       dragRef.current = {
+        startX: touch.clientX,
         startY: touch.clientY,
+        lock: null,
         baseOffset,
         finalOffset: baseOffset,
         engaged: false,
@@ -191,8 +204,15 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
       if (!touch) return;
       const delta = touch.clientY - drag.startY;
       const { revealed: isRevealed } = pullStateRef.current;
+      if (!drag.lock) {
+        const dx = Math.abs(touch.clientX - drag.startX);
+        const dy = Math.abs(delta);
+        if (dx < 8 && dy < 8) return;
+        drag.lock = dy > dx * 1.6 ? "vertical" : "horizontal";
+      }
+      if (drag.lock === "horizontal") return; // that's a chat-row swipe, not a pull
       if (!drag.engaged) {
-        if (Math.abs(delta) < 6 || (delta < 0 && !isRevealed)) return;
+        if (Math.abs(delta) < 10 || (delta < 0 && !isRevealed)) return;
         drag.engaged = true;
       }
       if (e.cancelable) e.preventDefault();
@@ -463,7 +483,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
                 </span>
                 <span className="archived-row-meta">
                   {archivedUnread > 0 && <span className="unread-badge muted">{archivedUnread}</span>}
-                  <span className="archived-row-count">{archivedCount}</span>
+                  {/* <span className="archived-row-count">{archivedCount}</span> */}
                 </span>
               </button>
             ) : (

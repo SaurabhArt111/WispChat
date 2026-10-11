@@ -101,10 +101,19 @@ export default function StatusPrivacyModal({ onClose }) {
           ) : (
             <div className="privacy-contacts">
               {contacts.map((c) => (
-                <button key={c._id} className="privacy-contact" onClick={() => toggle(String(c._id))}>
-                  <Avatar user={c} size={34} />
-                  <span>{c.displayName}</span>
-                  {selected.has(String(c._id)) && <CheckIcon size={16} />}
+                <button
+                  key={c._id}
+                  type="button"
+                  className={`privacy-contact ${selected.has(String(c._id)) ? "selected" : ""}`}
+                  onClick={() => toggle(String(c._id))}
+                  role="checkbox"
+                  aria-checked={selected.has(String(c._id))}
+                >
+                  <Avatar user={c} size={40} />
+                  <span className="privacy-contact-name">{c.displayName}</span>
+                  <span className="privacy-check" aria-hidden="true">
+                    {selected.has(String(c._id)) && <CheckIcon size={14} />}
+                  </span>
                 </button>
               ))}
             </div>

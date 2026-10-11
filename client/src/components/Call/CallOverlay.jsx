@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { useCall } from "../../context/CallContext";
+import { useChat } from "../../context/ChatContext";
 import Avatar from "../common/Avatar";
 import {
   PhoneIcon,
@@ -17,6 +19,8 @@ import {
   MoreIcon,
   MinimizeIcon,
   CheckIcon,
+  ChatIcon,
+  LockIcon as ShieldLockIcon,
 } from "../common/Icons";
 import { useToast } from "../../context/ToastContext";
 import "../../styles/call.css";
@@ -74,21 +78,86 @@ function useStreamRef(stream, { onBlocked } = {}) {
   return ref;
 }
 
+// "Speaker": phones' browsers can't flip between earpiece and loudspeaker, so
+// this does the part that is possible and audible — boosts the other person's
+// voice (Web Audio gain + a soft limiter so peaks don't distort). While it's
+// on, the plain <audio> element is muted so the sound isn't doubled.
+function useLoudSpeaker(stream) {
+  const [loud, setLoud] = useState(false);
+  const supported = typeof window !== "undefined" && !!(window.AudioContext || window.webkitAudioContext);
+
+  useEffect(() => {
+    if (!loud || !stream || !supported) return undefined;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    let ctx;
+    try {
+      ctx = new AC();
+      const src = ctx.createMediaStreamSource(stream);
+      const gain = ctx.createGain();
+      gain.gain.value = 2.4;
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -12;
+      limiter.ratio.value = 12;
+      src.connect(gain);
+      gain.connect(limiter);
+      limiter.connect(ctx.destination);
+      ctx.resume?.();
+    } catch {
+      setLoud(false);
+      return undefined;
+    }
+    return () => {
+      try {
+        ctx.close();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [loud, stream, supported]);
+
+  return { loud, supported, toggle: () => setLoud((v) => !v) };
+}
+
 export default function CallOverlay() {
   const { call, acceptCall, declineCall, endCall, toggleMute, toggleCamera, flipCamera, toggleScreenShare } = useCall();
   const { showToast } = useToast();
+  const { openConversation } = useChat();
+  const navigate = useNavigate();
   const [minimized, setMinimized] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const [outputs, setOutputs] = useState([]); // audio output devices
   const [outputId, setOutputId] = useState("default");
   const [audioBlocked, setAudioBlocked] = useState(false);
   const remoteAudioRef = useRef(null);
+  const hideTimerRef = useRef(null);
   const elapsed = useElapsed(call?.status === "connected" ? call.connectedAt : null);
+  const speaker = useLoudSpeaker(call?.remoteStream);
 
   const onBlocked = useCallback(() => setAudioBlocked(true), []);
   const remoteVideoRef = useStreamRef(call?.remoteStream, { onBlocked: () => {} });
   const remoteAudioBind = useStreamRef(call?.remoteStream, { onBlocked });
   const localVideoRef = useStreamRef(call?.localStream);
+
+  const isVideoCall = call?.kind === "video";
+  const canShare = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
+
+  // Video calls: the control bar tucks away after a few idle seconds so the
+  // picture gets the whole screen; any tap or movement brings it back.
+  const wake = useCallback(() => {
+    setControlsVisible(true);
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 4500);
+  }, []);
+  useEffect(() => {
+    if (!call || !isVideoCall || call.status !== "connected" || moreOpen) {
+      clearTimeout(hideTimerRef.current);
+      setControlsVisible(true);
+      return undefined;
+    }
+    wake();
+    return () => clearTimeout(hideTimerRef.current);
+  }, [call?.status, isVideoCall, moreOpen, wake, !!call]);
 
   useEffect(() => {
     if (!call) {
@@ -98,17 +167,14 @@ export default function CallOverlay() {
     }
   }, [call]);
 
-  // Audio output devices (speaker / headset / Bluetooth). Browsers only expose
-  // this where HTMLMediaElement.setSinkId exists (Chrome/Edge, Android Chrome).
+  // Audio output devices (Chrome/Edge/Android Chrome support setSinkId).
   const canPickOutput = typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
   async function loadOutputs() {
-    if (!canPickOutput || !navigator.mediaDevices?.enumerateDevices) return [];
+    if (!canPickOutput || !navigator.mediaDevices?.enumerateDevices) return;
     try {
-      const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
-      setOutputs(devices);
-      return devices;
+      setOutputs((await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput"));
     } catch {
-      return [];
+      /* ignore */
     }
   }
   async function chooseOutput(id) {
@@ -119,25 +185,21 @@ export default function CallOverlay() {
       showToast("Couldn't switch audio output");
     }
   }
-  // Speaker button: cycle through available outputs, or explain when the
-  // browser doesn't allow choosing one.
-  async function cycleSpeaker() {
-    if (!canPickOutput) {
-      showToast("This browser always uses your device's default audio output");
+  function toggleSpeaker() {
+    if (!speaker.supported) {
+      showToast("Your browser can't boost call volume");
       return;
     }
-    const list = outputs.length ? outputs : await loadOutputs();
-    if (list.length < 2) {
-      showToast("Only one audio output is available");
-      return;
-    }
-    const idx = Math.max(0, list.findIndex((d) => d.deviceId === outputId));
-    const next = list[(idx + 1) % list.length];
-    await chooseOutput(next.deviceId);
-    showToast(`Audio: ${next.label || "Output device"}`);
+    speaker.toggle();
+    showToast(speaker.loud ? "Speaker boost off" : "Speaker boost on — their voice is louder");
   }
-  function upgradeToVideo() {
-    showToast("Switching to video mid-call isn't supported yet — end this call and start a video call");
+  function openChatDuringCall() {
+    setMoreOpen(false);
+    setMinimized(true);
+    if (call?.conversationId) {
+      openConversation(call.conversationId);
+      navigate(`/chat/${call.conversationId}`);
+    }
   }
 
   function enableAudio() {
@@ -156,7 +218,13 @@ export default function CallOverlay() {
   const showRemoteVideo = isVideo && isActive && hasRemoteVideo && !call.remoteCameraOff;
 
   return createPortal(
-    <div className={`call-overlay ${minimized ? "minimized" : ""}`}>
+    <div
+      className={`call-overlay ${minimized ? "minimized" : ""} ${isVideo && isActive ? "video-mode" : ""} ${
+        controlsVisible || !isVideo || !isActive ? "" : "controls-hidden"
+      }`}
+      onPointerDown={isVideo && isActive ? wake : undefined}
+      onMouseMove={isVideo && isActive ? wake : undefined}
+    >
       {/* Remote audio always plays through its own element; the remote <video>
           is muted so sound is never doubled and audio-only calls work too. */}
       <audio
@@ -166,6 +234,7 @@ export default function CallOverlay() {
         }}
         autoPlay
         playsInline
+        muted={speaker.loud}
       />
       <video
         ref={remoteVideoRef}
@@ -213,7 +282,7 @@ export default function CallOverlay() {
             <VideoOffIcon size={12} /> {call.peer.displayName}'s camera is off
           </div>
         )}
-        {call.status === "connected" && call.safetyCode && (
+        {call.status === "connected" && call.safetyCode && !isVideo && (
           <div className="call-safety-code" title="Compare this code out loud to verify no one is intercepting your call">
             Safety code: {call.safetyCode}
           </div>
@@ -261,19 +330,26 @@ export default function CallOverlay() {
           </button>
         </div>
       ) : (
-        // WhatsApp-style 3 x 2 control card: Speaker · Video · Mute / More · Share · End.
-        <div className="call-panel">
+        <>
           {moreOpen && (
-            <div className="call-more-menu" role="menu">
-              {isVideo && (
+            <div className={`call-more-menu ${isVideo && isActive ? "compact" : ""}`} role="menu">
+              {(isVideo || call.sharing) && (
                 <button role="menuitem" onClick={() => { setMoreOpen(false); flipCamera(); }}>
                   <FlipCameraIcon size={18} /> Switch camera
                 </button>
               )}
+              {canShare && (
+                <button role="menuitem" onClick={() => { setMoreOpen(false); toggleScreenShare(); }}>
+                  <ScreenShareIcon size={18} /> {call.sharing ? "Stop sharing screen" : "Share screen"}
+                </button>
+              )}
+              <button role="menuitem" onClick={openChatDuringCall}>
+                <ChatIcon size={18} /> Open chat
+              </button>
               <button role="menuitem" onClick={() => { setMoreOpen(false); setMinimized(true); }}>
                 <MinimizeIcon size={18} /> Minimize
               </button>
-              {canPickOutput && outputs.length > 0 && (
+              {canPickOutput && outputs.length > 1 && (
                 <>
                   <div className="call-more-label">Audio output</div>
                   {outputs.map((d) => (
@@ -284,39 +360,76 @@ export default function CallOverlay() {
                   ))}
                 </>
               )}
-              {call.safetyCode && <div className="call-more-code">Safety code: {call.safetyCode}</div>}
+              {call.safetyCode && (
+                <div className="call-more-code">
+                  <ShieldLockIcon size={12} /> Safety code: {call.safetyCode}
+                </div>
+              )}
             </div>
           )}
-          <div className="call-panel-grid">
-            <button className="call-panel-btn" onClick={cycleSpeaker}>
-              <span className="call-panel-icon"><SpeakerIcon size={24} /></span>
-              <span>Speaker</span>
-            </button>
-            <button
-              className={`call-panel-btn ${isVideo && call.cameraOff ? "active" : ""}`}
-              onClick={isVideo ? toggleCamera : upgradeToVideo}
-            >
-              <span className="call-panel-icon">{isVideo && call.cameraOff ? <VideoOffIcon size={24} /> : <VideoIcon size={24} />}</span>
-              <span>Video</span>
-            </button>
-            <button className={`call-panel-btn ${call.muted ? "active" : ""}`} onClick={toggleMute}>
-              <span className="call-panel-icon">{call.muted ? <MicOffIcon size={24} /> : <MicIcon size={24} />}</span>
-              <span>Mute</span>
-            </button>
-            <button className={`call-panel-btn ${moreOpen ? "active" : ""}`} onClick={() => { setMoreOpen((o) => !o); loadOutputs(); }}>
-              <span className="call-panel-icon"><MoreIcon size={24} /></span>
-              <span>More</span>
-            </button>
-            <button className={`call-panel-btn ${call.sharing ? "active" : ""}`} onClick={toggleScreenShare}>
-              <span className="call-panel-icon"><ScreenShareIcon size={24} /></span>
-              <span>{call.sharing ? "Stop" : "Share"}</span>
-            </button>
-            <button className="call-panel-btn end" onClick={isOutgoing ? declineCall : endCall}>
-              <span className="call-panel-icon"><PhoneOffIcon size={26} /></span>
-              <span>{isOutgoing ? "Cancel" : "End"}</span>
-            </button>
-          </div>
-        </div>
+
+          {isVideo && isActive ? (
+            // Video call: a small icon-only bar so the picture stays the focus.
+            <div className="call-bar" onPointerDown={(e) => e.stopPropagation()}>
+              <button className={`call-bar-btn ${call.muted ? "active" : ""}`} onClick={toggleMute} title={call.muted ? "Unmute" : "Mute"} aria-label="Mute">
+                {call.muted ? <MicOffIcon size={20} /> : <MicIcon size={20} />}
+              </button>
+              <button className={`call-bar-btn ${call.cameraOff ? "active" : ""}`} onClick={toggleCamera} title={call.cameraOff ? "Camera on" : "Camera off"} aria-label="Camera">
+                {call.cameraOff ? <VideoOffIcon size={20} /> : <VideoIcon size={20} />}
+              </button>
+              <button className="call-bar-btn" onClick={flipCamera} title="Switch camera" aria-label="Switch camera">
+                <FlipCameraIcon size={20} />
+              </button>
+              <button className={`call-bar-btn ${speaker.loud ? "active" : ""}`} onClick={toggleSpeaker} title="Speaker boost" aria-label="Speaker">
+                <SpeakerIcon size={20} />
+              </button>
+              <button className={`call-bar-btn ${moreOpen ? "active" : ""}`} onClick={() => { setMoreOpen((o) => !o); loadOutputs(); }} title="More" aria-label="More">
+                <MoreIcon size={20} />
+              </button>
+              <button className="call-bar-btn end" onClick={endCall} title="End call" aria-label="End call">
+                <PhoneOffIcon size={22} />
+              </button>
+            </div>
+          ) : (
+            // Voice call (and while a call is still ringing/connecting): the
+            // roomy WhatsApp-style 3 × 2 panel.
+            <div className="call-panel">
+              <div className="call-panel-grid">
+                <button className={`call-panel-btn ${speaker.loud ? "active" : ""}`} onClick={toggleSpeaker}>
+                  <span className="call-panel-icon"><SpeakerIcon size={24} /></span>
+                  <span>Speaker</span>
+                </button>
+                <button className={`call-panel-btn ${isVideo && call.cameraOff ? "active" : ""}`} onClick={toggleCamera}>
+                  <span className="call-panel-icon">{isVideo && call.cameraOff ? <VideoOffIcon size={24} /> : <VideoIcon size={24} />}</span>
+                  <span>Video</span>
+                </button>
+                <button className={`call-panel-btn ${call.muted ? "active" : ""}`} onClick={toggleMute}>
+                  <span className="call-panel-icon">{call.muted ? <MicOffIcon size={24} /> : <MicIcon size={24} />}</span>
+                  <span>Mute</span>
+                </button>
+                <button className={`call-panel-btn ${moreOpen ? "active" : ""}`} onClick={() => { setMoreOpen((o) => !o); loadOutputs(); }}>
+                  <span className="call-panel-icon"><MoreIcon size={24} /></span>
+                  <span>More</span>
+                </button>
+                {canShare ? (
+                  <button className={`call-panel-btn ${call.sharing ? "active" : ""}`} onClick={toggleScreenShare}>
+                    <span className="call-panel-icon"><ScreenShareIcon size={24} /></span>
+                    <span>{call.sharing ? "Stop" : "Share"}</span>
+                  </button>
+                ) : (
+                  <button className="call-panel-btn" onClick={openChatDuringCall}>
+                    <span className="call-panel-icon"><ChatIcon size={24} /></span>
+                    <span>Chat</span>
+                  </button>
+                )}
+                <button className="call-panel-btn end" onClick={isOutgoing ? declineCall : endCall}>
+                  <span className="call-panel-icon"><PhoneOffIcon size={26} /></span>
+                  <span>{isOutgoing ? "Cancel" : "End"}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>,
     document.body

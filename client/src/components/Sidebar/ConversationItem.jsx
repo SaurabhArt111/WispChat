@@ -112,7 +112,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
   const REVEAL_RIGHT = ACTION_W; // Mute
   const FULL_TRIGGER = 230;
   const MAX_LEFT = 300;
-  const DRAG_SLOP = 8;
+  const DRAG_SLOP = 10;
   const LONG_PRESS_MS = 480;
   const [dragX, setDragX] = useState(0);
   const [rest, setRest] = useState(0); // resting offset: 0 | -REVEAL_LEFT | +REVEAL_RIGHT
@@ -180,7 +180,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
       if (Math.abs(deltaX) < DRAG_SLOP && Math.abs(deltaY) < DRAG_SLOP) return;
       clearLongPressTimer();
       // Commit to a swipe only when it is clearly horizontal.
-      if (Math.abs(deltaY) * 1.4 > Math.abs(deltaX)) {
+      if (Math.abs(deltaY) * 1.2 > Math.abs(deltaX)) {
         dragStartRef.current = null;
         setPressed(false);
         return;
@@ -388,22 +388,14 @@ export default function ConversationItem({ conversation, active, onClick }) {
     <>
     <div className={`conv-swipe-wrap ${leaving ? "is-leaving" : ""}`}>
       {/* Right-swipe action: Mute */}
-      <div
-        className={`conv-swipe-actions left ${rest > 0 || (dragging && dragX > 0) ? "visible" : ""}`}
-        style={{ width: Math.max(REVEAL_RIGHT, dragX) }}
-        aria-hidden={rest <= 0}
-      >
+      <div className="conv-swipe-actions left" style={{ width: Math.max(REVEAL_RIGHT, dragX), visibility: dragX > 0 || rest > 0 ? "visible" : "hidden" }} aria-hidden={rest <= 0}>
         <button className="conv-swipe-btn mute" onClick={handleSwipeMute} tabIndex={rest > 0 ? 0 : -1}>
           <MuteIcon size={20} />
           <span>{conversation.muted ? "Unmute" : "Mute"}</span>
         </button>
       </div>
       {/* Left-swipe actions: Pin + Archive (archive grows as you drag further) */}
-      <div
-        className={`conv-swipe-actions right ${rest < 0 || (dragging && dragX < 0) ? "visible" : ""}`}
-        style={{ width: Math.max(REVEAL_LEFT, -dragX) }}
-        aria-hidden={rest >= 0}
-      >
+      <div className="conv-swipe-actions right" style={{ width: Math.max(REVEAL_LEFT, -dragX), visibility: dragX < 0 || rest < 0 ? "visible" : "hidden" }} aria-hidden={rest >= 0}>
         <button className="conv-swipe-btn pin" onClick={handleSwipePin} tabIndex={rest < 0 ? 0 : -1}>
           <PinIcon size={20} filled={conversation.pinned} />
           <span>{conversation.pinned ? "Unpin" : "Pin"}</span>

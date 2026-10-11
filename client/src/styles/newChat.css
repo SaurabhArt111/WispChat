@@ -161,7 +161,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b7a43;
+  background: var(--border);
   color: #fff;
 }
 
@@ -248,8 +248,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b7a43;
-  color: #fff;
+  background: var(--wisp);
+  color: #04211a;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
 }
 
@@ -319,8 +319,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #0b7a43;
-    color: #fff;
+    background: var(--wisp);
+    color: #04211a;
     box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
     animation: fabPop 320ms var(--ease-spring) both;
   }

@@ -71,8 +71,7 @@ function fileExt(name = "") {
 }
 
 function replaceExt(name, ext) {
-  const baseName = typeof name === "string" && name ? name : "media";
-  return baseName.replace(/\.[a-z0-9]+$/i, "") + "." + ext;
+  return name.replace(/\.[a-z0-9]+$/i, "") + "." + ext;
 }
 
 function uid() {

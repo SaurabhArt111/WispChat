@@ -32,3 +32,15 @@
 - `sendMessage` used a stale conversation list for brand-new chats, so the first message could be encrypted for the wrong recipients (affected Broadcast too).
 - Explore "For you" explicitly included your own posts.
 - Chat header text collapsed at tablet widths (desktop layout was used below ~860px).
+
+---
+
+# Revision 2 (fixes from screenshots + screen recording)
+
+| Issue seen | Fix |
+|---|---|
+| Swiping a chat row also dragged the blue "Release for archive" bar | Pull gesture now direction-locks (must be clearly vertical); row swipe needs clearly horizontal (`Sidebar.jsx`, `ConversationItem.jsx`) |
+| Blue Archive sliver visible on a resting row | Swipe action panels are hidden unless the row is moved |
+| Status privacy: avatars stretched into ovals, no visible selection | `.privacy-contact span{flex:1}` was matching the avatar `<span>`; fixed + real tick circles. Global `.avatar{flex-shrink:0}` guard |
+| Video call: huge control panel covering the picture | Video calls use a small icon-only pill bar (Mute · Camera · Flip · Speaker · More · End) that auto-hides after ~4.5 s and returns on tap. Voice calls keep the big grid. Safety code moved into More; self-view moved top-right; remote video now fills the screen |
+| Call menu features not really working | **Video** in a voice call now truly adds your camera (renegotiates; the other side switches to video too). **Speaker** = real volume boost (Web Audio). **Share** works from voice or video calls where the browser supports screen capture (hidden on phones whose browsers don't; "Chat" shown instead). **More** → Switch camera, Share screen, Open chat, Minimize, Audio output |

@@ -316,7 +316,16 @@ export function CallProvider({ children }) {
         const stream = e.streams?.[0] || remoteStreamRef.current || new MediaStream();
         if (!e.streams?.[0] && !stream.getTracks().includes(e.track)) stream.addTrack(e.track);
         remoteStreamRef.current = stream;
-        patchCall((c) => ({ ...c, remoteStream: stream, remoteTracksAt: Date.now() }), callId);
+        patchCall(
+          (c) => ({
+            ...c,
+            // The other person turned their camera on mid-call → we're in a video call now.
+            kind: e.track.kind === "video" ? "video" : c.kind,
+            remoteStream: stream,
+            remoteTracksAt: Date.now(),
+          }),
+          callId
+        );
         e.track.onunmute = () => patchCall((c) => ({ ...c, remoteTracksAt: Date.now() }), callId);
       };
 
@@ -550,13 +559,47 @@ export function CallProvider({ children }) {
     announceMediaState(!track.enabled, callRef.current?.cameraOff);
   }, [patchCall, announceMediaState]);
 
+  // Turn the camera on in a voice call (or for the side that joined without
+  // one). Adds a video track to the live connection; the existing perfect-
+  // negotiation code (onnegotiationneeded) sends the new offer, and the other
+  // side's ontrack flips THEIR screen to video too.
+  const enableVideo = useCallback(async () => {
+    const pc = pcRef.current;
+    const stream = localStreamRef.current;
+    if (!pc || !stream || pc.signalingState === "closed") return false;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showToast("Your browser can't use the camera here");
+      return false;
+    }
+    try {
+      const cam = await navigator.mediaDevices.getUserMedia({ video: VIDEO_CONSTRAINTS });
+      const track = cam.getVideoTracks()[0];
+      stream.addTrack(track);
+      pc.addTrack(track, stream);
+      patchCall({
+        kind: "video",
+        cameraOff: false,
+        mirrored: true,
+        localStream: new MediaStream(stream.getTracks()),
+      });
+      announceMediaState(callRef.current?.muted, false);
+      return true;
+    } catch (err) {
+      showToast(err?.name === "NotAllowedError" ? "Camera permission was denied" : "No camera available");
+      return false;
+    }
+  }, [patchCall, showToast, announceMediaState]);
+
   const toggleCamera = useCallback(() => {
     const track = localStreamRef.current?.getVideoTracks()[0];
-    if (!track) return;
+    if (!track) {
+      enableVideo();
+      return;
+    }
     track.enabled = !track.enabled;
     patchCall({ cameraOff: !track.enabled });
     announceMediaState(callRef.current?.muted, !track.enabled);
-  }, [patchCall, announceMediaState]);
+  }, [patchCall, announceMediaState, enableVideo]);
 
   // Front/back camera switch on phones. Swaps the outgoing video track in
   // place (replaceTrack) so no renegotiation or reconnect is needed.
@@ -590,29 +633,33 @@ export function CallProvider({ children }) {
   const toggleScreenShare = useCallback(async () => {
     const pc = pcRef.current;
     const stream = localStreamRef.current;
-    const sender = pc?.getSenders().find((s) => s.track?.kind === "video");
-    if (!pc || !stream || !sender) {
-      showToast("Screen sharing is available during video calls");
-      return;
-    }
+    if (!pc || !stream) return;
     if (callRef.current?.sharing) {
       stopShareRef.current();
       return;
     }
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      showToast("Your browser can't share the screen");
+      showToast("Screen sharing isn't supported on this device's browser");
       return;
     }
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const track = display.getVideoTracks()[0];
-      cameraTrackRef.current = stream.getVideoTracks()[0] || null;
-      await sender.replaceTrack(track);
+      let sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      let addedSender = false;
+      if (sender) {
+        cameraTrackRef.current = stream.getVideoTracks()[0] || null;
+        await sender.replaceTrack(track);
+      } else {
+        // Voice call: add a video sender just for the share (renegotiates).
+        sender = pc.addTrack(track, new MediaStream([track]));
+        addedSender = true;
+      }
       screenTrackRef.current = track;
       stopShareRef.current = async () => {
-        const cam = cameraTrackRef.current;
         try {
-          if (cam) await sender.replaceTrack(cam);
+          if (addedSender) pc.removeTrack(sender);
+          else if (cameraTrackRef.current) await sender.replaceTrack(cameraTrackRef.current);
         } catch {
           /* ignore */
         }
@@ -626,6 +673,7 @@ export function CallProvider({ children }) {
       patchCall({
         sharing: true,
         mirrored: false,
+        kind: "video",
         localStream: new MediaStream([track, ...stream.getAudioTracks()]),
       });
     } catch (err) {
@@ -818,6 +866,7 @@ export function CallProvider({ children }) {
         toggleCamera,
         flipCamera,
         toggleScreenShare,
+        enableVideo,
       }}
     >
       {children}

@@ -68,11 +68,6 @@ export function useDecryptedMediaUrl(message, attachment) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!plainUrl) {
-      setState({ url: null, loading: false, error: true });
-      return;
-    }
-
     if (!attachment?.encrypted) {
       setState({ url: plainUrl, loading: false, error: false });
       return;
@@ -91,7 +86,6 @@ export function useDecryptedMediaUrl(message, attachment) {
         const { mk, locked } = await e2ee.decryptMessageText(message);
         if (locked || !mk) throw new Error("locked");
         const res = await fetch(plainUrl);
-        if (!res.ok) throw new Error(`Attachment request failed with ${res.status}`);
         const buffer = await res.arrayBuffer();
         const plainBuffer = await e2ee.decryptAttachmentBuffer(mk, buffer, attachment.iv);
         const blob = new Blob([plainBuffer], { type: attachment.mimeType || "application/octet-stream" });

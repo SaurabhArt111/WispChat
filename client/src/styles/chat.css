@@ -832,12 +832,6 @@
   background: var(--surface-3);
 }
 
-.attachment-media-not-found {
-  width: 100%;
-  min-height: 90px;
-  cursor: default;
-}
-
 .image-grid.count-1 .image-grid-item {
   aspect-ratio: 4/3;
 }
