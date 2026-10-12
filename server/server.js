@@ -89,6 +89,18 @@ app.use(
   })
 );
 
+// A file that is not on disk answers with a tiny JSON 404 (short-lived cache so
+// a chat full of broken thumbnails doesn't hammer the server). The client turns
+// this into a "File unavailable" tile instead of the misleading "Couldn't
+// decrypt". NOTE: hosts with an ephemeral disk (Render free tier, Heroku…) wipe
+// /uploads on every deploy/restart — attach a persistent disk and point
+// UPLOAD_DIR at it, or move uploads to object storage (S3/R2/Cloudinary).
+app.use("/uploads", (req, res) => {
+  res.set("Cache-Control", "public, max-age=60");
+  res.set("Cross-Origin-Resource-Policy", "cross-origin");
+  res.status(404).json({ message: "File not found" });
+});
+
 // Attach io to every request so controllers can emit events
 app.use((req, res, next) => {
   req.io = io;

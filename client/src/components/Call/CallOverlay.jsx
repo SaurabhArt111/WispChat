@@ -118,6 +118,82 @@ function useLoudSpeaker(stream) {
   return { loud, supported, toggle: () => setLoud((v) => !v) };
 }
 
+
+// Slide-to-answer: drag the green knob right past ~80% of the track to pick up
+// (haptic buzz at the threshold). A plain tap/click on the knob — or Enter /
+// Space when it is focused — answers too, so mouse and keyboard users never
+// have to drag.
+function SlideToAnswer({ onAnswer, video }) {
+  const trackRef = useRef(null);
+  const dragRef = useRef(null);
+  const [x, setX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [done, setDone] = useState(false);
+  const KNOB = 60;
+  const maxX = () => Math.max(0, (trackRef.current?.clientWidth || 260) - KNOB - 8);
+
+  function buzz(p) {
+    try { navigator.vibrate?.(p); } catch { /* ignore */ }
+  }
+  function finish() {
+    if (done) return;
+    setDone(true);
+    setX(maxX());
+    buzz([20, 40, 30]);
+    setTimeout(onAnswer, 120);
+  }
+  function down(e) {
+    if (done) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { startX: e.clientX, base: x, moved: false, armed: false };
+    setDragging(true);
+  }
+  function move(e) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    if (Math.abs(dx) > 6) d.moved = true;
+    const next = Math.max(0, Math.min(maxX(), d.base + dx));
+    const armed = next >= maxX() * 0.8;
+    if (armed && !d.armed) buzz(14);
+    d.armed = armed;
+    setX(next);
+  }
+  function up() {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDragging(false);
+    if (!d) return;
+    if (!d.moved || x >= maxX() * 0.8) return finish(); // tap OR slid far enough
+    setX(0); // spring back
+  }
+  const progress = maxX() ? x / maxX() : 0;
+
+  return (
+    <div className={`slide-answer ${done ? "done" : ""}`} ref={trackRef}>
+      <div className="slide-answer-label" style={{ opacity: Math.max(0, 1 - progress * 1.6) }}>
+        <span className="slide-chevrons"><i /><i /><i /></span>
+        Slide to answer
+      </div>
+      <div className="slide-answer-fill" style={{ width: x + KNOB + 4 }} />
+      <button
+        type="button"
+        className={`slide-answer-knob ${dragging ? "dragging" : ""}`}
+        style={{ transform: `translateX(${x}px)` }}
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); finish(); } }}
+        aria-label={`Answer ${video ? "video" : "voice"} call`}
+        title="Slide or tap to answer"
+      >
+        {video ? <VideoIcon size={26} /> : <PhoneIcon size={26} />}
+      </button>
+    </div>
+  );
+}
+
 export default function CallOverlay() {
   const { call, acceptCall, declineCall, endCall, toggleMute, toggleCamera, flipCamera, toggleScreenShare } = useCall();
   const { showToast } = useToast();
@@ -321,13 +397,16 @@ export default function CallOverlay() {
       )}
 
       {isIncoming ? (
-        <div className="call-controls">
-          <button className="call-btn decline" onClick={declineCall} title="Decline">
-            <PhoneOffIcon size={26} />
-          </button>
-          <button className="call-btn accept" onClick={acceptCall} title="Accept">
-            <PhoneIcon size={26} />
-          </button>
+        <div className="call-incoming">
+          <div className="call-incoming-row">
+            <div className="call-decline-wrap">
+              <button className="call-btn decline" onClick={declineCall} title="Decline" aria-label="Decline call">
+                <PhoneOffIcon size={26} />
+              </button>
+              <span>Decline</span>
+            </div>
+            <SlideToAnswer video={isVideo} onAnswer={acceptCall} />
+          </div>
         </div>
       ) : (
         <>

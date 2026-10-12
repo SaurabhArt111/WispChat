@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Wisp - Chat",
-  "short_name": "Wisp",
-  "description": "Fast, modern realtime chat - messages, media, groups and calls in one place.",
+  "name": "WispChat",
+  "short_name": "WispChat",
+  "description": "Fast, modern realtime chat/messages, media, groups and calls in one place.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

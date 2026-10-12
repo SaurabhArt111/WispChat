@@ -26,6 +26,16 @@ import {
   InfoIcon,
 } from "../common/Icons";
 
+// Tiny haptic helper. navigator.vibrate exists on Android/Chromium phones; it
+// is a harmless no-op on desktop and iOS Safari.
+function buzz(pattern = 8) {
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(pattern);
+  } catch {
+    /* ignore */
+  }
+}
+
 // Live draft text for one chat (updates when the Composer saves/clears it).
 function useDraft(userId, conversationId) {
   const [draft, setDraft] = useState(() => getDraft(userId, conversationId));
@@ -123,7 +133,11 @@ export default function ConversationItem({ conversation, active, onClick }) {
   const longPressTimerRef = useRef(null);
   const suppressClickRef = useRef(false);
   const dragXRef = useRef(0);
+  const zoneRef = useRef("closed"); // magnet zone the finger is currently in
+  const lastDragEndRef = useRef(0);
+  const [snapPulse, setSnapPulse] = useState(0); // bumps on every magnet "click" so CSS can pop the buttons
   const revealed = rest !== 0;
+  const MAGNET = 16; // px radius in which a resting point "grabs" the row
   const draftText = useDraft(user._id, conversation._id);
 
   function clearLongPressTimer() {
@@ -151,6 +165,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
 
   function onPointerDown(e) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    zoneRef.current = rest < 0 ? "open-left" : rest > 0 ? "open-right" : "closed";
     dragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -190,15 +205,44 @@ export default function ConversationItem({ conversation, active, onClick }) {
       e.currentTarget.setPointerCapture?.(e.pointerId);
     }
     e.preventDefault();
+    // A second mouse button pressed mid-drag (e.g. right-click) must neither
+    // cancel the drag nor open the context menu — just keep following.
     let next = drag.baseX + deltaX;
     // Rubber-band beyond the reveal width so it feels physical.
     if (next < -REVEAL_LEFT) next = -REVEAL_LEFT + (next + REVEAL_LEFT) * 0.75;
     if (next > REVEAL_RIGHT) next = REVEAL_RIGHT + (next - REVEAL_RIGHT) * 0.3;
     next = Math.max(-MAX_LEFT, Math.min(REVEAL_RIGHT + 24, next));
+
+    // Magnetic detents: the row "sticks" a little at each resting point
+    // (closed, Pin+Archive open, Mute open) and at the full-swipe-to-archive
+    // point, and buzzes the moment it locks in or lets go.
+    let zone = "free";
+    const detents = [
+      ["closed", 0],
+      ["open-left", -REVEAL_LEFT],
+      ["open-right", REVEAL_RIGHT],
+      ["armed", -FULL_TRIGGER],
+    ];
+    for (const [name, at] of detents) {
+      if (Math.abs(next - at) < MAGNET) {
+        next = at + (next - at) * 0.3; // strong pull toward the detent
+        zone = name;
+        break;
+      }
+    }
+    if (next <= -FULL_TRIGGER) zone = "armed";
+    if (zone !== "free" && zone !== zoneRef.current) {
+      buzz(zone === "armed" ? [12, 30, 18] : zone === "closed" ? 5 : 10);
+      setSnapPulse((n) => n + 1);
+    }
+    if (zone !== "free") zoneRef.current = zone;
+    else if (zoneRef.current === "armed" && next > -FULL_TRIGGER) zoneRef.current = "free";
     dragXRef.current = next;
     setDragX(next);
   }
   function endDrag(e) {
+    // Releasing/pressing the right button must not end a left-button drag.
+    if (e?.pointerType === "mouse" && e.type === "pointerup" && e.button === 2) return;
     clearLongPressTimer();
     setPressed(false);
     const drag = dragStartRef.current;
@@ -209,18 +253,21 @@ export default function ConversationItem({ conversation, active, onClick }) {
       return;
     }
     setDragging(false);
+    lastDragEndRef.current = Date.now();
     try {
       e?.currentTarget?.releasePointerCapture?.(drag.pointerId);
     } catch {}
     const x = dragXRef.current;
     if (x <= -FULL_TRIGGER) {
       // Full swipe → archive (or unarchive from the Archived page).
+      buzz([16, 40, 24]);
       setLeaving(true);
       setDragX(-480);
       setTimeout(() => handleSwipeArchive(), 180);
       return;
     }
     const target = x < -REVEAL_LEFT / 2 ? -REVEAL_LEFT : x > REVEAL_RIGHT / 2 ? REVEAL_RIGHT : 0;
+    if (target !== 0) buzz(10); // settle "thunk" as the buttons lock open
     setRest(target);
     setDragX(target);
   }
@@ -346,6 +393,15 @@ export default function ConversationItem({ conversation, active, onClick }) {
   }
 
   function handleContextMenu(e) {
+    // Right-click while a swipe is in progress (or the instant after one):
+    // swallow it. Otherwise the menu flashes open for a split second and the
+    // row freezes half-open.
+    if (dragStartRef.current?.dragging || Date.now() - lastDragEndRef.current < 350) {
+      e.preventDefault?.();
+      e.stopPropagation?.();
+      return;
+    }
+    if (rest !== 0) closeSwipe();
     openMenu(
       e,
       [
@@ -386,7 +442,7 @@ export default function ConversationItem({ conversation, active, onClick }) {
 
   return (
     <>
-    <div className={`conv-swipe-wrap ${leaving ? "is-leaving" : ""}`}>
+    <div className={`conv-swipe-wrap ${leaving ? "is-leaving" : ""} ${dragging ? "is-dragging" : ""}`} data-snap={snapPulse % 2}>
       {/* Right-swipe action: Mute */}
       <div className="conv-swipe-actions left" style={{ width: Math.max(REVEAL_RIGHT, dragX), visibility: dragX > 0 || rest > 0 ? "visible" : "hidden" }} aria-hidden={rest <= 0}>
         <button className="conv-swipe-btn mute" onClick={handleSwipeMute} tabIndex={rest > 0 ? 0 : -1}>
@@ -422,7 +478,11 @@ export default function ConversationItem({ conversation, active, onClick }) {
         onPointerLeave={handleRowPointerLeave}
         style={{
           transform: `translateX(${dragX}px)`,
-          transition: dragging ? "none" : "transform 240ms cubic-bezier(.2,.8,.2,1)",
+          transition: dragging
+            ? "none"
+            : rest !== 0
+            ? "transform 340ms cubic-bezier(.22,1.35,.36,1)" /* springy settle when locking open */
+            : "transform 260ms cubic-bezier(.2,.8,.2,1)",
           touchAction: "pan-y",
         }}
       >

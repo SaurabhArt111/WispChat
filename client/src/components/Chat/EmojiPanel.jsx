@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import EmojiPicker, { EmojiStyle, SuggestionMode } from "emoji-picker-react";
+import EmojiPicker, { Categories, EmojiStyle, SuggestionMode } from "emoji-picker-react";
 import { GifIcon, SearchIcon, SmileIcon, StickerIcon, CloseIcon } from "../common/Icons";
 
 // WhatsApp-style panel with three tabs — Emoji, GIF and Stickers — plus a
@@ -106,69 +106,77 @@ function GifTab({ onPickGif }) {
   );
 }
 
+// Category order + labels copied from WhatsApp Web (clock = Recent first).
+const WA_CATEGORIES = [
+  { category: Categories.SUGGESTED, name: "Recent" },
+  { category: Categories.SMILEYS_PEOPLE, name: "Smileys & People" },
+  { category: Categories.ANIMALS_NATURE, name: "Animals & Nature" },
+  { category: Categories.FOOD_DRINK, name: "Food & Drink" },
+  { category: Categories.ACTIVITIES, name: "Activities" },
+  { category: Categories.TRAVEL_PLACES, name: "Travel & Places" },
+  { category: Categories.OBJECTS, name: "Objects" },
+  { category: Categories.SYMBOLS, name: "Symbols" },
+  { category: Categories.FLAGS, name: "Flags" },
+];
+
 export default function EmojiPanel({ onEmoji, onSticker, onGif, docked }) {
   const [tab, setTab] = useState("emoji");
-  const [recent, setRecent] = useState(readRecentEmoji);
 
   function pick(emoji) {
     pushRecentEmoji(emoji);
-    setRecent(readRecentEmoji());
     onEmoji(emoji);
   }
 
   return (
-    <div className={`emoji-panel ${docked ? "docked" : ""}`}>
-      <div className="emoji-panel-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "emoji"} className={tab === "emoji" ? "active" : ""} onClick={() => setTab("emoji")}>
-          <SmileIcon size={18} /> <span>Emoji</span>
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "gif"} className={tab === "gif" ? "active" : ""} onClick={() => setTab("gif")}>
-          <GifIcon size={20} /> <span>GIF</span>
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "sticker"} className={tab === "sticker" ? "active" : ""} onClick={() => setTab("sticker")}>
-          <StickerIcon size={18} /> <span>Stickers</span>
-        </button>
-      </div>
-
-      {tab === "emoji" && (
-        <div className="emoji-panel-body">
-          {recent.length > 0 && (
-            <div className="emoji-recent">
-              <div className="emoji-recent-label">Recent</div>
-              <div className="emoji-recent-row">
-                {recent.map((e) => (
-                  <button key={e} type="button" onClick={() => pick(e)}>{e}</button>
-                ))}
-              </div>
-            </div>
-          )}
+    <div className={`emoji-panel wa-panel ${docked ? "docked" : ""}`}>
+      <div className="wa-panel-body">
+        {tab === "emoji" && (
           <EmojiPicker
             theme="dark"
             // Native glyphs: no CDN fetch, so it works offline and isn't
-            // blocked by tracking-prevention (see previous implementation).
+            // blocked by tracking-prevention.
             emojiStyle={EmojiStyle.NATIVE}
             suggestedEmojisMode={SuggestionMode.RECENT}
+            categories={WA_CATEGORIES}
+            searchPlaceHolder="Search emoji"
+            autoFocusSearch={false}
             onEmojiClick={(e) => pick(e.emoji)}
             width="100%"
-            height={docked ? 270 : 320}
+            height="100%"
             lazyLoadEmojis
             skinTonesDisabled
             previewConfig={{ showPreview: false }}
           />
-        </div>
-      )}
+        )}
 
-      {tab === "gif" && <GifTab onPickGif={onGif} />}
+        {tab === "gif" && <GifTab onPickGif={onGif} />}
 
-      {tab === "sticker" && (
-        <div className="sticker-grid">
-          {STICKERS.map((s) => (
-            <button key={s} type="button" className="sticker-item" onClick={() => onSticker(s)} title="Send">
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+        {tab === "sticker" && (
+          <div className="sticker-wrap">
+            <div className="sticker-heading">Stickers</div>
+            <div className="sticker-grid">
+              {STICKERS.map((s) => (
+                <button key={s} type="button" className="sticker-item" onClick={() => onSticker(s)} title="Send sticker">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* WhatsApp-style segmented switch pinned at the bottom */}
+      <div className="wa-switch" role="tablist" aria-label="Emoji, GIF and sticker">
+        <button type="button" role="tab" aria-selected={tab === "emoji"} aria-label="Emoji" className={tab === "emoji" ? "active" : ""} onClick={() => setTab("emoji")}>
+          <SmileIcon size={20} />
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "gif"} aria-label="GIF" className={`gif ${tab === "gif" ? "active" : ""}`} onClick={() => setTab("gif")}>
+          GIF
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "sticker"} aria-label="Stickers" className={tab === "sticker" ? "active" : ""} onClick={() => setTab("sticker")}>
+          <StickerIcon size={20} />
+        </button>
+      </div>
     </div>
   );
 }

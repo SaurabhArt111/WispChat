@@ -35,10 +35,12 @@
 
 .app-shell.is-profile-route {
   grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .app-shell.is-profile-route .app-main {
   display: flex;
+  min-height: 0;
 }
 
 .app-shell.is-post-route {

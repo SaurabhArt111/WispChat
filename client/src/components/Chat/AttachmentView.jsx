@@ -14,6 +14,7 @@ import {
   LockIcon,
   ExternalLinkIcon,
   InfoIcon,
+  AlertIcon,
 } from "../common/Icons";
 import { SafeAudio, SafeImage, SafeVideo } from "../common/SafeMedia";
 
@@ -88,10 +89,51 @@ function PendingGeneric({ a }) {
 // shown at all, so each one is wrapped in a tiny component that resolves
 // a usable (blob:) src via useDecryptedMediaUrl before rendering.
 
+
+// One shared, friendly error state for encrypted attachments. It says WHY it
+// failed (file gone from server vs. network blip vs. locked vs. bad key) and
+// offers Retry where retrying can actually help.
+const PROBLEM_TEXT = {
+  missing: { title: "File unavailable", hint: "It was removed from the server", retry: false },
+  network: { title: "Couldn't load", hint: "Connection problem", retry: true },
+  locked: { title: "Locked", hint: "Unlock encryption to view", retry: true },
+  decrypt: { title: "Couldn't decrypt", hint: "Wrong key for this file", retry: false },
+};
+
+function AttachmentProblem({ code = "decrypt", onRetry, compact = false, label = "" }) {
+  const info = PROBLEM_TEXT[code] || PROBLEM_TEXT.decrypt;
+  return (
+    <div className={`attachment-problem ${compact ? "compact" : ""} code-${code}`} role="status">
+      <AlertIcon size={compact ? 15 : 20} />
+      <div className="attachment-problem-text">
+        <strong>{label ? `${info.title} · ${label}` : info.title}</strong>
+        {!compact && <span>{info.hint}</span>}
+      </div>
+      {info.retry && onRetry && (
+        <button
+          type="button"
+          className="attachment-problem-retry"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetry();
+          }}
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AttachmentImage({ message, a, onClick, onContextMenu, overlay }) {
-  const { url, loading, error } = useDecryptedMediaUrl(message, a);
+  const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
   if (loading) return <div className="image-grid-item attachment-decrypting"><LockIcon size={18} /></div>;
-  if (error || !url) return <div className="image-grid-item attachment-decrypt-error">Couldn't decrypt</div>;
+  if (error || !url)
+    return (
+      <div className="image-grid-item attachment-decrypt-error" onContextMenu={(e) => onContextMenu(e, null)}>
+        <AttachmentProblem code={errorCode} onRetry={retry} compact />
+      </div>
+    );
   return (
     <div className="image-grid-item" onClick={() => onClick(url)} onContextMenu={(e) => onContextMenu(e, url)}>
       <SafeImage src={url} alt={a.name} loading="lazy" className="image-grid-img" />
@@ -101,13 +143,13 @@ function AttachmentImage({ message, a, onClick, onContextMenu, overlay }) {
 }
 
 function AttachmentVideo({ message, a, onContextMenu }) {
-  const { url, loading, error } = useDecryptedMediaUrl(message, a);
+  const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
   return (
     <div className="attachment-video-wrap" onContextMenu={(e) => onContextMenu(e, url)}>
       {loading ? (
         <div className="attachment-decrypting"><LockIcon size={18} /> Decrypting…</div>
       ) : error || !url ? (
-        <div className="attachment-decrypt-error">Couldn't decrypt video</div>
+        <div className="attachment-decrypt-error"><AttachmentProblem code={errorCode} onRetry={retry} label="video" /></div>
       ) : (
         <SafeVideo src={url} controls className="attachment-video" />
       )}
@@ -116,13 +158,13 @@ function AttachmentVideo({ message, a, onContextMenu }) {
 }
 
 function AttachmentAudio({ message, a }) {
-  const { url, loading, error } = useDecryptedMediaUrl(message, a);
+  const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
   return (
     <div className="attachment-audio-wrap">
       {loading ? (
         <div className="attachment-decrypting"><LockIcon size={14} /> Decrypting…</div>
       ) : error || !url ? (
-        <div className="attachment-decrypt-error">Couldn't decrypt audio</div>
+        <div className="attachment-decrypt-error"><AttachmentProblem code={errorCode} onRetry={retry} label="audio" compact /></div>
       ) : (
         <SafeAudio src={url} controls className="attachment-audio" />
       )}
@@ -131,38 +173,47 @@ function AttachmentAudio({ message, a }) {
 }
 
 function AttachmentFile({ message, a, onContextMenu }) {
-  const { url, loading, error } = useDecryptedMediaUrl(message, a);
+  const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
   const canOpen = !!url && !loading && !error;
+
+  function save() {
+    if (!canOpen) return;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = a.name || "file";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   return (
-    <div className={`attachment-file ${!canOpen ? "attachment-file-disabled" : ""}`} onContextMenu={(e) => onContextMenu(e, url)}>
-      <button
-        type="button"
-        className="attachment-file-open"
-        disabled={!canOpen}
-        title={canOpen ? "Open to view" : undefined}
-        onClick={() => canOpen && window.open(url, "_blank", "noopener,noreferrer")}
-      >
+    <div className={`attachment-file attachment-file-card ${!canOpen ? "attachment-file-disabled" : ""}`} onContextMenu={(e) => onContextMenu(e, url)}>
+      <div className="attachment-file-top">
         {getExtensionBadge(a.name)}
         <div className="attachment-file-info">
           <div className="attachment-file-name" title={a.name}>
             {a.name}
           </div>
           <div className="attachment-file-size">
-            {loading ? "Decrypting…" : error ? "Couldn't decrypt" : formatBytes(a.size)}
+            {loading ? "Decrypting…" : error ? PROBLEM_TEXT[errorCode]?.title || "Couldn't decrypt" : `${(a.name.split(".").pop() || "FILE").toUpperCase()} · ${formatBytes(a.size)}`}
           </div>
         </div>
-      </button>
-      <a
-        href={url || undefined}
-        download={a.name}
-        className="attachment-download"
-        title="Download"
-        onClick={(e) => {
-          if (!canOpen) e.preventDefault();
-        }}
-      >
-        <DownloadIcon size={16} />
-      </a>
+      </div>
+      {/* WhatsApp-style action row */}
+      <div className="attachment-file-actions">
+        {error && PROBLEM_TEXT[errorCode]?.retry ? (
+          <button type="button" onClick={retry}>Retry</button>
+        ) : (
+          <>
+            <button type="button" disabled={!canOpen} onClick={() => canOpen && window.open(url, "_blank", "noopener,noreferrer")}>
+              Open
+            </button>
+            <button type="button" disabled={!canOpen} onClick={save}>
+              Save as…
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

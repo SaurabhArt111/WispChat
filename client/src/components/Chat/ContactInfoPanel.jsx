@@ -366,6 +366,23 @@ export default function ContactInfoPanel({ conversation, onClose }) {
             <span>Block {other.displayName}</span>
           </button>
         )}
+        {/* WhatsApp-style settings rows */}
+        <div className="ci-settings-list">
+          <button type="button" className="ci-setting-row" onClick={() => flag("mute")}>
+            <MuteIcon size={18} />
+            <span className="ci-setting-text">
+              <strong>Notification settings</strong>
+              <small>{conversation.muted ? "Muted" : "All messages"}</small>
+            </span>
+          </button>
+          <div className="ci-setting-row static">
+            <LockIcon size={18} />
+            <span className="ci-setting-text">
+              <strong>Encryption</strong>
+              <small>Messages and calls are end-to-end encrypted.</small>
+            </span>
+          </div>
+        </div>
         <p className="ci-e2ee-note">
           <LockIcon size={12} /> This chat is end-to-end encrypted
         </p>

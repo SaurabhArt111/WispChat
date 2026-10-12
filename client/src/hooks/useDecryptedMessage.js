@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { mediaUrl } from "../api/config";
 import { peekDecrypted } from "../utils/decryptCache";
+import { fetchMediaBuffer, isKnownMissing, forgetMissing, MediaError } from "../utils/fetchMedia";
 
 /**
  * Decrypts a message's text (if it's encrypted) for display. Non-encrypted
@@ -57,51 +58,64 @@ const objectUrlCache = new Map(); // attachment url -> blob object URL, for this
 export function useDecryptedMediaUrl(message, attachment) {
   const { e2ee } = useAuth();
   const plainUrl = attachment?.url ? mediaUrl(attachment.url) : null;
+  const [attempt, setAttempt] = useState(0); // bumped by retry()
   const [state, setState] = useState(() => {
-    if (!attachment?.encrypted) return { url: plainUrl, loading: false, error: false };
+    if (!attachment?.encrypted) return { url: plainUrl, loading: false, error: false, errorCode: null };
     const cachedUrl = objectUrlCache.get(`${attachment.url}:${attachment.iv}`);
-    return cachedUrl
-      ? { url: cachedUrl, loading: false, error: false }
-      : { url: null, loading: true, error: false };
+    if (cachedUrl) return { url: cachedUrl, loading: false, error: false, errorCode: null };
+    if (plainUrl && isKnownMissing(plainUrl)) return { url: null, loading: false, error: true, errorCode: "missing" };
+    return { url: null, loading: true, error: false, errorCode: null };
   });
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
 
     if (!attachment?.encrypted) {
-      setState({ url: plainUrl, loading: false, error: false });
-      return;
+      setState({ url: plainUrl, loading: false, error: false, errorCode: null });
+      return undefined;
     }
 
     const cacheKey = `${attachment.url}:${attachment.iv}`;
     const cached = objectUrlCache.get(cacheKey);
     if (cached) {
-      setState({ url: cached, loading: false, error: false });
-      return;
+      setState({ url: cached, loading: false, error: false, errorCode: null });
+      return undefined;
     }
 
-    setState({ url: null, loading: true, error: false });
+    setState({ url: null, loading: true, error: false, errorCode: null });
     (async () => {
       try {
         const { mk, locked } = await e2ee.decryptMessageText(message);
-        if (locked || !mk) throw new Error("locked");
-        const res = await fetch(plainUrl);
-        const buffer = await res.arrayBuffer();
-        const plainBuffer = await e2ee.decryptAttachmentBuffer(mk, buffer, attachment.iv);
+        if (locked || !mk) throw new MediaError("locked");
+        const buffer = await fetchMediaBuffer(plainUrl, { signal: controller.signal });
+        let plainBuffer;
+        try {
+          plainBuffer = await e2ee.decryptAttachmentBuffer(mk, buffer, attachment.iv);
+        } catch {
+          throw new MediaError("decrypt");
+        }
         const blob = new Blob([plainBuffer], { type: attachment.mimeType || "application/octet-stream" });
         const objectUrl = URL.createObjectURL(blob);
         objectUrlCache.set(cacheKey, objectUrl);
-        if (!cancelled) setState({ url: objectUrl, loading: false, error: false });
+        if (!cancelled) setState({ url: objectUrl, loading: false, error: false, errorCode: null });
       } catch (err) {
-        if (!cancelled) setState({ url: null, loading: false, error: true });
+        if (cancelled) return;
+        setState({ url: null, loading: false, error: true, errorCode: err?.code || "decrypt" });
       }
     })();
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachment?.url, attachment?.iv, attachment?.encrypted, e2ee.ready]);
+  }, [attachment?.url, attachment?.iv, attachment?.encrypted, e2ee.ready, attempt]);
 
-  return state;
+  const retry = () => {
+    if (plainUrl) forgetMissing(plainUrl);
+    setAttempt((n) => n + 1);
+  };
+
+  return { ...state, retry };
 }

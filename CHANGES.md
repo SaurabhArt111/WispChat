@@ -44,3 +44,18 @@
 | Status privacy: avatars stretched into ovals, no visible selection | `.privacy-contact span{flex:1}` was matching the avatar `<span>`; fixed + real tick circles. Global `.avatar{flex-shrink:0}` guard |
 | Video call: huge control panel covering the picture | Video calls use a small icon-only pill bar (Mute · Camera · Flip · Speaker · More · End) that auto-hides after ~4.5 s and returns on tap. Voice calls keep the big grid. Safety code moved into More; self-view moved top-right; remote video now fills the screen |
 | Call menu features not really working | **Video** in a voice call now truly adds your camera (renegotiates; the other side switches to video too). **Speaker** = real volume boost (Web Audio). **Share** works from voice or video calls where the browser supports screen capture (hidden on phones whose browsers don't; "Chat" shown instead). **More** → Switch camera, Share screen, Open chat, Minimize, Audio output |
+
+---
+
+# Revision 3
+
+| Issue | Fix |
+|---|---|
+| "Couldn't decrypt" on files that are actually missing (404) | `utils/fetchMedia.js` checks the HTTP status, retries transient/QUIC failures with backoff, and `useDecryptedMediaUrl` returns `errorCode` (missing / network / locked / decrypt). `AttachmentView` shows the real reason + Retry |
+| `ERR_QUIC_PROTOCOL_ERROR` | Transient Chrome↔host HTTP/3 failure; media fetches now retry (last try cache-busted) |
+| 404 on `/uploads/...` | Server answers missing files with a clean cached JSON 404; client remembers known-missing URLs. **Root cause: Render's disk is ephemeral** — attach a persistent disk and set `UPLOAD_DIR`, or use S3/R2/Cloudinary. Old files already lost can't be recovered |
+| Chat-row swipe | Haptics + magnetic detents (closed / open / full-archive), springy settle, icon pop; right-click mid-drag no longer flashes the context menu or freezes the row |
+| Emoji / GIF / Sticker | WhatsApp Web layout: category icon bar, rounded search, bottom Emoji·GIF·Sticker switch |
+| Call pickup | Slide-to-answer (or tap/Enter on knob), separate Decline button, avatar ripple rings |
+| File bubbles | WhatsApp-style Open / Save as… buttons |
+| Contact info | Notification settings + Encryption rows |
