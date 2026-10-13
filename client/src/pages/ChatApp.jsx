@@ -43,7 +43,6 @@ export default function ChatApp() {
   const { hasUnread } = useStatus();
   const location = useLocation();
   const navigate = useNavigate();
-  const [showNewChat, setShowNewChat] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showProfileEditor, setShowProfileEditor] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
@@ -51,7 +50,17 @@ export default function ChatApp() {
   const [slide, setSlide] = useState(null); // "next" | "prev" while a tab transition plays
   const settingsReturnRef = useRef("/");
 
-  const routeSegment = location.pathname.split("/")[1] || "";
+  const rawSegment = location.pathname.split("/")[1] || "";
+  // /new and /new/call are routes (shareable, back-button friendly). The page
+  // that opened them stays rendered underneath, so work out which one.
+  const newMatch = location.pathname.match(/^\/new(?:\/(call))?\/?$/);
+  const showNewChat = !!newMatch;
+  const newMode = newMatch?.[1] === "call" ? "call" : "chat";
+  let routeSegment = rawSegment;
+  if (rawSegment === "new") {
+    const fromSeg = (location.state?.from || "/").split("/")[1] || "";
+    routeSegment = ROUTED_VIEWS.includes(fromSeg) && fromSeg !== "post" ? fromSeg : "";
+  }
   const isDesktop = useMediaQuery("(min-width: 859px)");
   const isPostPage = routeSegment === "post";
   // A post opens as a modal over where you came from on desktop, and as its
@@ -112,6 +121,18 @@ export default function ChatApp() {
     },
   });
 
+  function openNewChat(mode = "chat") {
+    navigate(mode === "call" ? "/new/call" : "/new", { state: { from: location.pathname } });
+  }
+
+  // Closing goes back to wherever it was opened from. If the page already
+  // navigated elsewhere (e.g. it just opened a chat), leave that alone.
+  function closeNewChat() {
+    if (!/^\/new(\/|$)/.test(window.location.pathname)) return;
+    const from = location.state?.from;
+    navigate(from && !from.startsWith("/new") ? from : "/", { replace: true });
+  }
+
   function changeView(id) {
     navigate(id === "chats" ? "/" : `/${id}`);
   }
@@ -162,7 +183,7 @@ export default function ChatApp() {
 
       {activePanel === "chats" && (
         <Sidebar
-          onOpenNewChat={() => setShowNewChat(true)}
+          onOpenNewChat={() => openNewChat("chat")}
           onOpenNewGroup={() => setShowNewGroup(true)}
           onOpenArchived={() => navigate("/archived")}
           onOpenSettings={openSettings}
@@ -175,7 +196,7 @@ export default function ChatApp() {
       {activePanel === "groups" && <GroupsPanel onOpenSettings={openSettings} />}
       {activePanel === "status" && <StatusPanel onOpenSettings={openSettings} />}
       {activePanel === "media" && <MediaStoragePanel onOpenSettings={openSettings} />}
-      {activePanel === "calls" && <CallsPanel onOpenSettings={openSettings} />}
+      {activePanel === "calls" && <CallsPanel onOpenSettings={openSettings} onOpenNewCall={() => openNewChat("call")} />}
       {activePanel === "explore" && <ExplorerPanel onOpenSettings={openSettings} />}
       {activePanel === "broadcast" && <BroadcastPanel onOpenSettings={openSettings} />}
 
@@ -204,7 +225,7 @@ export default function ChatApp() {
               Fast, quiet, real-time messaging with instant file sharing, pre-send drawing tools, and rich reactions.
             </p>
             <div className="welcome-actions">
-              <button className="btn btn-primary" onClick={() => setShowNewChat(true)}>
+              <button className="btn btn-primary" onClick={() => openNewChat("chat")}>
                 <PlusIcon size={16} /> Start a conversation
               </button>
               <button className="btn btn-ghost" onClick={() => setShowNewGroup(true)}>
@@ -253,7 +274,8 @@ export default function ChatApp() {
 
       {showNewChat && (
         <NewChatModal
-          onClose={() => setShowNewChat(false)}
+          mode={newMode}
+          onClose={closeNewChat}
           onOpenNewGroup={() => setShowNewGroup(true)}
         />
       )}

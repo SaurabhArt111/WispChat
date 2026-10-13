@@ -72,7 +72,12 @@ export default function PostsGrid({ userId, editable = false, showLimit = editab
   }
 
   const remaining = MAX_POSTS_PER_USER - posts.length;
-  const openPost = (post) => openPostRoute(navigate, location, post, posts.filter((p) => p._id !== post._id));
+  const openPost = (post) => {
+    // Like Instagram: the feed opens AT the tapped post, with the ones before
+    // it above and the ones after it below.
+    const i = posts.findIndex((p) => p._id === post._id);
+    openPostRoute(navigate, location, post, i >= 0 ? posts.slice(i + 1) : [], i > 0 ? posts.slice(0, i) : []);
+  };
 
   return (
     <div className="posts-grid-wrap">

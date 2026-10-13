@@ -175,7 +175,16 @@ function NewCallSheet({ onClose, favs, toggleFav, placeCall }) {
   );
 }
 
-export default function CallsPanel({ onOpenSettings }) {
+function NewCallIcon({ size = 24 }) {
+  return (
+    <span className="calls-fab-icon">
+      <PhoneIcon size={size} />
+      <b aria-hidden="true">+</b>
+    </span>
+  );
+}
+
+export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
   const { user } = useAuth();
   const { openConversation, startDirectConversation } = useChat();
   const { startCall, call: activeCall } = useCall();
@@ -403,6 +412,17 @@ export default function CallsPanel({ onOpenSettings }) {
           }}
         />
       )}
+
+      {/* WhatsApp-style floating "new call" button (phones) */}
+      <button
+        type="button"
+        className="calls-fab"
+        title="New call"
+        aria-label="New call"
+        onClick={() => (onOpenNewCall ? onOpenNewCall() : setShowNew(true))}
+      >
+        <NewCallIcon size={26} />
+      </button>
 
       {showNew && (
         <NewCallSheet onClose={() => setShowNew(false)} favs={favs} toggleFav={toggleFav} placeCall={placeCall} />

@@ -242,7 +242,7 @@ export default function ExplorerPanel({ onOpenSettings }) {
 
   const openPost = (post) => {
     const idx = posts.findIndex((p) => p._id === post._id);
-    openPostRoute(navigate, location, post, idx >= 0 ? posts.slice(idx + 1) : []);
+    openPostRoute(navigate, location, post, idx >= 0 ? posts.slice(idx + 1) : [], idx > 0 ? posts.slice(0, idx) : []);
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
@@ -221,6 +221,7 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
   const [burst, setBurst] = useState(null);
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [mediaReady, setMediaReady] = useState(false); // reserves space (no black/zero-height gap) until the file arrives
   const { toggleLike, likeOnly } = usePostLike(post, onChange);
   const isMine = String(post.user?._id || post.user) === String(user._id);
 
@@ -265,12 +266,12 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
         )}
       </header>
 
-      <div className="pfc-media" {...doubleTap}>
+      <div className={`pfc-media ${mediaReady ? "" : "is-loading"}`} {...doubleTap}>
         {isNear ? (
           post.kind === "video" ? (
-            <SafeVideo ref={videoRef} src={mediaUrl(post.url)} loop playsInline muted={muted} preload={isActive ? "auto" : "metadata"} />
+            <SafeVideo ref={videoRef} src={mediaUrl(post.url)} loop playsInline muted={muted} preload={isActive ? "auto" : "metadata"} onLoadedData={() => setMediaReady(true)} />
           ) : (
-            <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} draggable={false} />
+            <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} draggable={false} onLoad={() => setMediaReady(true)} />
           )
         ) : (
           <div className="post-feed-placeholder" />
@@ -337,10 +338,10 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
   );
 }
 
-export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadingMore, onClose, onActive }) {
+export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadingMore, onClose, onActive, initialIndex = 0 }) {
   const { showToast } = useToast();
   const scrollerRef = useRef(null);
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(initialIndex);
   const [muted, setMuted] = useState(true);
   const [commentsFor, setCommentsFor] = useState(null);
   const [ownerFor, setOwnerFor] = useState(null);
@@ -350,6 +351,17 @@ export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadi
     (next) => setItems((list) => list.map((p) => (p._id === next._id ? { ...p, ...next } : p))),
     [setItems]
   );
+
+  // Open scrolled to the tapped post (earlier posts sit above it).
+  useLayoutEffect(() => {
+    const root = scrollerRef.current;
+    const el = root?.querySelector(`.pfc[data-index="${initialIndex}"]`);
+    if (!root || !el || !initialIndex) return;
+    root.style.scrollBehavior = "auto";
+    root.scrollTop = el.offsetTop;
+    requestAnimationFrame(() => (root.style.scrollBehavior = ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Which post is on screen: the one that's mostly visible in the scroller.
   useEffect(() => {

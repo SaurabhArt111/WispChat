@@ -76,3 +76,14 @@
 | No text selection on mobile | Bubble text isn't selectable on touch devices (use the menu → Copy) |
 | Link card | Now above the message text |
 | My profile | Smoother scroll (momentum, overscroll contain), sticky Posts tab bar, back-to-top button, bottom padding for the nav bar |
+
+---
+
+# Revision 5
+
+| Item | Details |
+|---|---|
+| New chat is a route | `/new` (and `/new/call`). Back button / swipe-back closes it and returns to the page it was opened from; the previous page stays rendered underneath |
+| Direct call buttons | Every contact row in New chat has voice + video call buttons. `/new/call` ("New call") lists contacts only and tapping a row calls them. Calls tab has a floating "new call" button on phones |
+| Selecting messages | Bubbles no longer jump to one side — the checkbox is pinned to the left edge and each bubble keeps its own side |
+| Mobile post viewer | Opens like Instagram: scrolling post cards with the tapped post in place, earlier posts above, later ones below. Media reserves space with a shimmer while loading (no more empty/black gaps); missing files show a "File unavailable" tile |

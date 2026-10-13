@@ -25,12 +25,16 @@ export default function PostViewerPage() {
   const seeded = location.state?.post?._id === postId ? location.state.post : null;
   const queueSeed = location.state?.post?._id === postId ? location.state.queue || [] : [];
 
-  const [items, setItems] = useState(seeded ? [seeded, ...queueSeed.filter((p) => p._id !== seeded._id)] : []);
+  const beforeSeed = seeded ? (location.state.before || []).filter((p) => p._id !== seeded._id) : [];
+  const startIndex = useRef(beforeSeed.length).current; // the tapped post's slot in the list
+  const [items, setItems] = useState(
+    seeded ? [...beforeSeed, seeded, ...queueSeed.filter((p) => p._id !== seeded._id && !beforeSeed.some((b) => b._id === p._id))] : []
+  );
   const [loading, setLoading] = useState(!seeded);
   const [failed, setFailed] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(startIndex);
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const suggestBusy = useRef(false);
@@ -127,6 +131,7 @@ export default function PostViewerPage() {
         loadingMore={loadingMore}
         onClose={close}
         onActive={syncUrl}
+        initialIndex={startIndex}
       />
     );
   }

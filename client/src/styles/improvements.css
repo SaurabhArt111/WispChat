@@ -1531,6 +1531,7 @@ audio.media-failed {
 .call-overlay.controls-hidden .call-more-menu {
   transform: translateX(-50%) translateY(10px);
 }
+
 /* ---------- 10. Attachment error state + WhatsApp-style file card ---------- */
 .attachment-problem {
   display: flex;
@@ -1541,14 +1542,40 @@ audio.media-failed {
   font-size: 12.5px;
   line-height: 1.3;
 }
-.attachment-problem.compact { gap: 6px; padding: 6px; flex-direction: column; text-align: center; justify-content: center; height: 100%; }
-.attachment-problem svg { flex-shrink: 0; color: #f59e0b; }
-.attachment-problem.code-decrypt svg { color: #ff6b6b; }
-.attachment-problem-text { display: flex; flex-direction: column; min-width: 0; }
-.attachment-problem-text strong { font-weight: 600; color: var(--text); font-size: 12.5px; }
+
+.attachment-problem.compact {
+  gap: 6px;
+  padding: 6px;
+  flex-direction: column;
+  text-align: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.attachment-problem svg {
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+.attachment-problem.code-decrypt svg {
+  color: #ff6b6b;
+}
+
+.attachment-problem-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.attachment-problem-text strong {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
 .attachment-problem-retry {
   margin-left: auto;
-  border: 1px solid var(--border-glass, rgba(255,255,255,.18));
+  border: 1px solid var(--border-glass, rgba(255, 255, 255, .18));
   background: transparent;
   color: var(--wisp, #5ef2c0);
   font-weight: 700;
@@ -1557,13 +1584,45 @@ audio.media-failed {
   border-radius: 999px;
   cursor: pointer;
 }
-.attachment-problem.compact .attachment-problem-retry { margin-left: 0; padding: 3px 10px; }
-.attachment-problem-retry:hover { background: var(--wisp-dim, rgba(94,242,192,.12)); }
-.image-grid-item.attachment-decrypt-error { background: var(--surface-3, #232733); color: inherit; display: flex; align-items: center; justify-content: center; min-height: 90px; }
 
-.attachment-file.attachment-file-card { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
-.attachment-file-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
-.attachment-file-actions { display: flex; border-top: 1px solid var(--border, rgba(255,255,255,.08)); }
+.attachment-problem.compact .attachment-problem-retry {
+  margin-left: 0;
+  padding: 3px 10px;
+}
+
+.attachment-problem-retry:hover {
+  background: var(--wisp-dim, rgba(94, 242, 192, .12));
+}
+
+.image-grid-item.attachment-decrypt-error {
+  background: var(--surface-3, #232733);
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 90px;
+}
+
+.attachment-file.attachment-file-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.attachment-file-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.attachment-file-actions {
+  display: flex;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, .08));
+}
+
 .attachment-file-actions button {
   flex: 1;
   background: transparent;
@@ -1574,23 +1633,82 @@ audio.media-failed {
   color: var(--wisp, #5ef2c0);
   cursor: pointer;
 }
-.attachment-file-actions button + button { border-left: 1px solid var(--border, rgba(255,255,255,.08)); }
-.attachment-file-actions button:hover:not(:disabled) { background: var(--wisp-dim, rgba(94,242,192,.1)); }
-.attachment-file-actions button:disabled { color: var(--text-faint); cursor: default; }
+
+.attachment-file-actions button+button {
+  border-left: 1px solid var(--border, rgba(255, 255, 255, .08));
+}
+
+.attachment-file-actions button:hover:not(:disabled) {
+  background: var(--wisp-dim, rgba(94, 242, 192, .1));
+}
+
+.attachment-file-actions button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
 
 /* ---------- 11. Swipe rows: springy settle + magnetic "click" pop ---------- */
 .conv-swipe-wrap:not(.is-dragging) .conv-swipe-actions {
   transition: width 340ms cubic-bezier(.22, 1.35, .36, 1);
 }
-.conv-swipe-wrap.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
-.conv-swipe-wrap.is-dragging .conv-item { cursor: grabbing; }
-.conv-swipe-wrap.is-dragging[data-snap="0"] .conv-swipe-btn svg { animation: swipeIconPop0 220ms cubic-bezier(.3, 1.6, .5, 1); }
-.conv-swipe-wrap.is-dragging[data-snap="1"] .conv-swipe-btn svg { animation: swipeIconPop1 220ms cubic-bezier(.3, 1.6, .5, 1); }
-@keyframes swipeIconPop0 { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
-@keyframes swipeIconPop1 { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
-.conv-swipe-btn.archive.armed { background: #22c55e; }
-.conv-swipe-btn.archive.armed svg { transform: scale(1.2); }
-.conv-swipe-btn svg { transition: transform 160ms ease; }
+
+.conv-swipe-wrap.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+.conv-swipe-wrap.is-dragging .conv-item {
+  cursor: grabbing;
+}
+
+.conv-swipe-wrap.is-dragging[data-snap="0"] .conv-swipe-btn svg {
+  animation: swipeIconPop0 220ms cubic-bezier(.3, 1.6, .5, 1);
+}
+
+.conv-swipe-wrap.is-dragging[data-snap="1"] .conv-swipe-btn svg {
+  animation: swipeIconPop1 220ms cubic-bezier(.3, 1.6, .5, 1);
+}
+
+@keyframes swipeIconPop0 {
+  0% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.28);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes swipeIconPop1 {
+  0% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.28);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.conv-swipe-btn.archive.armed {
+  background: #22c55e;
+}
+
+.conv-swipe-btn.archive.armed svg {
+  transform: scale(1.2);
+}
+
+.conv-swipe-btn svg {
+  transition: transform 160ms ease;
+}
 
 /* ---------- 12. Emoji / GIF / Sticker panel — WhatsApp Web look ---------- */
 .emoji-popover {
@@ -1600,8 +1718,19 @@ audio.media-failed {
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
 }
-.wa-panel { height: 400px; position: relative; background: #1d1f1f; }
-.wa-panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.wa-panel {
+  height: 400px;
+  position: relative;
+  background: #1d1f1f;
+}
+
+.wa-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 
 /* picker: category icons on top, rounded search under them (WhatsApp order) */
 .wa-panel .EmojiPickerReact {
@@ -1628,16 +1757,46 @@ audio.media-failed {
   --epr-highlight-color: #e9edef;
   border: none;
   background: transparent;
-  padding-bottom: 54px; /* room for the bottom switch */
+  padding-bottom: 54px;
+  /* room for the bottom switch */
   font-family: inherit;
 }
-.wa-panel .epr-header { display: flex; flex-direction: column-reverse; }
-.wa-panel .epr-header .epr-category-nav { padding: 12px 18px 8px; }
-.wa-panel .epr-header .epr-search-container { padding: 4px 18px 6px; }
-.wa-panel .epr-search { border: 2px solid #e9edef !important; padding-left: 44px !important; font-size: 16px; }
-.wa-panel .epr-emoji-category-label { font-size: 15px; font-weight: 600; color: #aebac1; text-transform: none; padding: 10px 18px 4px; }
-.wa-panel .epr-body::-webkit-scrollbar { width: 8px; }
-.wa-panel .epr-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 8px; }
+
+.wa-panel .epr-header {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.wa-panel .epr-header .epr-category-nav {
+  padding: 12px 18px 8px;
+}
+
+.wa-panel .epr-header .epr-search-container {
+  padding: 4px 18px 6px;
+}
+
+.wa-panel .epr-search {
+  border: 2px solid #e9edef !important;
+  padding-left: 44px !important;
+  font-size: 16px;
+}
+
+.wa-panel .epr-emoji-category-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #aebac1;
+  text-transform: none;
+  padding: 10px 18px 4px;
+}
+
+.wa-panel .epr-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.wa-panel .epr-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+}
 
 /* bottom segmented switch */
 .wa-switch {
@@ -1652,6 +1811,7 @@ audio.media-failed {
   border: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 5;
 }
+
 .wa-switch button {
   width: 86px;
   height: 36px;
@@ -1668,74 +1828,393 @@ audio.media-failed {
   letter-spacing: 0.02em;
   transition: background 140ms ease, color 140ms ease;
 }
-.wa-switch button.active { background: #3b3f40; color: #fff; }
-.wa-switch button:hover:not(.active) { background: rgba(255, 255, 255, 0.06); }
+
+.wa-switch button.active {
+  background: #3b3f40;
+  color: #fff;
+}
+
+.wa-switch button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+}
 
 /* GIF + sticker bodies share the same chrome */
-.wa-panel .gif-tab { height: 100%; padding-bottom: 54px; }
-.wa-panel .gif-search { margin: 14px 18px 8px; padding: 0 18px; height: 48px; border-radius: 999px; background: transparent; border: 2px solid #e9edef; color: #8696a0; }
-.wa-panel .gif-search input { font-size: 16px; color: #e9edef; }
-.wa-panel .gif-grid { grid-template-columns: repeat(3, 1fr); padding: 4px 18px 10px; }
-.wa-panel .gif-item { background: #2a2d2e; }
-.wa-panel .gif-attrib { display: none; }
-.sticker-wrap { height: 100%; display: flex; flex-direction: column; padding-bottom: 54px; }
-.sticker-heading { padding: 16px 18px 4px; color: #aebac1; font-size: 15px; font-weight: 600; }
-.wa-panel .sticker-grid { height: auto; flex: 1; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); padding: 6px 14px 10px; }
-.wa-panel .sticker-item { font-size: 40px; padding: 10px 0; }
-.wa-panel .emoji-panel-empty { height: 100%; padding-bottom: 70px; justify-content: center; }
+.wa-panel .gif-tab {
+  height: 100%;
+  padding-bottom: 54px;
+}
+
+.wa-panel .gif-search {
+  margin: 14px 18px 8px;
+  padding: 0 18px;
+  height: 48px;
+  border-radius: 999px;
+  background: transparent;
+  border: 2px solid #e9edef;
+  color: #8696a0;
+}
+
+.wa-panel .gif-search input {
+  font-size: 16px;
+  color: #e9edef;
+}
+
+.wa-panel .gif-grid {
+  grid-template-columns: repeat(3, 1fr);
+  padding: 4px 18px 10px;
+}
+
+.wa-panel .gif-item {
+  background: #2a2d2e;
+}
+
+.wa-panel .gif-attrib {
+  display: none;
+}
+
+.sticker-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 54px;
+}
+
+.sticker-heading {
+  padding: 16px 18px 4px;
+  color: #aebac1;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wa-panel .sticker-grid {
+  height: auto;
+  flex: 1;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  padding: 6px 14px 10px;
+}
+
+.wa-panel .sticker-item {
+  font-size: 40px;
+  padding: 10px 0;
+}
+
+.wa-panel .emoji-panel-empty {
+  height: 100%;
+  padding-bottom: 70px;
+  justify-content: center;
+}
 
 @media (max-width: 858px) {
-  .emoji-popover { width: 100%; border-radius: 22px 22px 0 0; }
-  .wa-panel { height: min(52vh, 420px); }
-  .wa-panel .EmojiPickerReact { --epr-emoji-size: 28px; --epr-horizontal-padding: 12px; }
-  .wa-switch button { width: 72px; }
+  .emoji-popover {
+    width: 100%;
+    border-radius: 22px 22px 0 0;
+  }
+
+  .wa-panel {
+    height: min(52vh, 420px);
+  }
+
+  .wa-panel .EmojiPickerReact {
+    --epr-emoji-size: 28px;
+    --epr-horizontal-padding: 12px;
+  }
+
+  .wa-switch button {
+    width: 72px;
+  }
 }
 
 /* ---------- 13. Contact info: WhatsApp-style settings rows ---------- */
-.ci-settings-list { margin: 12px 0 4px; border-top: 1px solid var(--border, rgba(255,255,255,.08)); }
-.ci-setting-row { display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 6px; background: none; border: none; color: var(--text); text-align: left; cursor: pointer; font: inherit; }
-.ci-setting-row.static { cursor: default; }
-.ci-setting-row:hover:not(.static) { background: var(--surface-hover, rgba(255,255,255,.04)); }
-.ci-setting-row svg { color: var(--text-faint); flex-shrink: 0; }
-.ci-setting-text { display: flex; flex-direction: column; gap: 2px; }
-.ci-setting-text small { color: var(--text-faint); font-size: 12.5px; }
+.ci-settings-list {
+  margin: 12px 0 4px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, .08));
+}
+
+.ci-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ci-setting-row.static {
+  cursor: default;
+}
+
+.ci-setting-row:hover:not(.static) {
+  background: var(--surface-hover, rgba(255, 255, 255, .04));
+}
+
+.ci-setting-row svg {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.ci-setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ci-setting-text small {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
 
 /* ---------- 14. Multi-select messages ---------- */
-.message-list-wrap { position: relative; }
-.select-toolbar {
-  position: absolute; z-index: 20; top: 0; left: 0; right: 0;
-  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
-  background: var(--surface, #14171c); border-bottom: 1px solid var(--border-soft, rgba(255,255,255,.08));
-  box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: selectBarIn 180ms ease-out;
+.message-list-wrap {
+  position: relative;
 }
-.select-toolbar strong { font-size: 15px; font-weight: 650; }
-.select-toolbar-spacer { flex: 1; }
-.select-toolbar .icon-btn.danger { color: #ff6b6b; }
-@keyframes selectBarIn { from { transform: translateY(-100%); opacity: 0; } to { transform: none; opacity: 1; } }
-.bubble-row.select-mode { cursor: pointer; position: relative; transition: background 120ms ease; }
-.bubble-row.select-mode.is-selected { background: rgba(94, 242, 192, 0.12); }
+
+.select-toolbar {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface, #14171c);
+  border-bottom: 1px solid var(--border-soft, rgba(255, 255, 255, .08));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  animation: selectBarIn 180ms ease-out;
+}
+
+.select-toolbar strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.select-toolbar-spacer {
+  flex: 1;
+}
+
+.select-toolbar .icon-btn.danger {
+  color: #ff6b6b;
+}
+
+@keyframes selectBarIn {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.bubble-row.select-mode {
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms ease;
+}
+
+.bubble-row.select-mode.is-selected {
+  background: rgba(94, 242, 192, 0.12);
+}
+
 .bubble-row.select-mode .bubble-react-trigger,
-.bubble-row.select-mode .bubble-forward-trigger { display: none !important; }
+.bubble-row.select-mode .bubble-forward-trigger {
+  display: none !important;
+}
+
 .select-check {
-  flex-shrink: 0; align-self: center; width: 22px; height: 22px; margin: 0 8px 0 6px; border-radius: 50%;
-  border: 2px solid var(--text-faint, #8a93a3); display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 8px 0 6px;
+  border-radius: 50%;
+  border: 2px solid var(--text-faint, #8a93a3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--wisp-ink, #04201a);
 }
-.select-check.on { background: var(--wisp, #5ef2c0); border-color: var(--wisp, #5ef2c0); }
-.bubble-row.select-mode.mine { flex-direction: row-reverse; }
-.bubble-row.select-mode.mine .select-check { margin: 0 6px 0 8px; }
+
+.select-check.on {
+  background: var(--wisp, #5ef2c0);
+  border-color: var(--wisp, #5ef2c0);
+}
+
+.bubble-row.select-mode.mine {
+  flex-direction: row-reverse;
+}
+
+.bubble-row.select-mode.mine .select-check {
+  margin: 0 6px 0 8px;
+}
 
 /* Double-tap target feedback */
-.bubble-row { -webkit-tap-highlight-color: transparent; }
+.bubble-row {
+  -webkit-tap-highlight-color: transparent;
+}
 
 /* ---------- 15. Mobile: no text selection inside message bubbles ----------
    (long-press opens the message menu instead; Copy lives in that menu) */
 @media (hover: none) and (pointer: coarse), (max-width: 858px) {
   .bubble, .bubble-text, .bubble-emoji-only, .bubble-reply-preview {
-    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
-  .bubble-link { -webkit-user-select: none; user-select: none; }
+
+  .bubble-link {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 /* ---------- 16. Link card above the text ---------- */
-.bubble > .link-preview-card, .bubble > .link-card, .bubble > a.link-preview { margin: 2px 0 6px; }
+.bubble>.link-preview-card, .bubble>.link-card, .bubble>a.link-preview {
+  margin: 2px 0 6px;
+}
+
+/* ---------- 17. Selecting messages: bubbles keep their side ---------- */
+.bubble-row.select-mode.mine {
+  flex-direction: row;
+}
+
+/* undo the old row-reverse */
+.bubble-row.select-mode {
+  padding-left: 46px;
+}
+
+.bubble-row.select-mode .select-check,
+.bubble-row.select-mode.mine .select-check {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+}
+
+.bubble-row.select-mode .bubble-stack {
+  max-width: min(100%, 78%);
+}
+
+/* ---------- 18. New chat / new call: direct call buttons ---------- */
+.nc-call-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.nc-call-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--wisp, #5ef2c0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nc-call-btn:hover:not(:disabled) {
+  background: var(--wisp-dim, rgba(94, 242, 192, .12));
+}
+
+.nc-call-btn:active:not(:disabled) {
+  transform: scale(.9);
+}
+
+.nc-call-btn:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+/* ---------- 19. Calls: floating "new call" button (phones) ---------- */
+.calls-fab {
+  display: none;
+}
+
+@media (max-width: 858px) {
+  .calls-fab {
+    display: flex;
+    position: fixed;
+    right: 18px;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    border: 0;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    background: var(--wisp, #5ef2c0);
+    color: var(--wisp-ink, #04201a);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    -webkit-tap-highlight-color: transparent;
+    animation: fabPop 320ms var(--ease-spring) both;
+  }
+
+  .calls-fab:active {
+    transform: scale(.94);
+  }
+}
+
+.calls-fab-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.calls-fab-icon b {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+/* ---------- 20. Post cards: reserve space while the file loads ---------- */
+.pfc-media.is-loading {
+  min-height: 280px;
+  aspect-ratio: 4 / 5;
+  background: linear-gradient(110deg, #0b0e12 30%, #151a21 50%, #0b0e12 70%);
+  background-size: 200% 100%;
+  animation: pfcShimmer 1.4s linear infinite;
+}
+
+.pfc-media.is-loading img, .pfc-media.is-loading video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pfc-media>.media-broken {
+  width: 100%;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-faint);
+}
+
+@keyframes pfcShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

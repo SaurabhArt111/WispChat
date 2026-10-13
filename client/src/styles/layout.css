@@ -45,10 +45,12 @@
 
 .app-shell.is-post-route {
   grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .app-shell.is-post-route .app-main {
   display: flex;
+  min-height: 0;
 }
 
 /* Mobile responsive layout */

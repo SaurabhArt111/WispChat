@@ -4,11 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { Virtuoso } from "react-virtuoso";
 import client from "../../api/client";
 import { useChat } from "../../context/ChatContext";
+import { useCall } from "../../context/CallContext";
 import { useToast } from "../../context/ToastContext";
 import Avatar from "../common/Avatar";
 import ProfileView from "../Profile/ProfileView";
 import useSheetClose from "../../hooks/useSheetClose";
-import { BackIcon, MegaphoneIcon, SearchIcon, UserPlusIcon, UsersIcon, CloseIcon } from "../common/Icons";
+import { BackIcon, MegaphoneIcon, SearchIcon, UserPlusIcon, UsersIcon, CloseIcon, PhoneIcon, VideoIcon } from "../common/Icons";
 import "../../styles/newChat.css";
 
 // Full "New chat" page (mobile: full screen, rises from the bottom; desktop:
@@ -16,7 +17,9 @@ import "../../styles/newChat.css";
 // people whose posts you liked, and suggestions. Tapping a contact opens the
 // chat; tapping anyone else opens their profile (with "Add contact") because
 // people can be discovered freely but only chatted with once added.
-export default function NewChatPage({ onClose, onOpenNewGroup }) {
+export default function NewChatPage({ onClose, onOpenNewGroup, mode = "chat" }) {
+  const callMode = mode === "call";
+  const { startCall, call: activeCall } = useCall();
   const navigate = useNavigate();
   const { startDirectConversation, openConversation } = useChat();
   const { showToast } = useToast();
@@ -85,6 +88,21 @@ export default function NewChatPage({ onClose, onOpenNewGroup }) {
     }
   }
 
+  // Direct call from the list — no need to open the chat first.
+  async function placeCall(person, kind) {
+    if (activeCall) {
+      showToast("You're already in a call");
+      return;
+    }
+    try {
+      const conv = await startDirectConversation(person._id);
+      onClose();
+      await startCall(conv, kind);
+    } catch {
+      showToast("Couldn't start the call", "danger");
+    }
+  }
+
   async function quickAdd(person) {
     try {
       await client.post("/users/friend-requests", { userId: person._id });
@@ -122,9 +140,11 @@ export default function NewChatPage({ onClose, onOpenNewGroup }) {
       return out;
     }
 
+    if (!callMode) {
     out.push({ type: "action", key: "a-group", icon: <UsersIcon size={22} />, label: "New group", onClick: () => { onClose(); onOpenNewGroup?.(); } });
     out.push({ type: "action", key: "a-bcast", icon: <MegaphoneIcon size={22} />, label: "New broadcast", onClick: () => { onClose(); navigate("/broadcast"); } });
     out.push({ type: "divider", key: "d1" });
+    }
 
     if (contacts === null) {
       for (let i = 0; i < 7; i++) out.push({ type: "skeleton", key: `sk-${i}` });
@@ -138,19 +158,19 @@ export default function NewChatPage({ onClose, onOpenNewGroup }) {
       out.push({ type: "note", key: "n-nocontacts", text: "No contacts yet — search for someone or pick from the suggestions below." });
     }
 
-    if (liked.length) {
+    if (!callMode && liked.length) {
       out.push({ type: "title", key: "t-liked", title: "From posts you liked" });
       liked.forEach((u) =>
         out.push(personRow(u, `You liked ${u.likedCount} post${u.likedCount > 1 ? "s" : ""}`, { section: "l", isContact: u.isContact, requestPending: u.requestPending }))
       );
     }
-    if (suggested.length) {
+    if (!callMode && suggested.length) {
       out.push({ type: "title", key: "t-sugg", title: "Suggested for you" });
       suggested.forEach((u) => out.push(personRow(u, u.reason, { section: "s", isContact: false })));
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, remote, contacts, liked, suggested, sortedContacts, contactIds, requested]);
+  }, [query, remote, contacts, liked, suggested, sortedContacts, contactIds, requested, callMode]);
 
   function renderRow(index, row) {
     switch (row.type) {
@@ -184,14 +204,44 @@ export default function NewChatPage({ onClose, onOpenNewGroup }) {
             className="nc-person"
             role="button"
             tabIndex={0}
-            onClick={() => (isContact ? openChat(person._id) : setProfile({ person, isContact, pending }))}
-            onKeyDown={(e) => e.key === "Enter" && (isContact ? openChat(person._id) : setProfile({ person, isContact, pending }))}
+            onClick={() => (isContact ? (callMode ? placeCall(person, "audio") : openChat(person._id)) : setProfile({ person, isContact, pending }))}
+            onKeyDown={(e) => e.key === "Enter" && (isContact ? (callMode ? placeCall(person, "audio") : openChat(person._id)) : setProfile({ person, isContact, pending }))}
           >
             <Avatar user={person} size={46} />
             <span className="nc-person-text">
               <span className="nc-person-name">{person.displayName}</span>
               {sub && <span className="nc-person-sub">{sub}</span>}
             </span>
+            {isContact && (
+              <span className="nc-call-actions" data-no-tap>
+                <button
+                  type="button"
+                  className="nc-call-btn"
+                  title={`Voice call ${person.displayName}`}
+                  aria-label={`Voice call ${person.displayName}`}
+                  disabled={!!activeCall}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    placeCall(person, "audio");
+                  }}
+                >
+                  <PhoneIcon size={19} />
+                </button>
+                <button
+                  type="button"
+                  className="nc-call-btn"
+                  title={`Video call ${person.displayName}`}
+                  aria-label={`Video call ${person.displayName}`}
+                  disabled={!!activeCall}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    placeCall(person, "video");
+                  }}
+                >
+                  <VideoIcon size={20} />
+                </button>
+              </span>
+            )}
             {!isContact && (
               <button
                 className="nc-add-pill"
@@ -212,7 +262,7 @@ export default function NewChatPage({ onClose, onOpenNewGroup }) {
 
   return createPortal(
     <div className={`newchat-overlay ${closing ? "closing" : ""}`} onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
-      <div className="newchat-page" role="dialog" aria-label="New chat">
+      <div className="newchat-page" role="dialog" aria-label={callMode ? "New call" : "New chat"}>
         <div className="newchat-header">
           <button className="icon-btn" onClick={requestClose} title="Back">
             <BackIcon size={20} />
@@ -238,7 +288,7 @@ export default function NewChatPage({ onClose, onOpenNewGroup }) {
             </div>
           ) : (
             <>
-              <h2 className="newchat-title">New chat</h2>
+              <h2 className="newchat-title">{callMode ? "New call" : "New chat"}</h2>
               <button className="icon-btn" onClick={() => setSearching(true)} title="Search">
                 <SearchIcon size={19} />
               </button>
