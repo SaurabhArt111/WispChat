@@ -2035,8 +2035,9 @@ audio.media-failed {
   width: 22px;
   height: 22px;
   margin: 0 8px 0 6px;
-  border-radius: 50%;
+  border-radius: 6px;
   border: 2px solid var(--text-faint, #8a93a3);
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2046,6 +2047,7 @@ audio.media-failed {
 .select-check.on {
   background: var(--wisp, #5ef2c0);
   border-color: var(--wisp, #5ef2c0);
+  transform: scale(1.04);
 }
 
 .bubble-row.select-mode.mine {

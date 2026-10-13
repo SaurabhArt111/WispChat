@@ -1,3 +1,17 @@
+# WispChat — latest update
+
+| Request | Where |
+|---|---|
+| Tap a quoted reply → go to that message. Near = smooth scroll, far/long way up = instant jump (then re-centres). Older, not-yet-loaded history is fetched automatically until the message is found; toast if it was deleted | `Chat/MessageList.jsx#handleJumpToMessage` |
+| Calls page loads fast: first 20 logs, header block (New call / Favourites / filters) paints instantly, only the rows show a skeleton | `Sidebar/CallsPanel.jsx` |
+| Drag the chat window right to close it, like the mobile drawer (follows the finger, chat list revealed underneath with parallax, fling or >1/3 width closes, otherwise springs back) | `hooks/useSwipeBack.js`, `styles/layout.css`, `pages/ChatApp.jsx` |
+| Select option is now a rounded square with a tick | `styles/improvements.css` (`.select-check`) |
+
+## Extra fixes
+- Calls: the header used to be an inline component, so it re-mounted on every render (the "whole page pauses" feeling). Virtuoso components are now module-level and the header is passed through `context`.
+- Calls: background refresh no longer throws away older pages you already scrolled through.
+- Chat: vertical scrolling is unaffected; horizontal scrollers, inputs, video and open dialogs are ignored by the drag-to-close gesture.
+
 # WispChat — this revision
 
 ## New environment variables

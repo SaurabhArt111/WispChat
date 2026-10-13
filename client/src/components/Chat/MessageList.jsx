@@ -200,15 +200,63 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
   // identity-stable (reads rows/firstItemIndex through a ref) so it doesn't
   // defeat MessageBubble's memo.
   const jumpState = useRef({});
-  jumpState.current = { rows, firstItemIndex };
-  const handleJumpToMessage = useCallback((msgId) => {
-    const { rows: r, firstItemIndex: first } = jumpState.current;
-    const idx = r.findIndex((x) => x.msg._id === msgId);
-    if (idx < 0) return;
-    virtuosoRef.current?.scrollToIndex({ index: first + idx, align: "center", behavior: "smooth" });
-    setHighlightedId(msgId);
-    setTimeout(() => setHighlightedId(null), 2000);
-  }, []);
+  jumpState.current = { rows, firstItemIndex, messages, hasMore, loadMoreMessages };
+  const visibleRange = useRef({ startIndex: 0, endIndex: 0 });
+  const jumpingRef = useRef(false);
+  const highlightTimer = useRef(null);
+  const handleJumpToMessage = useCallback(async (msgId) => {
+    if (!msgId || jumpingRef.current) return;
+    jumpingRef.current = true;
+    try {
+      const find = () => jumpState.current.rows.findIndex((x) => x.msg._id === msgId);
+      let idx = find();
+
+      // The quoted message may be in older history that isn't loaded yet:
+      // keep pulling older pages (bounded) until it shows up.
+      let guard = 0;
+      while (idx < 0 && guard++ < 25 && jumpState.current.hasMore) {
+        const oldest = jumpState.current.messages[0]?.createdAt;
+        try {
+          await jumpState.current.loadMoreMessages(oldest);
+        } catch {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 60)); // let state + rows settle
+        idx = find();
+      }
+      if (idx < 0) {
+        showToast("That message is no longer available", "danger");
+        return;
+      }
+
+      const { firstItemIndex: first } = jumpState.current;
+      const target = first + idx;
+      const { startIndex, endIndex } = visibleRange.current;
+      const mid = (startIndex + endIndex) / 2;
+      const distance = Math.abs(target - mid);
+      const onScreen = target >= startIndex && target <= endIndex;
+      // Close by → glide there. Far away (or just loaded from history) →
+      // go straight to it; a long smooth scroll through hundreds of rows is
+      // slow and janky.
+      const smooth = onScreen || distance <= 30;
+      virtuosoRef.current?.scrollToIndex({ index: target, align: "center", behavior: smooth ? "smooth" : "auto" });
+
+      clearTimeout(highlightTimer.current);
+      setHighlightedId(null);
+      highlightTimer.current = setTimeout(
+        () => {
+          setHighlightedId(msgId);
+          highlightTimer.current = setTimeout(() => setHighlightedId(null), 2200);
+        },
+        smooth ? (onScreen ? 0 : 320) : 80
+      );
+      // Virtualized rows can still be measuring after an instant jump — re-centre once.
+      if (!smooth) setTimeout(() => virtuosoRef.current?.scrollToIndex({ index: target, align: "center", behavior: "auto" }), 140);
+    } finally {
+      jumpingRef.current = false;
+    }
+  }, [showToast]);
+  useEffect(() => () => clearTimeout(highlightTimer.current), []);
 
   // Count messages that arrive while the person is scrolled up, so the
   // "jump to latest" button can say how many they've missed.
@@ -322,6 +370,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
           }}
           startReached={handleStartReached}
           onScroll={handleScroll}
+          rangeChanged={(r) => (visibleRange.current = r)}
           isScrolling={handleIsScrolling}
           // A close estimate of a typical bubble keeps the first layout pass
           // near the truth (less correction/jump), and a moderate overscan

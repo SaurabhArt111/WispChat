@@ -25,7 +25,8 @@ import { formatListTime } from "../../utils/time";
 import useLiveRefresh from "../../hooks/useLiveRefresh";
 import "../../styles/railPanels.css";
 
-const PAGE = 40;
+// First paint only needs one screenful; older logs stream in on scroll.
+const PAGE = 20;
 
 // ---- tiny per-user cache so the page paints instantly on every visit ----
 const cacheKey = (uid) => `wisp_calls_cache_${uid}`;
@@ -44,6 +45,17 @@ function writeJson(key, value) {
     /* storage full — cache is optional */
   }
 }
+
+const CallsHeader = ({ context }) => context.header;
+const CallsEmpty = ({ context }) => (
+  <div className="rail-panel-empty">
+    <PhoneIcon size={34} />
+    <p>{context.filter === "missed" ? "No missed calls." : "Your voice and video calls will appear here."}</p>
+  </div>
+);
+const CallsFooter = ({ context }) =>
+  context.loadingMore ? <div className="explorer-loading-more">Loading more…</div> : <div style={{ height: 96 }} />;
+const CALLS_COMPONENTS = { Header: CallsHeader, EmptyPlaceholder: CallsEmpty, Footer: CallsFooter };
 
 function describe(call) {
   const { kind, status, durationSec = 0 } = call.callInfo;
@@ -210,9 +222,22 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
       try {
         const res = await client.get("/messages/calls", { params: { limit: PAGE } });
         const next = res.data.calls || [];
-        setCalls(next);
-        setHasMore(!!res.data.hasMore);
-        writeJson(cacheKey(user._id), next);
+        if (silent) {
+          // Background refresh: update the newest page but keep any older
+          // pages the person already scrolled through.
+          setCalls((prev) => {
+            const oldest = next.length ? new Date(next[next.length - 1].createdAt).getTime() : Infinity;
+            const tail = prev.filter((c) => new Date(c.createdAt).getTime() < oldest);
+            const merged = [...next, ...tail];
+            writeJson(cacheKey(user._id), merged.slice(0, PAGE));
+            return merged;
+          });
+          setHasMore((h) => h || !!res.data.hasMore);
+        } else {
+          setCalls(next);
+          setHasMore(!!res.data.hasMore);
+          writeJson(cacheKey(user._id), next);
+        }
       } catch {
         // Keep showing the cached list if we have one; only show the error
         // state when there is nothing to show at all.
@@ -312,7 +337,7 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
     { label: "Settings", icon: <SettingsIcon size={15} />, onClick: onOpenSettings },
   ];
 
-  const Header = () => (
+  const header = (
     <div className="calls-header-block">
       <div className="calls-quick">
         <button className="calls-quick-btn" onClick={() => setShowNew(true)}>
@@ -356,30 +381,30 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
       </div>
 
       {loading ? (
-        <SkeletonRows />
+        // The quick actions / filters never wait for the log: they render
+        // immediately and only the rows below show a skeleton.
+        <div className="calls-list" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {header}
+          <SkeletonRows />
+        </div>
       ) : failed && calls.length === 0 ? (
-        <div className="rail-panel-empty rail-panel-empty-tall">
-          <p>Call history is unavailable. Check your connection and try again.</p>
-          <button className="btn btn-primary btn-sm" onClick={() => setRetry((n) => n + 1)}>Retry</button>
+        <div className="calls-list" style={{ flex: 1, minHeight: 0 }}>
+          {header}
+          <div className="rail-panel-empty rail-panel-empty-tall">
+            <p>Call history is unavailable. Check your connection and try again.</p>
+            <button className="btn btn-primary btn-sm" onClick={() => setRetry((n) => n + 1)}>Retry</button>
+          </div>
         </div>
       ) : (
         <Virtuoso
           className="calls-list"
           style={{ flex: 1, minHeight: 0 }}
           data={rows}
+          context={{ header, filter, loadingMore }}
           computeItemKey={(index, row) => row.id}
-          overscan={300}
+          increaseViewportBy={{ top: 200, bottom: 400 }}
           endReached={loadMore}
-          components={{
-            Header,
-            EmptyPlaceholder: () => (
-              <div className="rail-panel-empty">
-                <PhoneIcon size={34} />
-                <p>{filter === "missed" ? "No missed calls." : "Your voice and video calls will appear here."}</p>
-              </div>
-            ),
-            Footer: () => (loadingMore ? <div className="explorer-loading-more">Loading more…</div> : <div style={{ height: 96 }} />),
-          }}
+          components={CALLS_COMPONENTS}
           itemContent={(index, row) => {
             const peer = peerOf(row.call, user._id);
             const isVideo = row.call.callInfo.kind === "video";

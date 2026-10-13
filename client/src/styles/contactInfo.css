@@ -113,7 +113,7 @@
 .contact-info-actions-row {
   display: flex;
   gap: 6px;
-  padding: 14px 12px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -399,7 +399,7 @@
 
 .ci-call-row {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   margin: 12px 12px 0;
 }
 
@@ -409,7 +409,7 @@
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  padding: 12px 6px;
+  padding: 6px;
   border-radius: 14px;
   cursor: pointer;
   background: var(--surface-2);

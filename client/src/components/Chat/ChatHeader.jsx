@@ -166,7 +166,7 @@ export default function ChatHeader({
       as="header"
       className="chat-header-lg"
       panelClassName="chat-header"
-      config={{ blurAmount: 0.3, refraction: 0.35, edgeHighlight: 0.25, saturation: 0.1 }}
+      config={{ blurAmount: 0.3, refraction: 0.35, edgeHighlight: 0, fresnel: 0, cornerRadius: 0, saturation: 0.1 }}
     >
       {/* Back button for mobile view */}
       <button
@@ -227,13 +227,13 @@ export default function ChatHeader({
         >
           <SearchIcon size={18} />
         </button>
-        <button
+        {/* <button
           className={`icon-btn ${infoOpen ? "active" : ""}`}
           title={conversation.isGroup ? "Group info" : "Contact info"}
           onClick={() => onOpenInfo?.()}
         >
           <InfoIcon size={18} />
-        </button>
+        </button> */}
         <button className="icon-btn" title="More options" onClick={openMenu2}>
           <MoreIcon size={18} />
         </button>

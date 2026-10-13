@@ -24,6 +24,7 @@ import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
 import MobileDrawer from "../components/Sidebar/MobileDrawer";
 import useSwipeGestures from "../hooks/useSwipeGestures";
+import useSwipeBack from "../hooks/useSwipeBack";
 import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
 import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
 import "../styles/layout.css";
@@ -49,6 +50,7 @@ export default function ChatApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [slide, setSlide] = useState(null); // "next" | "prev" while a tab transition plays
   const settingsReturnRef = useRef("/");
+  const shellRef = useRef(null);
 
   const rawSegment = location.pathname.split("/")[1] || "";
   // /new and /new/call are routes (shareable, back-button friendly). The page
@@ -107,9 +109,9 @@ export default function ChatApp() {
     onSwipe: ({ dir, startX, width }) => {
       const inChat = !!activeId && activePanel === "chats";
       if (inChat) {
-        // In a chat: swipe right → leave the chat; swipe left → open the side drawer.
-        if (dir === "right" && startX < width * 0.5) navigate("/");
-        else if (dir === "left" && startX > width * 0.5) setDrawerOpen(true);
+        // In a chat: swipe left → open the side drawer. (Dragging right to leave
+        // the chat is handled live by useSwipeBack below.)
+        if (dir === "left" && startX > width * 0.5) setDrawerOpen(true);
         return;
       }
       const i = TAB_ORDER.indexOf(activePanel);
@@ -119,6 +121,12 @@ export default function ChatApp() {
       try { navigator.vibrate?.(6); } catch { /* ignore */ }
       changeView(TAB_ORDER[j]);
     },
+  });
+
+  useSwipeBack({
+    enabled: !isDesktop && !anyModalOpen && !drawerOpen && !!activeId && activePanel === "chats",
+    shellRef,
+    onBack: () => navigate("/"),
   });
 
   function openNewChat(mode = "chat") {
@@ -171,7 +179,7 @@ export default function ChatApp() {
   }, [infoRequest, activeId]);
 
   return (
-    <div data-slide={slide || undefined} className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${postFullPage ? "is-post-route" : ""}`}>
+    <div ref={shellRef} data-slide={slide || undefined} className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${postFullPage ? "is-post-route" : ""}`}>
       <ConnectionBanner />
       <AsideRail
         view={activePanel}

@@ -82,6 +82,38 @@
   .app-shell:not(.has-active-chat) .app-main {
     display: none;
   }
+
+  /* Drag-to-close: while the chat follows the finger the chat list is shown
+     underneath it (slightly shifted, like the drawer's parallax). */
+  .app-shell.chat-dragging {
+    overflow: hidden;
+  }
+  .app-shell.chat-dragging .sidebar {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 0;
+    transform: translate3d(var(--under-x, -28%), 0, 0);
+  }
+  .app-shell.chat-dragging .sidebar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: var(--under-dim, 0.5);
+    pointer-events: none;
+    z-index: 50;
+  }
+  .app-shell.chat-dragging .app-main {
+    position: relative;
+    z-index: 20;
+    will-change: transform;
+    box-shadow: -14px 0 36px rgba(0, 0, 0, 0.5);
+  }
+  .chat-window {
+    touch-action: pan-y;
+  }
 }
 
 /* Desktop Welcome / Empty Screen */

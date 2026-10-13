@@ -49,7 +49,7 @@ export default function MyProfilePage({ user, onEditProfile, onOpenSettings }) {
 
           <div className="my-profile-details">
             <div className="my-profile-identity">
-              <h1>{user.username}</h1>
+              <h1>{user.displayName}</h1>
               <button className="my-profile-edit" onClick={onEditProfile}>Edit profile</button>
               <button
                 className="my-profile-icon-btn"
@@ -65,13 +65,15 @@ export default function MyProfilePage({ user, onEditProfile, onOpenSettings }) {
               <span><strong>{postCount ?? "—"}</strong> posts</span>
             </div>
 
-            <div className="my-profile-display-name">{user.displayName}</div>
+            <div className="my-profile-display-name">
+              <strong>{user.username}</strong>
+              <button className="my-profile-copy" onClick={copyUsername}>
+                <CopyIcon size={14} />
+                <span>Copy</span>
+              </button>
+            </div>
             {user.about && <p className="my-profile-bio">{user.about}</p>}
 
-            <button className="my-profile-copy" onClick={copyUsername}>
-              <CopyIcon size={14} />
-              <span>Copy username</span>
-            </button>
           </div>
         </header>
 
