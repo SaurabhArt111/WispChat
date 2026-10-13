@@ -196,13 +196,13 @@
 
 @media (max-width: 858px) {
     .my-profile-page {
-        padding: 28px 12px 30px;
+        padding: 28px 4px 30px;
     }
 
     .my-profile-header {
         grid-template-columns: 82px minmax(0, 1fr);
         gap: 16px;
-        padding: 4px 4px 26px;
+        padding: 4px 40px 26px;
     }
 
     .my-profile-avatar {

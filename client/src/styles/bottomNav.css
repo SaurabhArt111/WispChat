@@ -150,6 +150,18 @@
     display: inline-flex;
   }
 }
-.bottom-nav-avatar { display: inline-flex; border-radius: 50%; padding: 1px; border: 2px solid transparent; }
-.bottom-nav-btn.active .bottom-nav-avatar { border-color: var(--wisp); }
-.bottom-nav-btn .bottom-nav-label { font-size: 11px; }
+
+.bottom-nav-avatar {
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 1px;
+  border: 2px solid transparent;
+}
+
+.bottom-nav-btn.active .bottom-nav-avatar {
+  border-color: var(--wisp);
+}
+
+.bottom-nav-btn .bottom-nav-label {
+  font-size: 11px;
+}

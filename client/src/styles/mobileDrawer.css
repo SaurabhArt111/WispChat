@@ -1,42 +1,166 @@
-.mobile-drawer-root { display: none; }
+.mobile-drawer-root {
+  display: none;
+}
+
 @media (max-width: 858px) {
-  .mobile-drawer-root { display: block; position: fixed; inset: 0; z-index: 400; pointer-events: none; }
-  .mobile-drawer-root.open { pointer-events: auto; }
-  .mobile-drawer-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); opacity: 0; transition: opacity 240ms ease; -webkit-tap-highlight-color: transparent; }
+  .mobile-drawer-root {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    pointer-events: none;
+  }
+
+  .mobile-drawer-root.open {
+    pointer-events: auto;
+  }
+
+  .mobile-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transition: opacity 240ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .mobile-drawer {
-    position: absolute; top: 0; right: 0; bottom: 0; width: min(82vw, 330px);
-    background: var(--surface, #14171c); border-left: 1px solid var(--border-soft, rgba(255,255,255,.08));
-    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5); transform: translateX(105%);
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(82vw, 330px);
+    background: var(--surface, #14171c);
+    border-left: 1px solid var(--border-soft, rgba(255, 255, 255, .08));
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5);
+    transform: translateX(105%);
     transition: transform 300ms cubic-bezier(.22, 1, .36, 1);
-    display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
-    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     touch-action: pan-y;
   }
-  .mobile-drawer-root.open .mobile-drawer { transform: translateX(0); }
+
+  .mobile-drawer-root.open .mobile-drawer {
+    transform: translateX(0);
+  }
+
   .mobile-drawer-profile {
-    display: flex; align-items: center; gap: 14px; padding: 22px 18px 18px; background: none; border: 0;
-    border-bottom: 1px solid var(--border-soft, rgba(255,255,255,.08)); color: var(--text); text-align: left; cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 18px 18px;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--border-soft, rgba(255, 255, 255, .08));
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
   }
-  .mobile-drawer-who { display: flex; flex-direction: column; min-width: 0; }
-  .mobile-drawer-who strong { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-drawer-who small { color: var(--text-faint); font-size: 13px; }
-  .mobile-drawer-list { display: flex; flex-direction: column; padding: 8px 10px 18px; }
+
+  .mobile-drawer-who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .mobile-drawer-who strong {
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-drawer-who small {
+    color: var(--text-faint);
+    font-size: 13px;
+  }
+
+  .mobile-drawer-list {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px 18px;
+  }
+
   .mobile-drawer-item {
-    display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 12px; border: 0; border-radius: 12px;
-    background: none; color: var(--text); font-size: 15px; font-weight: 550; text-align: left; cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    padding: 14px 12px;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 550;
+    text-align: left;
+    cursor: pointer;
   }
-  .mobile-drawer-item svg { color: var(--text-dim); flex-shrink: 0; }
-  .mobile-drawer-item:active { background: var(--surface-hover, rgba(255,255,255,.06)); }
-  .mobile-drawer-item.active { background: var(--wisp-dim, rgba(94,242,192,.12)); color: var(--wisp); }
-  .mobile-drawer-item.active svg { color: var(--wisp); }
-  .mobile-drawer-divider { height: 1px; margin: 8px 12px; background: var(--border-soft, rgba(255,255,255,.08)); }
+
+  .mobile-drawer-item svg {
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .mobile-drawer-item:active {
+    background: var(--surface-hover, rgba(255, 255, 255, .06));
+  }
+
+  .mobile-drawer-item.active {
+    background: var(--wisp-dim, rgba(94, 242, 192, .12));
+    color: var(--wisp);
+  }
+
+  .mobile-drawer-item.active svg {
+    color: var(--wisp);
+  }
+
+  .mobile-drawer-divider {
+    height: 1px;
+    margin: 8px 12px;
+    background: var(--border-soft, rgba(255, 255, 255, .08));
+  }
 
   /* tab-to-tab slide when swiping between Chats / Status / Explore / Calls / Profile */
-  .app-shell[data-slide="next"] .sidebar, .app-shell[data-slide="next"] .rail-panel, .app-shell[data-slide="next"] .app-main { animation: tabSlideNext 280ms cubic-bezier(.22, 1, .36, 1); }
-  .app-shell[data-slide="prev"] .sidebar, .app-shell[data-slide="prev"] .rail-panel, .app-shell[data-slide="prev"] .app-main { animation: tabSlidePrev 280ms cubic-bezier(.22, 1, .36, 1); }
+  .app-shell[data-slide="next"] .sidebar, .app-shell[data-slide="next"] .rail-panel, .app-shell[data-slide="next"] .app-main {
+    animation: tabSlideNext 280ms cubic-bezier(.22, 1, .36, 1);
+  }
+
+  .app-shell[data-slide="prev"] .sidebar, .app-shell[data-slide="prev"] .rail-panel, .app-shell[data-slide="prev"] .app-main {
+    animation: tabSlidePrev 280ms cubic-bezier(.22, 1, .36, 1);
+  }
 }
-@keyframes tabSlideNext { from { transform: translateX(32%); opacity: 0.2; } to { transform: none; opacity: 1; } }
-@keyframes tabSlidePrev { from { transform: translateX(-32%); opacity: 0.2; } to { transform: none; opacity: 1; } }
+
+@keyframes tabSlideNext {
+  from {
+    transform: translateX(32%);
+    opacity: 0.2;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes tabSlidePrev {
+  from {
+    transform: translateX(-32%);
+    opacity: 0.2;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .app-shell[data-slide] .sidebar, .app-shell[data-slide] .rail-panel, .app-shell[data-slide] .app-main { animation: none !important; }
+  .app-shell[data-slide] .sidebar, .app-shell[data-slide] .rail-panel, .app-shell[data-slide] .app-main {
+    animation: none !important;
+  }
 }
