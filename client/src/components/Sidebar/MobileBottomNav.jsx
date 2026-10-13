@@ -1,4 +1,6 @@
 import { ChatIcon, PhoneIcon, StatusRingIcon, CompassIcon } from "../common/Icons";
+import { useAuth } from "../../context/AuthContext";
+import Avatar from "../common/Avatar";
 import "../../styles/bottomNav.css";
 
 const TABS = [
@@ -6,6 +8,7 @@ const TABS = [
   { id: "status", label: "Status", icon: StatusRingIcon },
   { id: "explore", label: "Explore", icon: CompassIcon },
   { id: "calls", label: "Calls", icon: PhoneIcon },
+  { id: "profile", label: "Profile", icon: null }, // shows the user's avatar
 ];
 
 // The "More" tab used to live here (Archived/Media/Broadcast/Settings behind
@@ -14,6 +17,7 @@ const TABS = [
 // of each panel instead (see MobileMoreButton + MoreMenuSheet). "explore"
 // is a routed panel (/explore): the posts feed + people search.
 export default function MobileBottomNav({ view, onChangeView, hasUnreadStatus }) {
+  const { user } = useAuth();
   return (
     <nav className="bottom-nav" aria-label="Primary">
       {TABS.map((t) => (
@@ -23,7 +27,7 @@ export default function MobileBottomNav({ view, onChangeView, hasUnreadStatus })
           onClick={() => onChangeView(t.id)}
         >
           <span className="bottom-nav-icon">
-            <t.icon size={25} />
+            {t.icon ? <t.icon size={25} /> : <span className="bottom-nav-avatar"><Avatar user={user} size={26} /></span>}
             {t.id === "status" && hasUnreadStatus && <span className="bottom-nav-dot" />}
           </span>
           <span className="bottom-nav-label">{t.label}</span>

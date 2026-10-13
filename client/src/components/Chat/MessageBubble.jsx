@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import { useDecryptedText } from "../../hooks/useDecryptedMessage";
+import useDoubleTap from "../../hooks/useDoubleTap";
 import { formatClock } from "../../utils/time";
 import { LockIcon } from "../common/Icons";
 import Avatar from "../common/Avatar";
@@ -147,6 +148,10 @@ function MessageBubble({
   reactToMessage,
   requestDeleteMessage,
   undoDeleteMessage,
+  selectMode = false,
+  isSelected = false,
+  onStartSelect,
+  onToggleSelect,
 }) {
   // NOTE: this component is React.memo'd and deliberately does NOT read
   // useChat()/useAuth() itself — a context subscription would re-render every
@@ -174,9 +179,25 @@ function MessageBubble({
         setShowQuickReact(false);
       }
     }
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
+    window.addEventListener("pointerdown", onDown);
+    return () => window.removeEventListener("pointerdown", onDown);
   }, [showQuickReact]);
+
+  // Double-tap / double-click on a message:
+  //   • on the bubble itself  → pop the quick-reaction bar
+  //   • on the empty part of the row → reply to that message
+  const doubleTap = useDoubleTap({
+    onDouble: (_pt, e) => {
+      if (selectMode || message.pending || message.failed) return;
+      try {
+        window.getSelection?.()?.removeAllRanges();
+      } catch {
+        /* ignore */
+      }
+      if (e?.target?.closest?.(".bubble-stack")) setShowQuickReact(true);
+      else onReply?.(message);
+    },
+  });
 
   if (message.deletedForEveryone) {
     return (
@@ -256,6 +277,7 @@ function MessageBubble({
     { label: "Reply", icon: <ReplyIcon size={15} />, onClick: () => onReply?.(message) },
     { label: "Copy", icon: <CopyIcon size={15} />, onClick: copyText, disabled: !decryptedText },
     { label: "Forward", icon: <ForwardIcon size={15} />, onClick: () => setShowForward(true) },
+    { label: "Select", icon: <CheckIcon size={15} />, onClick: () => onStartSelect?.(message._id) },
     isMine && !message.pending
       ? {
           label: "Edit",
@@ -297,9 +319,25 @@ function MessageBubble({
       id={`msg-${message._id}`}
       className={`bubble-row ${isMine ? "mine" : ""} ${grouped ? "grouped" : ""} ${
         isHighlighted ? "highlighted-bubble" : ""
-      }`}
-      onContextMenu={handleContextMenu}
+      } ${selectMode ? "select-mode" : ""} ${isSelected ? "is-selected" : ""}`}
+      onContextMenu={selectMode ? (e) => e.preventDefault() : handleContextMenu}
+      // In select mode any tap (even on links/images) just toggles selection.
+      onClickCapture={
+        selectMode
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect?.(message._id);
+            }
+          : undefined
+      }
+      {...(selectMode ? {} : doubleTap)}
     >
+      {selectMode && (
+        <span className={`select-check ${isSelected ? "on" : ""}`} aria-hidden="true">
+          {isSelected && <CheckIcon size={14} />}
+        </span>
+      )}
       {!isMine && isGroup && (
         <div className="bubble-avatar-slot">
           {!grouped && <Avatar user={message.sender} size={28} />}
@@ -360,6 +398,9 @@ function MessageBubble({
             />
           )}
 
+          {/* Link card sits ABOVE the text, like WhatsApp */}
+          {!textLocked && decryptedText && linkPreview && <LinkPreviewCard href={linkPreview} />}
+
           {textLocked ? (
             <div className="bubble-text encrypted-locked-text">
               <LockIcon size={12} /> Encrypted message — unlock to view
@@ -371,8 +412,6 @@ function MessageBubble({
           ) : (
             decryptedText && <FormattedText text={decryptedText} />
           )}
-
-          {!textLocked && decryptedText && linkPreview && <LinkPreviewCard href={linkPreview} />}
 
           <div className="bubble-meta">
             {message.encrypted && (

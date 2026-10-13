@@ -27,7 +27,7 @@ import "../../styles/posts.css";
 
 // ---------------------------------------------------------------------------
 // Mobile post viewer: a full-screen page on its own /post/:id route with a
-// vertical, snap-scrolling feed. The post you opened is first; swipe up for
+// normal, free-scrolling feed of post cards (not a reel). The post you opened is first; swipe up for
 // the posts that followed it, then suggestions from other people. Double-tap
 // any post to like it (heart bursts where you tapped); the URL follows
 // whichever post is on screen. Comments live in a bottom sheet.
@@ -220,10 +220,11 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
   const videoRef = useRef(null);
   const [burst, setBurst] = useState(null);
   const [paused, setPaused] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const { toggleLike, likeOnly } = usePostLike(post, onChange);
   const isMine = String(post.user?._id || post.user) === String(user._id);
 
-  // Only the post on screen plays; the rest stay paused (saves bandwidth & battery).
+  // Only the post nearest the middle of the screen plays; the rest pause.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -242,19 +243,32 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
     onSingle: () => post.kind === "video" && setPaused((p) => !p),
   });
 
+  const longCaption = (post.caption || "").length > 120;
+
   return (
-    <section className="post-feed-item" data-index={index} data-post-id={post._id}>
-      <div className="post-feed-media" {...doubleTap}>
+    <article className="pfc" data-index={index} data-post-id={post._id}>
+      <header className="pfc-head">
+        <Avatar user={post.user} size={38} />
+        <div className="pfc-author">
+          <strong>{post.user?.displayName}</strong>
+          <span>
+            @{post.user?.username} · {formatListTime(post.createdAt)}
+            {!isMine && (
+              <em className={`post-feed-tag ${post.isContact ? "friend" : ""}`}>{post.isContact ? "Friend" : "Suggested"}</em>
+            )}
+          </span>
+        </div>
+        {isMine && (
+          <button className="icon-btn" onClick={() => onOpenOwner(post._id)} title="Edit or delete" aria-label="Post options">
+            <DotsHorizontalIcon size={22} />
+          </button>
+        )}
+      </header>
+
+      <div className="pfc-media" {...doubleTap}>
         {isNear ? (
           post.kind === "video" ? (
-            <SafeVideo
-              ref={videoRef}
-              src={mediaUrl(post.url)}
-              loop
-              playsInline
-              muted={muted}
-              preload={isActive ? "auto" : "metadata"}
-            />
+            <SafeVideo ref={videoRef} src={mediaUrl(post.url)} loop playsInline muted={muted} preload={isActive ? "auto" : "metadata"} />
           ) : (
             <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} draggable={false} />
           )
@@ -277,9 +291,9 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
         )}
       </div>
 
-      <div className="post-feed-rail" data-no-tap>
+      <div className="pfc-actions" data-no-tap>
         <button
-          className={`post-feed-action ${post.likedByMe ? "liked" : ""}`}
+          className={`pfc-action ${post.likedByMe ? "liked" : ""}`}
           onClick={() => {
             if (!post.likedByMe) setBurst((b) => ({ n: (b?.n || 0) + 1 }));
             toggleLike();
@@ -287,47 +301,39 @@ function FeedItem({ post, index, isActive, isNear, muted, onChange, onOpenCommen
           title={post.likedByMe ? "Unlike" : "Like"}
         >
           <span key={post.likedByMe ? "on" : "off"} className="post-like-icon">
-            <HeartIcon size={28} filled={post.likedByMe} />
+            <HeartIcon size={26} filled={post.likedByMe} />
           </span>
-          <span>{post.likeCount}</span>
         </button>
-        <button className="post-feed-action" onClick={() => onOpenComments(post._id)} title="Comments">
-          <CommentIcon size={27} />
-          <span>{post.commentCount}</span>
+        <button className="pfc-action" onClick={() => onOpenComments(post._id)} title="Comments">
+          <CommentIcon size={25} />
         </button>
-        <button className="post-feed-action" onClick={() => onShare(post)} title="Share link">
-          <ForwardIcon size={25} />
+        <button className="pfc-action" onClick={() => onShare(post)} title="Share link">
+          <ForwardIcon size={23} />
         </button>
-        {isMine && (
-          <button className="post-feed-action" onClick={() => onOpenOwner(post._id)} title="Edit or delete">
-            <DotsHorizontalIcon size={25} />
+      </div>
+
+      <div className="pfc-body" data-no-tap>
+        <div className="pfc-likes">{post.likeCount} {post.likeCount === 1 ? "like" : "likes"}</div>
+        {(post.caption || post.edited) && (
+          <p className={`pfc-caption ${expanded ? "open" : ""}`}>
+            <strong>{post.user?.username}</strong> {post.caption}
+            {post.edited && <span className="post-edited-tag"> · edited</span>}
+            {longCaption && !expanded && (
+              <button type="button" className="pfc-more" onClick={() => setExpanded(true)}>more</button>
+            )}
+          </p>
+        )}
+        {post.commentCount > 0 ? (
+          <button type="button" className="pfc-comments-link" onClick={() => onOpenComments(post._id)}>
+            View all {post.commentCount} comment{post.commentCount === 1 ? "" : "s"}
+          </button>
+        ) : (
+          <button type="button" className="pfc-comments-link" onClick={() => onOpenComments(post._id)}>
+            Add a comment…
           </button>
         )}
       </div>
-
-      <div className="post-feed-meta" data-no-tap>
-        <div className="post-feed-author">
-          <Avatar user={post.user} size={34} />
-          <div className="post-feed-author-text">
-            <strong>{post.user?.displayName}</strong>
-            <span>
-              @{post.user?.username} · {formatListTime(post.createdAt)}
-              {!isMine && (
-                <em className={`post-feed-tag ${post.isContact ? "friend" : ""}`}>
-                  {post.isContact ? "Friend" : "Suggested"}
-                </em>
-              )}
-            </span>
-          </div>
-        </div>
-        {(post.caption || post.edited) && (
-          <p className="post-feed-caption">
-            {post.caption}
-            {post.edited && <span className="post-edited-tag"> · edited</span>}
-          </p>
-        )}
-      </div>
-    </section>
+    </article>
   );
 }
 
@@ -352,12 +358,12 @@ export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadi
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting && e.intersectionRatio >= 0.6) setActive(Number(e.target.dataset.index));
+          if (e.isIntersecting) setActive(Number(e.target.dataset.index));
         }
       },
-      { root, threshold: [0.6] }
+      { root, rootMargin: "-45% 0px -45% 0px", threshold: 0 }
     );
-    root.querySelectorAll("[data-index]").forEach((n) => io.observe(n));
+    root.querySelectorAll(".pfc[data-index]").forEach((n) => io.observe(n));
     return () => io.disconnect();
   }, [items.length]);
 
@@ -390,7 +396,7 @@ export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadi
         <button className="post-feed-back" onClick={onClose} aria-label="Back">
           <BackIcon size={20} />
         </button>
-        <strong>Posts</strong>
+        <strong className="post-feed-title">Posts</strong>
         {hasVideo ? (
           <button className={`post-feed-back ${muted ? "" : "on"}`} onClick={() => setMuted((m) => !m)} aria-label={muted ? "Unmute" : "Mute"}>
             <SpeakerIcon size={19} />
@@ -415,7 +421,7 @@ export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadi
             onShare={share}
           />
         ))}
-        <section className="post-feed-end">
+        <section className="pfc-end">
           {loadingMore ? "Finding more posts…" : hasMore ? "" : "You're all caught up"}
         </section>
       </div>

@@ -1,13 +1,34 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Avatar from "../common/Avatar";
 import PostsGrid from "../Posts/PostsGrid";
-import { CopyIcon, GridIcon, SettingsIcon } from "../common/Icons";
+import { ChevronDownIcon, CopyIcon, GridIcon, SettingsIcon } from "../common/Icons";
 import { useToast } from "../../context/ToastContext";
 import "../../styles/myProfile.css";
 
 export default function MyProfilePage({ user, onEditProfile, onOpenSettings }) {
   const { showToast } = useToast();
   const [postCount, setPostCount] = useState(null);
+  const pageRef = useRef(null);
+  const [showTop, setShowTop] = useState(false);
+
+  // Floating "back to top" once you've scrolled a screen down; rAF-throttled.
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return undefined;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setShowTop(el.scrollTop > 480);
+      });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   async function copyUsername() {
     try {
@@ -20,7 +41,7 @@ export default function MyProfilePage({ user, onEditProfile, onOpenSettings }) {
 
   return (
     <main className="my-profile-route">
-      <div className="my-profile-page">
+      <div className="my-profile-page" ref={pageRef}>
         <header className="my-profile-header">
           <div className="my-profile-avatar">
             <Avatar user={user} size={148} />
@@ -78,6 +99,15 @@ export default function MyProfilePage({ user, onEditProfile, onOpenSettings }) {
           />
         </section>
       </div>
+      <button
+        type="button"
+        className={`my-profile-top ${showTop ? "show" : ""}`}
+        onClick={() => pageRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Back to top"
+        tabIndex={showTop ? 0 : -1}
+      >
+        <ChevronDownIcon size={20} />
+      </button>
     </main>
   );
 }

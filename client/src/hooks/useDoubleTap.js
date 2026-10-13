@@ -5,7 +5,7 @@ import { useCallback, useRef } from "react";
  * and mouse (the native `dblclick` event is unreliable on touch screens,
  * which is why double-tap-to-like used to do nothing on phones).
  *
- * Returns pointer handlers to spread on the element. `onDouble(point)` gets
+ * Returns pointer handlers to spread on the element. `onDouble(point, event)` gets
  * the position of the second tap so the heart can burst where you tapped.
  * `onSingle` (optional) fires only once it's clear no second tap followed.
  */
@@ -32,7 +32,7 @@ export default function useDoubleTap({ onDouble, onSingle, delay = 280 } = {}) {
         clearTimeout(singleTimer.current);
         last.current = { t: 0, x: 0, y: 0 };
         const rect = e.currentTarget.getBoundingClientRect();
-        onDouble?.({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        onDouble?.({ x: e.clientX - rect.left, y: e.clientY - rect.top }, e);
       } else {
         last.current = { t: now, x: e.clientX, y: e.clientY };
         if (onSingle) {

@@ -165,6 +165,8 @@ export default function ConversationItem({ conversation, active, onClick }) {
 
   function onPointerDown(e) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // Edge touches belong to the app-level tab swipe, not the row actions.
+    if (e.pointerType === "touch" && (e.clientX < 28 || e.clientX > window.innerWidth - 28)) return;
     zoneRef.current = rest < 0 ? "open-left" : rest > 0 ? "open-right" : "closed";
     dragStartRef.current = {
       startX: e.clientX,

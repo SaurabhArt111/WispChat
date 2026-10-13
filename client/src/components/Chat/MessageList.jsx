@@ -5,7 +5,10 @@ import { useAuth } from "../../context/AuthContext";
 import MessageBubble from "./MessageBubble";
 import TypingDots from "./TypingDots";
 import { formatDayLabel } from "../../utils/time";
-import { ChevronDownIcon, LockIcon } from "../common/Icons";
+import { ChevronDownIcon, LockIcon, CloseIcon, CopyIcon, ForwardIcon, TrashIcon } from "../common/Icons";
+import { useToast } from "../../context/ToastContext";
+import ForwardModal from "./ForwardModal";
+import ActionSheetModal from "../common/ActionSheetModal";
 import { onWallpaperChange, resolveWallpaperStyle } from "../../utils/wallpaper";
 
 // react-virtuoso's "inverse infinite scroll" needs a large positive starting
@@ -15,12 +18,18 @@ const START_INDEX = 1_000_000;
 export default function MessageList({ conversation, onReply, onEdit, searchQuery = "" }) {
   const chat = useChat();
   const { messages, hasMore, loadMoreMessages, typing } = chat;
-  const { user } = useAuth();
+  const { user, e2ee } = useAuth();
+  const { showToast } = useToast();
   const typingUsers = Object.values(typing[conversation._id] || {});
   const virtuosoRef = useRef(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
+  // Multi-select: null = off, otherwise the list of selected message ids.
+  const [selection, setSelection] = useState(null);
+  const [showForwardSel, setShowForwardSel] = useState(false);
+  const [showDeleteSel, setShowDeleteSel] = useState(false);
+  const selectMode = selection !== null;
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [wallpaperStyle, setWallpaperStyle] = useState(() => resolveWallpaperStyle(conversation._id));
   const prevFirstKeyRef = useRef(null);
@@ -46,9 +55,67 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
       reactToMessage: (...a) => latest.current.chat.reactToMessage(...a),
       requestDeleteMessage: (...a) => latest.current.chat.requestDeleteMessage(...a),
       undoDeleteMessage: (...a) => latest.current.chat.undoDeleteMessage(...a),
+      onStartSelect: (id) => setSelection((cur) => (cur ? (cur.includes(id) ? cur : [...cur, id]) : [id])),
+      onToggleSelect: (id) =>
+        setSelection((cur) => {
+          if (!cur) return cur;
+          const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+          return next.length ? next : null; // deselecting the last one leaves select mode
+        }),
     }),
     []
   );
+
+  // Leave select mode with Esc, and when switching chats.
+  useEffect(() => {
+    if (!selectMode) return undefined;
+    const onKey = (e) => e.key === "Escape" && setSelection(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectMode]);
+  useEffect(() => setSelection(null), [conversation._id]);
+
+  const selectedMessages = useMemo(
+    () => (selection ? messages.filter((m) => selection.includes(m._id)) : []),
+    [selection, messages]
+  );
+  const allSelectedMine = selectedMessages.length > 0 && selectedMessages.every((m) => (m.sender?._id || m.sender) === user._id);
+
+  async function copySelected() {
+    const parts = [];
+    for (const m of selectedMessages) {
+      let text = m.text || "";
+      if (m.encrypted) {
+        try {
+          const r = await e2ee.decryptMessageText(m);
+          text = r.locked ? "" : r.text;
+        } catch {
+          text = "";
+        }
+      }
+      if (text) parts.push(text);
+    }
+    if (!parts.length) return showToast("Nothing to copy", "danger");
+    try {
+      await navigator.clipboard.writeText(parts.join("\n"));
+      showToast(`Copied ${parts.length} message${parts.length > 1 ? "s" : ""}`);
+      setSelection(null);
+    } catch {
+      showToast("Couldn't copy", "danger");
+    }
+  }
+
+  function deleteSelected(forEveryone) {
+    const ids = selectedMessages.map((m) => m._id);
+    setShowDeleteSel(false);
+    setSelection(null);
+    ids.forEach((id) => chat.requestDeleteMessage(id, forEveryone));
+    showToast(`${ids.length} message${ids.length > 1 ? "s" : ""} deleted`, "default", {
+      actionLabel: "Undo",
+      onAction: () => ids.forEach((id) => chat.undoDeleteMessage(id)),
+      duration: 3000,
+    });
+  }
 
   // Re-resolve the wallpaper whenever it changes (Settings → Chats default,
   // or this chat's own "More → Chat wallpaper" override).
@@ -283,9 +350,52 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
                 reactToMessage={stable.reactToMessage}
                 requestDeleteMessage={stable.requestDeleteMessage}
                 undoDeleteMessage={stable.undoDeleteMessage}
+                selectMode={selectMode}
+                isSelected={!!selection?.includes(row.msg._id)}
+                onStartSelect={stable.onStartSelect}
+                onToggleSelect={stable.onToggleSelect}
               />
             </div>
           )}
+        />
+      )}
+
+      {selectMode && (
+        <div className="select-toolbar" role="toolbar" aria-label="Selected messages">
+          <button type="button" className="icon-btn" onClick={() => setSelection(null)} title="Cancel selection">
+            <CloseIcon size={18} />
+          </button>
+          <strong>{selection.length} selected</strong>
+          <span className="select-toolbar-spacer" />
+          <button type="button" className="icon-btn" onClick={copySelected} title="Copy">
+            <CopyIcon size={18} />
+          </button>
+          <button type="button" className="icon-btn" onClick={() => setShowForwardSel(true)} title="Forward">
+            <ForwardIcon size={18} />
+          </button>
+          <button type="button" className="icon-btn danger" onClick={() => setShowDeleteSel(true)} title="Delete">
+            <TrashIcon size={18} />
+          </button>
+        </div>
+      )}
+
+      {showForwardSel && (
+        <ForwardModal
+          messages={selectedMessages}
+          onClose={() => {
+            setShowForwardSel(false);
+            setSelection(null);
+          }}
+        />
+      )}
+      {showDeleteSel && (
+        <ActionSheetModal
+          title={`Delete ${selection?.length || 0} message${selection?.length === 1 ? "" : "s"}?`}
+          actions={[
+            allSelectedMine && { label: "Delete for everyone", danger: true, icon: <TrashIcon size={16} />, onClick: () => deleteSelected(true) },
+            { label: "Delete for me", danger: true, icon: <TrashIcon size={16} />, onClick: () => deleteSelected(false) },
+          ].filter(Boolean)}
+          onCancel={() => setShowDeleteSel(false)}
         />
       )}
 

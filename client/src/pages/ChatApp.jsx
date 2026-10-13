@@ -22,6 +22,8 @@ import ConnectionBanner from "../components/common/ConnectionBanner";
 import useMediaQuery from "../hooks/useMediaQuery";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
+import MobileDrawer from "../components/Sidebar/MobileDrawer";
+import useSwipeGestures from "../hooks/useSwipeGestures";
 import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
 import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
 import "../styles/layout.css";
@@ -31,6 +33,8 @@ import "../styles/layout.css";
 // fallback for any path that doesn't match one of these. "Archived" is now a
 // real route (/archived) so it can be linked to, bookmarked and reached with
 // the browser back button.
+// Order used when swiping left/right between the main mobile tabs.
+const TAB_ORDER = ["chats", "status", "explore", "calls", "profile"];
 const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "archived", "profile", "post"];
 
 export default function ChatApp() {
@@ -43,6 +47,8 @@ export default function ChatApp() {
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showProfileEditor, setShowProfileEditor] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [slide, setSlide] = useState(null); // "next" | "prev" while a tab transition plays
   const settingsReturnRef = useRef("/");
 
   const routeSegment = location.pathname.split("/")[1] || "";
@@ -72,6 +78,39 @@ export default function ChatApp() {
   // Single source of truth for which sidebar-column panel is on screen —
   // derived purely from the URL, so two panels can never render at once.
   const activePanel = view;
+
+  // Direction of the last tab change → drives the slide animation.
+  const prevPanelRef = useRef(activePanel);
+  useEffect(() => {
+    const from = TAB_ORDER.indexOf(prevPanelRef.current);
+    const to = TAB_ORDER.indexOf(activePanel);
+    prevPanelRef.current = activePanel;
+    if (from < 0 || to < 0 || from === to) return undefined;
+    setSlide(to > from ? "next" : "prev");
+    const t = setTimeout(() => setSlide(null), 340);
+    return () => clearTimeout(t);
+  }, [activePanel]);
+  useEffect(() => setDrawerOpen(false), [activePanel, activeId]);
+
+  const anyModalOpen = showNewChat || showNewGroup || showProfileEditor || showContactInfo || showSettings;
+  useSwipeGestures({
+    enabled: !isDesktop && !anyModalOpen && !drawerOpen && !postFullPage,
+    onSwipe: ({ dir, startX, width }) => {
+      const inChat = !!activeId && activePanel === "chats";
+      if (inChat) {
+        // In a chat: swipe right → leave the chat; swipe left → open the side drawer.
+        if (dir === "right" && startX < width * 0.5) navigate("/");
+        else if (dir === "left" && startX > width * 0.5) setDrawerOpen(true);
+        return;
+      }
+      const i = TAB_ORDER.indexOf(activePanel);
+      if (i < 0) return;
+      const j = dir === "left" ? i + 1 : i - 1;
+      if (j < 0 || j >= TAB_ORDER.length) return;
+      try { navigator.vibrate?.(6); } catch { /* ignore */ }
+      changeView(TAB_ORDER[j]);
+    },
+  });
 
   function changeView(id) {
     navigate(id === "chats" ? "/" : `/${id}`);
@@ -111,7 +150,7 @@ export default function ChatApp() {
   }, [infoRequest, activeId]);
 
   return (
-    <div className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${postFullPage ? "is-post-route" : ""}`}>
+    <div data-slide={slide || undefined} className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${postFullPage ? "is-post-route" : ""}`}>
       <ConnectionBanner />
       <AsideRail
         view={activePanel}
@@ -193,6 +232,17 @@ export default function ChatApp() {
       {postOverlay && <PostViewerPage />}
       {showContactInfo && activeConversation && (
         <ContactInfoPanel conversation={activeConversation} onClose={() => setShowContactInfo(false)} />
+      )}
+
+      {!isDesktop && (
+        <MobileDrawer
+          open={drawerOpen && !!activeId}
+          onClose={() => setDrawerOpen(false)}
+          view={activePanel}
+          onChangeView={changeView}
+          onOpenProfile={openProfile}
+          onOpenSettings={openSettings}
+        />
       )}
 
       <MobileBottomNav

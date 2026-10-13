@@ -7,7 +7,9 @@ import Avatar from "../common/Avatar";
 import Modal from "../common/Modal";
 import { ForwardIcon } from "../common/Icons";
 
-export default function ForwardModal({ message, onClose }) {
+export default function ForwardModal({ message: single, messages: many, onClose }) {
+  const list = many?.length ? many : [single];
+  const message = list[0];
   const { conversations, forwardMessage } = useChat();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -23,8 +25,8 @@ export default function ForwardModal({ message, onClose }) {
     if (selected.length === 0) return;
     setBusy(true);
     try {
-      await forwardMessage(message, selected);
-      showToast(`Message forwarded to ${selected.length} conversation${selected.length > 1 ? "s" : ""}`);
+      for (const m of list) await forwardMessage(m, selected); // in order, so the chat keeps the same sequence
+      showToast(`${list.length > 1 ? `${list.length} messages` : "Message"} forwarded to ${selected.length} conversation${selected.length > 1 ? "s" : ""}`);
       onClose();
     } catch (err) {
       showToast(err?.message || "Could not forward message", "danger");
@@ -51,7 +53,9 @@ export default function ForwardModal({ message, onClose }) {
       <div className="forward-message-snippet">
         <span className="snippet-label">Message to forward:</span>
         <div className="snippet-body">
-          {locked
+          {list.length > 1
+            ? `${list.length} messages`
+            : locked
             ? "🔒 Encrypted message"
             : snippetText || (message.attachments?.length ? "📎 Media attachment" : "Message")}
         </div>

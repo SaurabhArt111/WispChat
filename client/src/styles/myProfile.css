@@ -251,3 +251,82 @@
         height: 44px;
     }
 }
+
+/* ===== Smoother profile scrolling ===== */
+.my-profile-route {
+    position: relative;
+}
+
+.my-profile-page {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    scroll-padding-top: 56px;
+
+}
+
+.my-profile-page::-webkit-scrollbar {
+    width: 8px;
+}
+
+.my-profile-page::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+}
+
+/* the Posts tab bar stays pinned while the grid scrolls underneath */
+.my-profile-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    /* background: color-mix(in srgb, var(--ink) 88%, transparent); */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.my-profile-top {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 8;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    transform: translateY(16px) rotate(180deg) scale(0.8);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 220ms cubic-bezier(.22, 1.3, .36, 1), opacity 180ms ease;
+}
+
+.my-profile-top.show {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (max-width: 858px) {
+    .my-profile-page {
+        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+        scroll-padding-top: 48px;
+    }
+
+    .my-profile-top {
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .my-profile-page {
+        scroll-behavior: auto;
+    }
+}

@@ -1699,3 +1699,43 @@ audio.media-failed {
 .ci-setting-row svg { color: var(--text-faint); flex-shrink: 0; }
 .ci-setting-text { display: flex; flex-direction: column; gap: 2px; }
 .ci-setting-text small { color: var(--text-faint); font-size: 12.5px; }
+
+/* ---------- 14. Multi-select messages ---------- */
+.message-list-wrap { position: relative; }
+.select-toolbar {
+  position: absolute; z-index: 20; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+  background: var(--surface, #14171c); border-bottom: 1px solid var(--border-soft, rgba(255,255,255,.08));
+  box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: selectBarIn 180ms ease-out;
+}
+.select-toolbar strong { font-size: 15px; font-weight: 650; }
+.select-toolbar-spacer { flex: 1; }
+.select-toolbar .icon-btn.danger { color: #ff6b6b; }
+@keyframes selectBarIn { from { transform: translateY(-100%); opacity: 0; } to { transform: none; opacity: 1; } }
+.bubble-row.select-mode { cursor: pointer; position: relative; transition: background 120ms ease; }
+.bubble-row.select-mode.is-selected { background: rgba(94, 242, 192, 0.12); }
+.bubble-row.select-mode .bubble-react-trigger,
+.bubble-row.select-mode .bubble-forward-trigger { display: none !important; }
+.select-check {
+  flex-shrink: 0; align-self: center; width: 22px; height: 22px; margin: 0 8px 0 6px; border-radius: 50%;
+  border: 2px solid var(--text-faint, #8a93a3); display: inline-flex; align-items: center; justify-content: center;
+  color: var(--wisp-ink, #04201a);
+}
+.select-check.on { background: var(--wisp, #5ef2c0); border-color: var(--wisp, #5ef2c0); }
+.bubble-row.select-mode.mine { flex-direction: row-reverse; }
+.bubble-row.select-mode.mine .select-check { margin: 0 6px 0 8px; }
+
+/* Double-tap target feedback */
+.bubble-row { -webkit-tap-highlight-color: transparent; }
+
+/* ---------- 15. Mobile: no text selection inside message bubbles ----------
+   (long-press opens the message menu instead; Copy lives in that menu) */
+@media (hover: none) and (pointer: coarse), (max-width: 858px) {
+  .bubble, .bubble-text, .bubble-emoji-only, .bubble-reply-preview {
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  .bubble-link { -webkit-user-select: none; user-select: none; }
+}
+
+/* ---------- 16. Link card above the text ---------- */
+.bubble > .link-preview-card, .bubble > .link-card, .bubble > a.link-preview { margin: 2px 0 6px; }

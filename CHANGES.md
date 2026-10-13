@@ -59,3 +59,20 @@
 | Call pickup | Slide-to-answer (or tap/Enter on knob), separate Decline button, avatar ripple rings |
 | File bubbles | WhatsApp-style Open / Save as… buttons |
 | Contact info | Notification settings + Encryption rows |
+
+---
+
+# Revision 4 (mobile gestures)
+
+| Feature | Details |
+|---|---|
+| Swipe between tabs | Chats → Status → Explore → Calls → Profile. Swipe left/right on any non-scrolling area; on chat rows start the swipe at the screen edge (rows keep their own pin/mute/archive swipe). Slide animation + light haptic |
+| Swipe out of a chat | Swipe right (from the left half) to go back to the chat list |
+| Side drawer | In a chat, swipe left (from the right half) to open the navigation drawer. Close by tapping outside, swiping it right, Esc, or choosing an item |
+| Profile tab | 5th button in the mobile bottom nav (your avatar) |
+| Explore post viewer (mobile) | Reel/snap layout replaced with a normal scrolling feed of post cards (header, media, like/comment/share, likes, caption, comments link). Opened post is first |
+| Message double-tap/click | On the bubble → reaction bar. On the empty part of the row → reply |
+| Select messages | "Select" in the message menu → multi-select with Copy / Forward / Delete (+Undo) |
+| No text selection on mobile | Bubble text isn't selectable on touch devices (use the menu → Copy) |
+| Link card | Now above the message text |
+| My profile | Smoother scroll (momentum, overscroll contain), sticky Posts tab bar, back-to-top button, bottom padding for the nav bar |
