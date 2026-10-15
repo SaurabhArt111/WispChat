@@ -8,7 +8,7 @@ import { LockIcon } from "../common/Icons";
 import Avatar from "../common/Avatar";
 import ActionSheetModal from "../common/ActionSheetModal";
 import AttachmentView from "./AttachmentView";
-import QuickReactions from "./QuickReactions";
+import QuickReactions, { QUICK_EMOJI } from "./QuickReactions";
 import ForwardModal from "./ForwardModal";
 import LinkPreviewCard, { linkPreviewsEnabled } from "./LinkPreviewCard";
 import { mediaUrl } from "../../api/config";
@@ -29,7 +29,6 @@ import {
 } from "../common/Icons";
 
 const URL_SRC = makeUrlRegex().source;
-const QUICK_EMOJI = ["❤️", "😂", "👍", "🔥", "😮", "🙏"];
 
 function FormattedText({ text }) {
   if (!text) return null;
@@ -392,6 +391,8 @@ function MessageBubble({
             <AttachmentView
               message={message}
               attachments={message.attachments}
+              userId={userId}
+              reactToMessage={reactToMessage}
               onForward={() => setShowForward(true)}
               onReply={() => onReply?.(message)}
               onDeleteRequest={() => setShowDeleteSheet(true)}

@@ -5,18 +5,29 @@ import { copyImageToClipboard } from "../../utils/copyImage";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
 import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
+import { QUICK_EMOJI } from "./QuickReactions";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 
-export default function Lightbox({ message, images, startIndex = 0, onClose, onForward }) {
+export default function Lightbox({
+  message,
+  images,
+  startIndex = 0,
+  userId,
+  reactToMessage,
+  onClose,
+  onForward,
+}) {
   const [index, setIndex] = useState(startIndex);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [origin, setOrigin] = useState({ x: 50, y: 50 });
   const [dragging, setDragging] = useState(false);
+  const [dismissY, setDismissY] = useState(0);
   const dragRef = useRef(null);
   const pinchRef = useRef(null);
+  const swipeRef = useRef(null);
   const overlayRef = useRef(null);
   const imgRef = useRef(null);
   const { openMenu } = useContextMenu();
@@ -139,9 +150,15 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
       pinchRef.current = { startDist: touchDistance(e.touches), startZoom: zoom };
       setOrigin(originFromPoint((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2));
       dragRef.current = null;
-    } else if (e.touches.length === 1 && zoom > 1) {
+      swipeRef.current = null;
+    } else if (e.touches.length === 1) {
       const t = e.touches[0];
-      dragRef.current = { startX: t.clientX, startY: t.clientY, origin: pan };
+      if (zoom > 1) {
+        dragRef.current = { startX: t.clientX, startY: t.clientY, origin: pan };
+        swipeRef.current = null;
+      } else {
+        swipeRef.current = { startX: t.clientX, startY: t.clientY, direction: null };
+      }
     }
   }
   function handleTouchMove(e) {
@@ -155,6 +172,19 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
         setPan({ x: 0, y: 0 });
         setOrigin({ x: 50, y: 50 });
       }
+    } else if (e.touches.length === 1 && swipeRef.current && zoom <= 1) {
+      const t = e.touches[0];
+      const dx = t.clientX - swipeRef.current.startX;
+      const dy = t.clientY - swipeRef.current.startY;
+      if (!swipeRef.current.direction && Math.max(Math.abs(dx), Math.abs(dy)) > 8) {
+        swipeRef.current.direction = Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
+      }
+      if (swipeRef.current.direction === "horizontal") {
+        e.preventDefault();
+      } else if (swipeRef.current.direction === "vertical" && dy > 0) {
+        e.preventDefault();
+        setDismissY(dy);
+      }
     } else if (e.touches.length === 1 && dragRef.current) {
       e.preventDefault();
       const t = e.touches[0];
@@ -165,7 +195,28 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   }
   function handleTouchEnd(e) {
     if (e.touches.length < 2) pinchRef.current = null;
-    if (e.touches.length === 0) dragRef.current = null;
+    if (e.touches.length === 0) {
+      if (swipeRef.current?.direction === "horizontal" && zoom <= 1) {
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - swipeRef.current.startX;
+        const dy = touch.clientY - swipeRef.current.startY;
+        if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+          setIndex((current) =>
+            Math.max(0, Math.min(images.length - 1, current + (dx < 0 ? 1 : -1)))
+          );
+        }
+      } else if (swipeRef.current?.direction === "vertical" && zoom <= 1) {
+        const touch = e.changedTouches[0];
+        const dy = touch.clientY - swipeRef.current.startY;
+        if (dy >= Math.max(100, window.innerHeight * 0.18)) {
+          onClose();
+        }
+      }
+      setDismissY(0);
+      swipeRef.current = null;
+      dragRef.current = null;
+      setDragging(false);
+    }
   }
 
   function toggleZoom(e) {
@@ -194,13 +245,22 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
     onClose();
   }
 
+  function handleLightboxContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   async function handleCopyImage(url) {
     await copyImageToClipboard(url, showToast);
   }
 
   function handleStageContextMenu(e) {
     e.preventDefault();
+    e.stopPropagation();
     if (!resolvedUrl) return;
+    const myReaction = message?.reactions?.find(
+      (reaction) => (reaction.user?._id || reaction.user) === userId
+    )?.emoji;
     openMenu(
       e,
       [
@@ -217,7 +277,17 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
             link.click();
           },
         },
-      ].filter(Boolean)
+      ].filter(Boolean),
+      null,
+      reactToMessage && message?._id
+        ? {
+            reactions: {
+              emojis: QUICK_EMOJI,
+              current: myReaction,
+              onPick: (emoji) => reactToMessage(message._id, emoji),
+            },
+          }
+        : undefined
     );
   }
 
@@ -226,7 +296,12 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
   if (!img) return null;
 
   return createPortal(
-    <div className="lightbox" ref={overlayRef} onMouseDown={handleBackgroundMouseDown}>
+    <div
+      className="lightbox"
+      ref={overlayRef}
+      onMouseDown={handleBackgroundMouseDown}
+      onContextMenu={handleLightboxContextMenu}
+    >
       <div className="lightbox-topbar">
         <button className="lightbox-icon-btn" onClick={onClose} title="Close (Esc)">
           <CloseIcon size={20} />
@@ -279,10 +354,11 @@ export default function Lightbox({ message, images, startIndex = 0, onClose, onF
           draggable={false}
           onDoubleClick={toggleZoom}
           style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transform: `translate(${pan.x}px, ${pan.y + dismissY}px) scale(${zoom})`,
             transformOrigin: `${origin.x}% ${origin.y}%`,
             cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in",
-            opacity: loading || !resolvedUrl ? 0.3 : 1,
+            opacity: loading || !resolvedUrl ? 0.3 : Math.max(0.35, 1 - dismissY / 600),
+            transition: dismissY ? "none" : undefined,
             touchAction: zoom > 1 ? "none" : "auto",
           }}
         />

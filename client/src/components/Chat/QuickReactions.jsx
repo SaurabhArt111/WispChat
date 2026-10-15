@@ -1,3 +1,5 @@
+export const QUICK_EMOJI = ["❤️", "😂", "👍", "🔥", "😮", "🙏"];
+
 export default function QuickReactions({ emojis, current, onPick, align = "left" }) {
   return (
     <div className={`quick-reactions ${align}`}>

@@ -12,10 +12,10 @@ router.get("/", async (req, res) => {
   try {
     const preview = await getLinkPreview(url);
     res.json({ preview });
-  } catch (err) {
-    // Not an error worth surfacing loudly — plenty of links simply have no
-    // preview. The client falls back to a plain tappable link.
-    res.status(422).json({ message: "No preview available" });
+  } catch {
+    // Preview generation is best-effort: inaccessible pages simply use the
+    // plain tappable link in the client rather than returning an HTTP error.
+    res.json({ preview: null });
   }
 });
 

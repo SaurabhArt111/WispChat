@@ -207,12 +207,12 @@ export default function PostViewerModal({
           )} */}
           {newFile ? (
             newFile.type.startsWith("video") ? (
-              <video src={previewUrl} controls muted playsInline />
+              <video src={previewUrl} autoPlay loop muted playsInline />
             ) : (
               <img src={previewUrl} alt="New media preview" />
             )
           ) : post.kind === "video" ? (
-            <SafeVideo src={mediaUrl(post.url)} controls autoPlay playsInline />
+            <SafeVideo src={mediaUrl(post.url)} autoPlay loop muted playsInline />
           ) : (
             <SafeImage src={mediaUrl(post.url)} alt={post.caption || "Post"} />
           )}

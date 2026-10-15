@@ -218,7 +218,15 @@ function AttachmentFile({ message, a, onContextMenu }) {
   );
 }
 
-export default function AttachmentView({ message, attachments, onForward, onReply, onDeleteRequest }) {
+export default function AttachmentView({
+  message,
+  attachments,
+  userId,
+  reactToMessage,
+  onForward,
+  onReply,
+  onDeleteRequest,
+}) {
   const [lightbox, setLightbox] = useState(null);
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
@@ -301,6 +309,8 @@ export default function AttachmentView({ message, attachments, onForward, onRepl
           message={message}
           images={lightbox.list}
           startIndex={lightbox.index}
+          userId={userId}
+          reactToMessage={reactToMessage}
           onClose={() => setLightbox(null)}
           onForward={onForward ? () => { onForward(); setLightbox(null); } : undefined}
         />

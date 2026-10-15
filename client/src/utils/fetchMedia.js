@@ -49,7 +49,15 @@ export async function fetchMediaBuffer(url, { retries = 3, signal } = {}) {
         u.searchParams.set("_r", String(Date.now()));
         target = u.toString();
       }
-      const res = await fetch(target, { signal, cache: attempt > 0 ? "reload" : "default" });
+      const res = await fetch(target, {
+        signal,
+        cache: attempt > 0 ? "reload" : "no-cache",
+        headers: { Accept: "application/vnd.wispchat.media" },
+      });
+      if (res.headers.get("X-Media-Status") === "missing") {
+        missingUrls.add(url);
+        throw new MediaError("missing", "File not found on server");
+      }
       if (res.status === 404 || res.status === 410) {
         missingUrls.add(url);
         throw new MediaError("missing", "File not found on server");

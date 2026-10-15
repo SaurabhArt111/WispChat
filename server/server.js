@@ -55,6 +55,7 @@ const corsOptions = {
     return callback(new Error("Origin is not allowed by CORS"));
   },
   credentials: true,
+  exposedHeaders: ["X-Media-Status"],
 };
 
 const io = new Server(server, {
@@ -89,15 +90,21 @@ app.use(
   })
 );
 
-// A file that is not on disk answers with a tiny JSON 404 (short-lived cache so
-// a chat full of broken thumbnails doesn't hammer the server). The client turns
-// this into a "File unavailable" tile instead of the misleading "Couldn't
-// decrypt". NOTE: hosts with an ephemeral disk (Render free tier, Heroku…) wipe
-// /uploads on every deploy/restart — attach a persistent disk and point
-// UPLOAD_DIR at it, or move uploads to object storage (S3/R2/Cloudinary).
+// Missing files stay 404 for normal browser requests. Encrypted-media fetches
+// use a marked 200 response instead, since browsers log 404 fetch responses to
+// the console even when the client handles them as an expected unavailable file.
+// NOTE: hosts with an ephemeral disk (Render free tier, Heroku…) wipe /uploads
+// on every deploy/restart — attach a persistent disk and point UPLOAD_DIR at
+// it, or move uploads to object storage (S3/R2/Cloudinary).
 app.use("/uploads", (req, res) => {
   res.set("Cache-Control", "public, max-age=60");
   res.set("Cross-Origin-Resource-Policy", "cross-origin");
+  res.vary("Accept");
+  if (req.get("Accept") === "application/vnd.wispchat.media") {
+    res.set("X-Media-Status", "missing");
+    res.status(200).end();
+    return;
+  }
   res.status(404).json({ message: "File not found" });
 });
 
