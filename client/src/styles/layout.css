@@ -88,6 +88,7 @@
   .app-shell.chat-dragging {
     overflow: hidden;
   }
+
   .app-shell.chat-dragging .sidebar {
     display: flex;
     position: fixed;
@@ -96,6 +97,7 @@
     z-index: 0;
     transform: translate3d(var(--under-x, -28%), 0, 0);
   }
+
   .app-shell.chat-dragging .sidebar::after {
     content: "";
     position: absolute;
@@ -105,12 +107,14 @@
     pointer-events: none;
     z-index: 50;
   }
+
   .app-shell.chat-dragging .app-main {
     position: relative;
     z-index: 20;
     will-change: transform;
     box-shadow: -14px 0 36px rgba(0, 0, 0, 0.5);
   }
+
   .chat-window {
     touch-action: pan-y;
   }
@@ -249,5 +253,54 @@
   .app-shell.is-post-route .mobile-bottom-nav,
   .app-shell.is-post-route .bottom-nav {
     display: none;
+  }
+}
+
+/* ---------- Live swiping between the main tabs (mobile) ----------
+   The current page follows the finger (--tab-dx, set by useTabSwipe) and the
+   neighbouring tab is rendered right beside it inside .tab-peek. */
+@media (max-width: 858px) {
+  .app-shell {
+    --tab-dx: 0px;
+  }
+
+  .app-shell.tab-dragging {
+    touch-action: pan-y;
+  }
+
+  .app-shell.tab-dragging>.sidebar,
+  .app-shell.tab-dragging>.rail-panel,
+  .app-shell.tab-dragging>.app-main {
+    transform: translate3d(var(--tab-dx), 0, 0);
+    will-change: transform;
+    animation: none !important;
+  }
+
+  .tab-peek {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    display: flex;
+    background: var(--ink);
+    transform: translate3d(calc(var(--tab-dx, 0px) + var(--peek-side, 1) * (100% + 14px)), 0, 0);
+    will-change: transform;
+    box-shadow: calc(var(--peek-side, 1) * -16px) 0 32px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+  }
+
+  .tab-peek>.sidebar,
+  .tab-peek>.rail-panel {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+  }
+
+  .app-shell.tab-settling>.sidebar,
+  .app-shell.tab-settling>.rail-panel,
+  .app-shell.tab-settling>.app-main,
+  .app-shell.tab-settling .tab-peek {
+    transition: transform 250ms cubic-bezier(.22, 1, .36, 1);
   }
 }

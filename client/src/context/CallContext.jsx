@@ -4,6 +4,7 @@ import { useSocket } from "./SocketContext";
 import { useToast } from "./ToastContext";
 import { logError } from "../utils/logger";
 import client from "../api/client";
+import { getDeviceInfo, videoConstraintsFor } from "../utils/device";
 
 const CallContext = createContext(null);
 
@@ -34,18 +35,14 @@ async function loadIceServers() {
 // hard 1280x720 made weaker devices choke or fail getUserMedia), and
 // `ideal` so a camera that can't do it falls back instead of erroring.
 const AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-const VIDEO_CONSTRAINTS = {
-  facingMode: "user",
-  width: { ideal: 960, max: 1280 },
-  height: { ideal: 540, max: 720 },
-  frameRate: { ideal: 24, max: 30 },
-};
+// Camera constraints depend on the device: a phone held upright captures a
+// tall 9:16 frame, a computer captures 16:9 (see utils/device.js).
 
 async function getLocalMedia(kind) {
   try {
     return await navigator.mediaDevices.getUserMedia({
       audio: AUDIO_CONSTRAINTS,
-      video: kind === "video" ? VIDEO_CONSTRAINTS : false,
+      video: kind === "video" ? videoConstraintsFor() : false,
     });
   } catch (err) {
     // Camera missing/busy on a video call: fall back to audio-only rather than failing the call.
@@ -152,6 +149,10 @@ export function CallProvider({ children }) {
   // version re-subscribed every socket handler on each state change and
   // could act on an outdated `call`).
   const [call, setCallState] = useState(null);
+  // Minimised = the full-screen call UI is tucked away and a slim green bar
+  // shows at the top of the app (like WhatsApp). Lives here, not in the
+  // overlay, so the bar can be rendered anywhere in the app.
+  const [minimized, setMinimized] = useState(false);
   const callRef = useRef(null);
   const pcRef = useRef(null);
   const screenTrackRef = useRef(null); // active screen-share track, if any
@@ -262,6 +263,7 @@ export function CallProvider({ children }) {
     remoteStreamRef.current = null;
     callRef.current = null;
     setCallState(null);
+    setMinimized(false);
   }, []);
 
   function startRingback() {
@@ -450,6 +452,8 @@ export function CallProvider({ children }) {
           peerUnstable: false,
           safetyCode: null,
           deliveredRinging: false,
+          localDevice: getDeviceInfo(),
+          remoteDevice: null,
         });
         startingRef.current = false;
         startRingback();
@@ -463,6 +467,7 @@ export function CallProvider({ children }) {
           conversationId: conversation._id,
           kind: effectiveKind,
           offer: pc.localDescription,
+          device: getDeviceInfo(),
         });
         // The invite is on its way — now it's safe to send candidates.
         flushOutbox(callId, other._id);
@@ -511,9 +516,9 @@ export function CallProvider({ children }) {
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket?.emit("call:answer", { callId: pending.callId, answer: pc.localDescription });
+      socket?.emit("call:answer", { callId: pending.callId, answer: pc.localDescription, device: getDeviceInfo() });
 
-      patchCall({ status: "connecting", localStream }, pending.callId);
+      patchCall({ status: "connecting", localStream, localDevice: getDeviceInfo() }, pending.callId);
       incomingOfferRef.current = null;
       acquireWakeLock();
     } catch (err) {
@@ -572,7 +577,7 @@ export function CallProvider({ children }) {
       return false;
     }
     try {
-      const cam = await navigator.mediaDevices.getUserMedia({ video: VIDEO_CONSTRAINTS });
+      const cam = await navigator.mediaDevices.getUserMedia({ video: videoConstraintsFor() });
       const track = cam.getVideoTracks()[0];
       stream.addTrack(track);
       pc.addTrack(track, stream);
@@ -611,7 +616,7 @@ export function CallProvider({ children }) {
     const facing = oldTrack.getSettings?.().facingMode === "environment" ? "user" : "environment";
     try {
       const fresh = await navigator.mediaDevices.getUserMedia({
-        video: { ...VIDEO_CONSTRAINTS, facingMode: { exact: facing } },
+        video: { ...videoConstraintsFor(), facingMode: { exact: facing } },
       });
       const newTrack = fresh.getVideoTracks()[0];
       const sender = pc.getSenders().find((s) => s.track?.kind === "video");
@@ -688,7 +693,7 @@ export function CallProvider({ children }) {
   useEffect(() => {
     if (!socket) return;
 
-    function onIncoming({ callId, conversationId, kind, offer, from }) {
+    function onIncoming({ callId, conversationId, kind, offer, from, device }) {
       if (incomingOfferRef.current?.callId === callId || callRef.current?.callId === callId) return;
       if (callRef.current || incomingOfferRef.current) {
         socket.emit("call:decline", { callId });
@@ -711,6 +716,8 @@ export function CallProvider({ children }) {
         remoteCameraOff: false,
         peerUnstable: false,
         safetyCode: null,
+        localDevice: getDeviceInfo(),
+        remoteDevice: device || null,
       });
       startRingtone();
 
@@ -736,7 +743,7 @@ export function CallProvider({ children }) {
       patchCall({ deliveredRinging: true }, callId);
     }
 
-    async function onAnswered({ callId, answer }) {
+    async function onAnswered({ callId, answer, device }) {
       const pc = pcRef.current;
       const cur = callRef.current;
       if (!pc || !cur || cur.callId !== callId) return;
@@ -745,7 +752,7 @@ export function CallProvider({ children }) {
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
         await flushRemoteCandidates(pc);
-        patchCall({ status: "connecting" }, callId);
+        patchCall({ status: "connecting", remoteDevice: device || null }, callId);
       } catch (err) {
         logError("call:answered", err);
       }
@@ -777,6 +784,10 @@ export function CallProvider({ children }) {
       } catch (err) {
         logError("call:signal", err);
       }
+    }
+
+    function onRemoteDevice({ callId, device }) {
+      if (device) patchCall({ remoteDevice: device }, callId);
     }
 
     function onMediaState({ callId, muted, cameraOff }) {
@@ -820,6 +831,7 @@ export function CallProvider({ children }) {
       "call:ice-candidate": onIceCandidate,
       "call:signal": onSignal,
       "call:media-state": onMediaState,
+      "call:device": onRemoteDevice,
       "call:declined": onDeclined,
       "call:busy": onBusy,
       "call:unavailable": onUnavailable,
@@ -844,6 +856,32 @@ export function CallProvider({ children }) {
     };
   }, [socket, cleanup, showToast, patchCall, replaceCall, restartIce, flushRemoteCandidates]);
 
+  // Phone rotated / window resized during a call: tell the other side, so a
+  // portrait phone and a landscape computer keep re-fitting each other's picture.
+  useEffect(() => {
+    if (!socket) return undefined;
+    let timer = null;
+    function announce() {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const cur = callRef.current;
+        if (!cur) return;
+        const next = getDeviceInfo();
+        const prev = cur.localDevice;
+        if (prev && prev.type === next.type && prev.orientation === next.orientation) return;
+        patchCall({ localDevice: next });
+        socket.emit("call:device", { callId: cur.callId, device: next });
+      }, 250);
+    }
+    window.addEventListener("resize", announce);
+    window.addEventListener("orientationchange", announce);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", announce);
+      window.removeEventListener("orientationchange", announce);
+    };
+  }, [socket, patchCall]);
+
   // Leaving the page mid-call shouldn't leave the other person hanging.
   useEffect(() => {
     const onUnload = () => {
@@ -858,6 +896,8 @@ export function CallProvider({ children }) {
     <CallContext.Provider
       value={{
         call,
+        minimized,
+        setMinimized,
         startCall,
         acceptCall,
         declineCall,

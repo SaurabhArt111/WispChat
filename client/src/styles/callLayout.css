@@ -1,0 +1,123 @@
+/* ---------------------------------------------------------------------------
+   Adaptive call picture.
+   The remote picture is either FILLED (screen and picture have the same shape)
+   or FITTED (they don't: portrait phone ↔ landscape computer), in which case
+   the whole picture is shown centred over a blurred copy of itself. The small
+   self-view takes the shape of the camera that feeds it — a phone's tall frame
+   or a computer's wide one.
+   --------------------------------------------------------------------------- */
+
+.call-remote-blur {
+  position: absolute;
+  inset: -10%;
+  width: 120%;
+  height: 120%;
+  object-fit: cover;
+  filter: blur(30px) brightness(0.5) saturate(1.15);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.call-overlay.pic-fit .call-remote-video {
+  object-fit: contain;
+  background: transparent;
+  z-index: 1;
+}
+
+.call-overlay.pic-fill .call-remote-video {
+  object-fit: cover;
+}
+
+/* Beats the older `@media (max-width: 640px) { object-fit: contain }` rule so
+   a matching picture really fills a phone screen. */
+.call-overlay.call-overlay.pic-fill .call-remote-video {
+  object-fit: cover;
+}
+
+/* ---- self-view ---- */
+.call-overlay.call-overlay .call-local-video.call-local-video {
+  height: auto;
+  z-index: 3;
+}
+
+.call-overlay.call-overlay .call-local-video.call-local-video.portrait {
+  width: 96px;
+  aspect-ratio: 9 / 16;
+}
+
+.call-overlay.call-overlay .call-local-video.call-local-video.landscape {
+  width: 168px;
+  aspect-ratio: 16 / 9;
+}
+
+.call-overlay.call-overlay .call-local-video.call-local-video.square {
+  width: 120px;
+  aspect-ratio: 1 / 1;
+}
+
+.call-overlay.call-overlay .call-local-video.call-local-video.unknown {
+  width: 110px;
+  aspect-ratio: 3 / 4;
+}
+
+@media (max-width: 640px) {
+  .call-overlay.call-overlay .call-local-video.call-local-video.portrait {
+    width: 86px;
+  }
+
+  .call-overlay.call-overlay .call-local-video.call-local-video.landscape {
+    width: 138px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .call-overlay.call-overlay .call-local-video.call-local-video.landscape {
+    width: 232px;
+    border-radius: 12px;
+  }
+
+  .call-overlay.call-overlay .call-local-video.call-local-video.portrait {
+    width: 128px;
+  }
+}
+
+/* Phone held sideways: the self-view must not eat the picture. */
+@media (max-height: 480px) {
+  .call-overlay.call-overlay .call-local-video.call-local-video.landscape {
+    width: 120px;
+  }
+
+  .call-overlay.call-overlay .call-local-video.call-local-video.portrait {
+    width: 68px;
+  }
+}
+
+/* ---- who is on the other end ---- */
+.call-device-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+/* ---- minimised: the full-screen call is tucked away; <CallBar/> shows instead.
+   (Audio keeps playing — only the visuals are hidden.) ---- */
+.call-overlay.call-overlay.minimized {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transform: none;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  animation: none;
+  background: transparent;
+}

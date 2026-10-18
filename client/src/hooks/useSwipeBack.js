@@ -61,6 +61,9 @@ export default function useSwipeBack({ enabled, shellRef, onBack }) {
       const el = e.target;
       if (!(el instanceof Element) || !el.closest(".chat-window")) return;
       if (el.closest(BLOCK) || document.querySelector(OVERLAY) || inHScroller(el)) return;
+      // Dragging a message to the right means "reply" — only the left screen
+      // edge (or the header / composer area) may drag the chat closed.
+      if (el.closest(".bubble-row") && e.touches[0].clientX > 24) return;
       clearTimeout(timer);
       cleanup();
       const t = e.touches[0];

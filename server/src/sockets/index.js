@@ -152,7 +152,19 @@ export function initSockets(io) {
       return call;
     }
 
-    socket.on("call:invite", async ({ callId, calleeId, conversationId, kind, offer }) => {
+    // Device info a caller/callee announces ("mobile" | "tablet" | "desktop" and
+    // its screen orientation) so the other side can lay the video out for a
+    // portrait phone vs a landscape computer. Never trust the client blindly.
+    function cleanDevice(d) {
+      const types = ["mobile", "tablet", "desktop"];
+      const orients = ["portrait", "landscape"];
+      return {
+        type: types.includes(d?.type) ? d.type : "desktop",
+        orientation: orients.includes(d?.orientation) ? d.orientation : "landscape",
+      };
+    }
+
+    socket.on("call:invite", async ({ callId, calleeId, conversationId, kind, offer, device }) => {
       if (!callId || !calleeId || !conversationId || !offer) return;
 
       // Already on a call (either side) — auto-busy instead of ringing.
@@ -185,6 +197,7 @@ export function initSockets(io) {
         conversationId,
         kind,
         offer,
+        device: cleanDevice(device),
         from: { _id: socket.user._id, displayName: socket.user.displayName, avatar: socket.user.avatar, avatarColor: socket.user.avatarColor },
       });
       // Let the caller know the invite actually reached the callee's devices.
@@ -204,14 +217,14 @@ export function initSockets(io) {
       );
     });
 
-    socket.on("call:answer", ({ callId, answer }) => {
+    socket.on("call:answer", ({ callId, answer, device }) => {
       const call = activeCalls.get(callId);
       if (!call || call.calleeId !== userId || !answer) return;
       call.status = "connected";
       call.connectedAt = Date.now();
       clearTimeout(ringTimers.get(callId));
       ringTimers.delete(callId);
-      io.to(`user:${call.callerId}`).emit("call:answered", { callId, answer });
+      io.to(`user:${call.callerId}`).emit("call:answered", { callId, answer, device: cleanDevice(device) });
       // The callee may have several tabs/devices all ringing — silence the
       // ones that didn't pick up.
       socket.to(`user:${userId}`).emit("call:handled-elsewhere", { callId });
@@ -245,6 +258,16 @@ export function initSockets(io) {
       if (call.callerId !== userId && call.calleeId !== userId) return;
       const targetId = call.callerId === userId ? call.calleeId : call.callerId;
       io.to(`user:${targetId}`).emit("call:media-state", { callId, muted: !!muted, cameraOff: !!cameraOff });
+    });
+
+    // The phone was rotated / the window resized mid-call: tell the other side
+    // so it can re-fit the picture.
+    socket.on("call:device", ({ callId, device }) => {
+      const call = activeCalls.get(callId);
+      if (!call) return;
+      if (call.callerId !== userId && call.calleeId !== userId) return;
+      const targetId = call.callerId === userId ? call.calleeId : call.callerId;
+      io.to(`user:${targetId}`).emit("call:device", { callId, device: cleanDevice(device) });
     });
 
     socket.on("call:decline", async ({ callId }) => {

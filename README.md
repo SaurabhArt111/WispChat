@@ -29,6 +29,8 @@ Wisp Chat is a real-time, end-to-end-encrypted messenger with voice/video calls,
 
 ### Voice & video calls
 - 1-to-1 audio and video, ringtone/ringback, 45 s ring-out, missed/declined/completed call log (also shown in the Calls tab)
+- Phone ↔ computer aware video: portrait and landscape pictures are fitted/filled correctly, self-view matches its camera, device chip in the header
+- Minimised calls show a green call bar at the top of the app (mute / return / hang up)
 - Mute, camera off, front/back camera switch, call timer, live "muted / camera off / lost connection" indicators for the other side
 - Auto-recovery: ICE restart on network changes, 15 s server grace period if a socket drops mid-call, wake lock to keep the screen on
 - Ringing devices are silenced when you answer or decline on another tab/device

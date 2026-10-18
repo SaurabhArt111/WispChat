@@ -5,6 +5,8 @@ import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
 import Lightbox from "./Lightbox";
+import ForwardModal from "./ForwardModal";
+import { useGallery } from "../../context/GalleryContext";
 import {
   DownloadIcon,
   ForwardIcon,
@@ -130,7 +132,13 @@ function AttachmentImage({ message, a, onClick, onContextMenu, overlay }) {
   if (loading) return <div className="image-grid-item attachment-decrypting"><LockIcon size={18} /></div>;
   if (error || !url)
     return (
-      <div className="image-grid-item attachment-decrypt-error" onContextMenu={(e) => onContextMenu(e, null)}>
+      <div
+        className="image-grid-item attachment-decrypt-error"
+        onContextMenu={(e) => onContextMenu(e, null)}
+        // A file that's gone for good: tapping it explains why (the viewer shows the dialog).
+        onClick={errorCode === "missing" ? () => onClick(null) : undefined}
+        style={errorCode === "missing" ? { cursor: "pointer" } : undefined}
+      >
         <AttachmentProblem code={errorCode} onRetry={retry} compact />
       </div>
     );
@@ -228,10 +236,20 @@ export default function AttachmentView({
   onDeleteRequest,
 }) {
   const [lightbox, setLightbox] = useState(null);
+  const [forwardOther, setForwardOther] = useState(null); // forwarding a photo that belongs to a different message
+  const gallery = useGallery();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const images = attachments.filter((a) => a.kind === "image");
   const others = attachments.filter((a) => a.kind !== "image");
+
+  // Open on this photo, but let the viewer swipe through the whole chat's media.
+  function openViewer(a, i, resolvedUrl) {
+    const all = gallery?.getGallery?.() || [];
+    const at = all.findIndex((g) => g.url === a.url && g._message?._id === message._id);
+    if (at >= 0) setLightbox({ list: all, index: at, url: resolvedUrl });
+    else setLightbox({ list: images, index: i, url: resolvedUrl });
+  }
 
   function imageContextMenu(e, a, resolvedUrl) {
     openMenu(e, [
@@ -280,7 +298,7 @@ export default function AttachmentView({
                 message={message}
                 a={a}
                 overlay={moreOverlay}
-                onClick={(resolvedUrl) => setLightbox({ list: images, index: i, url: resolvedUrl })}
+                onClick={(resolvedUrl) => openViewer(a, i, resolvedUrl)}
                 onContextMenu={(e, resolvedUrl) => imageContextMenu(e, a, resolvedUrl)}
               />
             );
@@ -312,9 +330,19 @@ export default function AttachmentView({
           userId={userId}
           reactToMessage={reactToMessage}
           onClose={() => setLightbox(null)}
-          onForward={onForward ? () => { onForward(); setLightbox(null); } : undefined}
+          onForward={
+            onForward
+              ? (cur) => {
+                  const owner = cur?._message;
+                  if (owner && owner._id !== message._id) setForwardOther(owner);
+                  else onForward();
+                  setLightbox(null);
+                }
+              : undefined
+          }
         />
       )}
+      {forwardOther && <ForwardModal message={forwardOther} onClose={() => setForwardOther(null)} />}
     </div>
   );
 }

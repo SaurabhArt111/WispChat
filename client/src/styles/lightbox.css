@@ -1,0 +1,326 @@
+/* ---------------------------------------------------------------------------
+   Media viewer. A strip of photos (previous · current · next) sits inside a
+   track that follows your finger; between them is a black gap, like WhatsApp.
+   --------------------------------------------------------------------------- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  overscroll-behavior: contain;
+  animation: lbEnter 220ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.lightbox.closing:not(.lb-flying) {
+  animation: lbExit 200ms ease-in forwards;
+}
+
+@keyframes lbEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lbExit {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+.lb-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #050608;
+  will-change: opacity;
+}
+
+.lightbox-stage {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.lb-track {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.lb-slide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  left: calc(var(--p, 0) * (100% + 28px));
+  box-sizing: border-box;
+  padding: 72px 84px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lb-media {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  transition: transform 60ms linear;
+}
+
+.lb-video {
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.lb-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.lb-problem {
+  pointer-events: auto;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.lb-problem button {
+  margin-top: 4px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---- chrome ---- */
+.lightbox-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  z-index: 3;
+  background: linear-gradient(to bottom, rgba(4, 6, 9, 0.82), transparent);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.lightbox-counter {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lightbox-topbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.lightbox-icon-btn {
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease;
+  border: none;
+  cursor: pointer;
+}
+
+.lightbox-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lightbox-icon-btn.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #fff;
+  font-size: 28px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease, opacity 180ms ease;
+  z-index: 3;
+  border: none;
+  cursor: pointer;
+}
+
+.lightbox-nav:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lightbox-nav.left {
+  left: 20px;
+}
+
+.lightbox-nav.right {
+  right: 20px;
+}
+
+.lightbox-zoom-hint {
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 4px 12px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Tap the picture once → controls fade away; again → they come back. */
+.lightbox.chrome-hidden .lightbox-topbar {
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+}
+
+.lightbox.chrome-hidden .lightbox-nav {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- "this file doesn't exist" dialog ---- */
+.lb-dialog-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+  animation: lbDialogIn 160ms ease-out;
+}
+
+.lb-dialog {
+  width: min(100%, 340px);
+  box-sizing: border-box;
+  padding: 22px 22px 14px;
+  border-radius: 20px;
+  background: var(--surface-2, #1b1f26);
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  color: var(--text, #fff);
+}
+
+.lb-dialog p {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.lb-dialog button {
+  display: block;
+  margin-left: auto;
+  padding: 8px 18px;
+  border: none;
+  background: transparent;
+  color: var(--wisp, #5ef2c0);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.lb-dialog button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@keyframes lbDialogIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- phones ---- */
+@media (max-width: 858px) {
+  .lb-slide {
+    padding: calc(68px + env(safe-area-inset-top, 0px)) 0 calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lb-media {
+    border-radius: 0;
+  }
+
+  .lightbox-topbar {
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 12px;
+    background: linear-gradient(to bottom, rgba(5, 6, 8, 0.98), rgba(5, 6, 8, 0.72), transparent);
+  }
+
+  .lightbox-icon-btn {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .lightbox-topbar-actions {
+    gap: 8px;
+  }
+
+  .lightbox-nav {
+    display: none; /* swipe instead */
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lightbox,
+  .lightbox.closing,
+  .lb-dialog-wrap {
+    animation-duration: 1ms;
+  }
+}

@@ -25,6 +25,7 @@ import NewGroupModal from "../components/Sidebar/NewGroupModal";
 import MobileDrawer from "../components/Sidebar/MobileDrawer";
 import useSwipeGestures from "../hooks/useSwipeGestures";
 import useSwipeBack from "../hooks/useSwipeBack";
+import useTabSwipe from "../hooks/useTabSwipe";
 import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
 import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
 import "../styles/layout.css";
@@ -36,6 +37,9 @@ import "../styles/layout.css";
 // the browser back button.
 // Order used when swiping left/right between the main mobile tabs.
 const TAB_ORDER = ["chats", "status", "explore", "calls", "profile"];
+// Tabs that are plain side panels can be shown side-by-side while swiping;
+// Profile is a full page, so it just switches.
+const PEEKABLE = ["chats", "status", "explore", "calls"];
 const ROUTED_VIEWS = ["groups", "status", "media", "calls", "broadcast", "explore", "archived", "profile", "post"];
 
 export default function ChatApp() {
@@ -48,6 +52,8 @@ export default function ChatApp() {
   const [showProfileEditor, setShowProfileEditor] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [peek, setPeek] = useState(null); // { id, side } neighbour tab rendered next to the current one while dragging
+  const suppressSlideRef = useRef(false);
   const [slide, setSlide] = useState(null); // "next" | "prev" while a tab transition plays
   const settingsReturnRef = useRef("/");
   const shellRef = useRef(null);
@@ -97,6 +103,11 @@ export default function ChatApp() {
     const to = TAB_ORDER.indexOf(activePanel);
     prevPanelRef.current = activePanel;
     if (from < 0 || to < 0 || from === to) return undefined;
+    // A live swipe already animated the move — don't play the slide again.
+    if (suppressSlideRef.current) {
+      suppressSlideRef.current = false;
+      return undefined;
+    }
     setSlide(to > from ? "next" : "prev");
     const t = setTimeout(() => setSlide(null), 340);
     return () => clearTimeout(t);
@@ -114,12 +125,19 @@ export default function ChatApp() {
         if (dir === "left" && startX > width * 0.5) setDrawerOpen(true);
         return;
       }
-      const i = TAB_ORDER.indexOf(activePanel);
-      if (i < 0) return;
-      const j = dir === "left" ? i + 1 : i - 1;
-      if (j < 0 || j >= TAB_ORDER.length) return;
-      try { navigator.vibrate?.(6); } catch { /* ignore */ }
-      changeView(TAB_ORDER[j]);
+    },
+  });
+
+  useTabSwipe({
+    enabled: !isDesktop && !anyModalOpen && !drawerOpen && !postFullPage && !(activeId && activePanel === "chats"),
+    shellRef,
+    order: TAB_ORDER,
+    current: activePanel,
+    canPeek: (id) => PEEKABLE.includes(id),
+    onPeek: setPeek,
+    onCommit: (id, { live }) => {
+      if (live) suppressSlideRef.current = true;
+      changeView(id);
     },
   });
 
@@ -178,6 +196,37 @@ export default function ChatApp() {
     }
   }, [infoRequest, activeId]);
 
+  function renderPanel(id) {
+    switch (id) {
+      case "chats":
+        return (
+          <Sidebar
+            onOpenNewChat={() => openNewChat("chat")}
+            onOpenNewGroup={() => setShowNewGroup(true)}
+            onOpenArchived={() => navigate("/archived")}
+            onOpenSettings={openSettings}
+            onOpenProfile={openProfile}
+          />
+        );
+      case "archived":
+        return <ArchivedPanel onBack={() => navigate("/")} onOpenSettings={openSettings} />;
+      case "groups":
+        return <GroupsPanel onOpenSettings={openSettings} />;
+      case "status":
+        return <StatusPanel onOpenSettings={openSettings} />;
+      case "media":
+        return <MediaStoragePanel onOpenSettings={openSettings} />;
+      case "calls":
+        return <CallsPanel onOpenSettings={openSettings} onOpenNewCall={() => openNewChat("call")} />;
+      case "explore":
+        return <ExplorerPanel onOpenSettings={openSettings} />;
+      case "broadcast":
+        return <BroadcastPanel onOpenSettings={openSettings} />;
+      default:
+        return null;
+    }
+  }
+
   return (
     <div ref={shellRef} data-slide={slide || undefined} className={`app-shell ${activeId && !isProfilePage && !isPostPage ? "has-active-chat" : ""} ${showContactInfo ? "has-contact-info" : ""} ${isProfilePage ? "is-profile-route" : ""} ${postFullPage ? "is-post-route" : ""}`}>
       <ConnectionBanner />
@@ -189,24 +238,12 @@ export default function ChatApp() {
         hasUnreadStatus={hasUnread}
       />
 
-      {activePanel === "chats" && (
-        <Sidebar
-          onOpenNewChat={() => openNewChat("chat")}
-          onOpenNewGroup={() => setShowNewGroup(true)}
-          onOpenArchived={() => navigate("/archived")}
-          onOpenSettings={openSettings}
-          onOpenProfile={openProfile}
-        />
+      {renderPanel(activePanel)}
+      {peek && (
+        <div className="tab-peek" style={{ "--peek-side": peek.side }}>
+          {renderPanel(peek.id)}
+        </div>
       )}
-      {activePanel === "archived" && (
-        <ArchivedPanel onBack={() => navigate("/")} onOpenSettings={openSettings} />
-      )}
-      {activePanel === "groups" && <GroupsPanel onOpenSettings={openSettings} />}
-      {activePanel === "status" && <StatusPanel onOpenSettings={openSettings} />}
-      {activePanel === "media" && <MediaStoragePanel onOpenSettings={openSettings} />}
-      {activePanel === "calls" && <CallsPanel onOpenSettings={openSettings} onOpenNewCall={() => openNewChat("call")} />}
-      {activePanel === "explore" && <ExplorerPanel onOpenSettings={openSettings} />}
-      {activePanel === "broadcast" && <BroadcastPanel onOpenSettings={openSettings} />}
 
       <div className="app-main">
         {postFullPage ? (

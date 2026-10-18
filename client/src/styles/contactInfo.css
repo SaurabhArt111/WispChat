@@ -218,6 +218,7 @@
   padding: 40px 24px;
   text-align: center;
   color: var(--text-faint);
+  min-height: 350px;
 }
 
 .ci-empty p {

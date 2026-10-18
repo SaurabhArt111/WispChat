@@ -1,0 +1,111 @@
+/* Slim "call in progress" bar (see components/Call/CallBar.jsx) */
+:root {
+  --call-bar-h: calc(58px + env(safe-area-inset-top, 0px));
+}
+
+.call-bar-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3600;
+  height: var(--call-bar-h);
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0px) 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #14181d;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  animation: callBarIn 240ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes callBarIn {
+  from {
+    transform: translateY(-100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+.call-bar-top-btn {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #2a2f36;
+  cursor: pointer;
+  transition: transform 100ms ease, background 140ms ease;
+}
+
+.call-bar-top-btn:active {
+  transform: scale(0.9);
+}
+
+.call-bar-top-btn.mic.muted {
+  background: #fff;
+  color: #0a0c10;
+}
+
+.call-bar-top-btn.end {
+  background: #f0194b;
+}
+
+.call-bar-top-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #35d07f;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.call-bar-top-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-bar-top-state {
+  font-variant-numeric: tabular-nums;
+}
+
+.call-bar-top.live .call-bar-top-info svg {
+  animation: callBarPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes callBarPulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Push the whole app down so the bar never covers a header. */
+body.has-call-bar #root {
+  box-sizing: border-box;
+  padding-top: var(--call-bar-h);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .call-bar-top,
+  .call-bar-top.live .call-bar-top-info svg {
+    animation: none;
+  }
+}

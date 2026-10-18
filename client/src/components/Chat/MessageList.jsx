@@ -5,9 +5,10 @@ import { useAuth } from "../../context/AuthContext";
 import MessageBubble from "./MessageBubble";
 import TypingDots from "./TypingDots";
 import { formatDayLabel } from "../../utils/time";
-import { ChevronDownIcon, LockIcon, CloseIcon, CopyIcon, ForwardIcon, TrashIcon } from "../common/Icons";
+import { ChevronDownIcon, LockIcon, CloseIcon, CopyIcon, ForwardIcon, TrashIcon, ReplyIcon } from "../common/Icons";
 import { useToast } from "../../context/ToastContext";
 import ForwardModal from "./ForwardModal";
+import { GalleryProvider } from "../../context/GalleryContext";
 import ActionSheetModal from "../common/ActionSheetModal";
 import { onWallpaperChange, resolveWallpaperStyle } from "../../utils/wallpaper";
 
@@ -21,6 +22,22 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
   const { user, e2ee } = useAuth();
   const { showToast } = useToast();
   const typingUsers = Object.values(typing[conversation._id] || {});
+  // Every photo/video in the loaded chat, oldest → newest, for the media viewer.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const gallery = useMemo(
+    () => ({
+      getGallery: () =>
+        messagesRef.current.flatMap((m) =>
+          m.deletedForEveryone || m.pendingDelete
+            ? []
+            : (m.attachments || [])
+                .filter((a) => (a.kind === "image" || a.kind === "video") && !a._local && a.url)
+                .map((a) => ({ ...a, _message: m }))
+        ),
+    }),
+    []
+  );
   const virtuosoRef = useRef(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -55,6 +72,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
       reactToMessage: (...a) => latest.current.chat.reactToMessage(...a),
       requestDeleteMessage: (...a) => latest.current.chat.requestDeleteMessage(...a),
       undoDeleteMessage: (...a) => latest.current.chat.undoDeleteMessage(...a),
+      onEndSelect: () => setSelection(null),
       onStartSelect: (id) => setSelection((cur) => (cur ? (cur.includes(id) ? cur : [...cur, id]) : [id])),
       onToggleSelect: (id) =>
         setSelection((cur) => {
@@ -343,6 +361,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
   );
 
   return (
+    <GalleryProvider value={gallery}>
     <div className="message-list-wrap" style={wallpaperStyle}>
       {showEmptySearch ? (
         <div className="message-list">
@@ -403,6 +422,8 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
                 isSelected={!!selection?.includes(row.msg._id)}
                 onStartSelect={stable.onStartSelect}
                 onToggleSelect={stable.onToggleSelect}
+                soloSelected={!!selection && selection.length === 1 && selection[0] === row.msg._id}
+                onEndSelect={stable.onEndSelect}
               />
             </div>
           )}
@@ -416,6 +437,20 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
           </button>
           <strong>{selection.length} selected</strong>
           <span className="select-toolbar-spacer" />
+          {selection.length === 1 && !selectedMessages[0]?.pending && !selectedMessages[0]?.failed && (
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                const m = selectedMessages[0];
+                setSelection(null);
+                if (m) stable.onReply(m);
+              }}
+              title="Reply"
+            >
+              <ReplyIcon size={18} />
+            </button>
+          )}
           <button type="button" className="icon-btn" onClick={copySelected} title="Copy">
             <CopyIcon size={18} />
           </button>
@@ -461,5 +496,6 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
         </button>
       )}
     </div>
+    </GalleryProvider>
   );
 }

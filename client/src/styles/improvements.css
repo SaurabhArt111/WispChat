@@ -1935,7 +1935,7 @@ audio.media-failed {
   align-items: center;
   gap: 16px;
   width: 100%;
-  padding: 14px 6px;
+  padding: 14px 18px;
   background: none;
   border: none;
   color: var(--text);

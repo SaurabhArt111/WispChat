@@ -3,6 +3,7 @@ import { useContextMenu } from "../../context/ContextMenuContext";
 import { useToast } from "../../context/ToastContext";
 import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import useDoubleTap from "../../hooks/useDoubleTap";
+import useBubbleGestures from "../../hooks/useBubbleGestures";
 import { formatClock } from "../../utils/time";
 import { LockIcon } from "../common/Icons";
 import Avatar from "../common/Avatar";
@@ -10,8 +11,10 @@ import ActionSheetModal from "../common/ActionSheetModal";
 import AttachmentView from "./AttachmentView";
 import QuickReactions, { QUICK_EMOJI } from "./QuickReactions";
 import ForwardModal from "./ForwardModal";
+import ReactionPickerSheet from "./ReactionPickerSheet";
 import LinkPreviewCard, { linkPreviewsEnabled } from "./LinkPreviewCard";
 import { mediaUrl } from "../../api/config";
+import "../../styles/reactions.css";
 import { extractUrls, isEmojiOnly, isUrlToken, makeUrlRegex, splitTrailing, toHref } from "../../utils/linkify";
 import {
   ReplyIcon,
@@ -151,6 +154,8 @@ function MessageBubble({
   isSelected = false,
   onStartSelect,
   onToggleSelect,
+  soloSelected = false, // the only selected message → shows the reaction row above it
+  onEndSelect,
 }) {
   // NOTE: this component is React.memo'd and deliberately does NOT read
   // useChat()/useAuth() itself — a context subscription would re-render every
@@ -162,6 +167,8 @@ function MessageBubble({
   const [showForward, setShowForward] = useState(false);
   const [showQuickReact, setShowQuickReact] = useState(false);
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
+  const [showMoreReact, setShowMoreReact] = useState(false);
+  const [rowEl, setRowEl] = useState(null);
   const reactPopRef = useRef(null);
   const { text: decryptedText, locked: textLocked } = useDecryptedText(message);
   const { text: replyDecryptedText, locked: replyLocked } = useDecryptedText(message.replyTo);
@@ -196,6 +203,16 @@ function MessageBubble({
       if (e?.target?.closest?.(".bubble-stack")) setShowQuickReact(true);
       else onReply?.(message);
     },
+  });
+
+  // Touch: drag right to reply, press-and-hold to start selecting (WhatsApp).
+  // Desktop keeps right-click → menu and double-click → react/reply.
+  const canInteract = !selectMode && !message.pending && !message.failed && !message.deletedForEveryone && !message.pendingDelete;
+  const gestures = useBubbleGestures({
+    el: rowEl,
+    enabled: true,
+    onReply: canInteract && onReply ? () => onReply(message) : null,
+    onLongPress: canInteract && onStartSelect ? () => onStartSelect(message._id) : null,
   });
 
   if (message.deletedForEveryone) {
@@ -299,6 +316,12 @@ function MessageBubble({
   )?.emoji;
 
   function handleContextMenu(e) {
+    // On a touch screen the long-press is handled by useBubbleGestures (it
+    // starts selection); the browser's own contextmenu would double up.
+    if (Date.now() - gestures.lastTouchAt.current < 1500) {
+      e.preventDefault();
+      return;
+    }
     openMenu(e, menuItems, null, {
       reactions: {
         emojis: QUICK_EMOJI,
@@ -306,6 +329,13 @@ function MessageBubble({
         onPick: (emoji) => reactToMessage(message._id, emoji),
       },
     });
+  }
+
+  function pickReaction(emoji) {
+    reactToMessage(message._id, emoji);
+    setShowQuickReact(false);
+    setShowMoreReact(false);
+    onEndSelect?.();
   }
 
   const reactionCounts = {};
@@ -316,6 +346,7 @@ function MessageBubble({
   return (
     <div
       id={`msg-${message._id}`}
+      ref={setRowEl}
       className={`bubble-row ${isMine ? "mine" : ""} ${grouped ? "grouped" : ""} ${
         isHighlighted ? "highlighted-bubble" : ""
       } ${selectMode ? "select-mode" : ""} ${isSelected ? "is-selected" : ""}`}
@@ -326,12 +357,19 @@ function MessageBubble({
           ? (e) => {
               e.preventDefault();
               e.stopPropagation();
+              // The finger-lift that ends a long-press arrives as a click — don't let it un-select.
+              if (Date.now() - gestures.lastLongPressAt.current < 600) return;
               onToggleSelect?.(message._id);
             }
           : undefined
       }
       {...(selectMode ? {} : doubleTap)}
     >
+      {!selectMode && canInteract && (
+        <span className="swipe-reply-icon" aria-hidden="true">
+          <ReplyIcon size={18} />
+        </span>
+      )}
       {selectMode && (
         <span className={`select-check ${isSelected ? "on" : ""}`} aria-hidden="true">
           {isSelected && <CheckIcon size={14} />}
@@ -476,18 +514,28 @@ function MessageBubble({
             <ForwardIcon size={14} />
           </button>
 
-          {showQuickReact && (
+          {showQuickReact && !soloSelected && (
             <div ref={reactPopRef}>
               <QuickReactions
                 emojis={QUICK_EMOJI}
                 current={myReaction}
-                onPick={(emoji) => {
-                  reactToMessage(message._id, emoji);
-                  setShowQuickReact(false);
-                }}
+                onPick={pickReaction}
+                onMore={() => setShowMoreReact(true)}
                 align={isMine ? "right" : "left"}
               />
             </div>
+          )}
+
+          {/* Long-pressed message: the reaction row floats above it, like WhatsApp */}
+          {soloSelected && (
+            <QuickReactions
+              className="in-select"
+              emojis={QUICK_EMOJI}
+              current={myReaction}
+              onPick={pickReaction}
+              onMore={() => setShowMoreReact(true)}
+              align={isMine ? "right" : "left"}
+            />
           )}
         </div>
 
@@ -510,6 +558,10 @@ function MessageBubble({
 
       {showForward && (
         <ForwardModal message={message} onClose={() => setShowForward(false)} />
+      )}
+
+      {showMoreReact && (
+        <ReactionPickerSheet onPick={pickReaction} onClose={() => setShowMoreReact(false)} />
       )}
 
       {showDeleteSheet && (

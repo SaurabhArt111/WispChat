@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCall } from "../../context/CallContext";
+import useElapsed from "../../hooks/useElapsed";
 import { useChat } from "../../context/ChatContext";
 import Avatar from "../common/Avatar";
 import {
@@ -23,21 +24,11 @@ import {
   LockIcon as ShieldLockIcon,
 } from "../common/Icons";
 import { useToast } from "../../context/ToastContext";
+import { deviceLabel, shapeOf } from "../../utils/device";
 import "../../styles/call.css";
+import "../../styles/callLayout.css";
 
-function useElapsed(startAt) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!startAt) return;
-    const tick = () => setElapsed(Math.floor((Date.now() - startAt) / 1000));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [startAt]);
-  const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
-  const s = String(elapsed % 60).padStart(2, "0");
-  return `${m}:${s}`;
-}
+const noop = () => {};
 
 // Binds a MediaStream to a <video>/<audio> element via a *callback ref*.
 //
@@ -119,6 +110,83 @@ function useLoudSpeaker(stream) {
 }
 
 
+// Measures the REAL pixel size of whatever a <video> is playing (and keeps
+// following it — a phone rotated mid-call changes the frame's shape). This is
+// what lets a portrait phone picture and a landscape computer picture each be
+// fitted correctly, regardless of what either side *says* it is.
+function useVideoShape(streamBinder) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const elRef = useRef(null);
+  const offRef = useRef(null);
+
+  const ref = useCallback(
+    (el) => {
+      offRef.current?.();
+      offRef.current = null;
+      elRef.current = el;
+      streamBinder?.(el);
+      if (!el) return;
+      const read = () => {
+        if (el.videoWidth && el.videoHeight) {
+          setSize((cur) => (cur.w === el.videoWidth && cur.h === el.videoHeight ? cur : { w: el.videoWidth, h: el.videoHeight }));
+        }
+      };
+      el.addEventListener("loadedmetadata", read);
+      el.addEventListener("resize", read);
+      el.addEventListener("playing", read);
+      read();
+      offRef.current = () => {
+        el.removeEventListener("loadedmetadata", read);
+        el.removeEventListener("resize", read);
+        el.removeEventListener("playing", read);
+      };
+    },
+    [streamBinder]
+  );
+
+  return { ref, size, shape: shapeOf(size.w, size.h) };
+}
+
+// Orientation of the screen the call is shown on.
+function useViewportShape() {
+  const read = () => (typeof window !== "undefined" && window.innerHeight > window.innerWidth ? "portrait" : "landscape");
+  const [shape, setShape] = useState(read);
+  useEffect(() => {
+    const on = () => setShape(read());
+    window.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on);
+    };
+  }, []);
+  return shape;
+}
+
+function DeviceGlyph({ type, size = 13 }) {
+  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+  if (type === "mobile")
+    return (
+      <svg {...common}>
+        <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
+        <path d="M11 18.5h2" />
+      </svg>
+    );
+  if (type === "tablet")
+    return (
+      <svg {...common}>
+        <rect x="4" y="3" width="16" height="18" rx="2.5" />
+        <path d="M11 18h2" />
+      </svg>
+    );
+  return (
+    <svg {...common}>
+      <rect x="3" y="4.5" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16.5V20" />
+    </svg>
+  );
+}
+
 // Slide-to-answer: drag the green knob right past ~80% of the track to pick up
 // (haptic buzz at the threshold). A plain tap/click on the knob — or Enter /
 // Space when it is focused — answers too, so mouse and keyboard users never
@@ -195,11 +263,11 @@ function SlideToAnswer({ onAnswer, video }) {
 }
 
 export default function CallOverlay() {
-  const { call, acceptCall, declineCall, endCall, toggleMute, toggleCamera, flipCamera, toggleScreenShare } = useCall();
+  const { call, minimized, setMinimized, acceptCall, declineCall, endCall, toggleMute, toggleCamera, flipCamera, toggleScreenShare } = useCall();
   const { showToast } = useToast();
   const { openConversation } = useChat();
   const navigate = useNavigate();
-  const [minimized, setMinimized] = useState(false);
+  const [fillMode, setFillMode] = useState(false); // user override: fill the screen instead of fitting
   const [moreOpen, setMoreOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [outputs, setOutputs] = useState([]); // audio output devices
@@ -211,9 +279,15 @@ export default function CallOverlay() {
   const speaker = useLoudSpeaker(call?.remoteStream);
 
   const onBlocked = useCallback(() => setAudioBlocked(true), []);
-  const remoteVideoRef = useStreamRef(call?.remoteStream, { onBlocked: () => {} });
+  const bindRemoteVideo = useStreamRef(call?.remoteStream, { onBlocked: noop });
   const remoteAudioBind = useStreamRef(call?.remoteStream, { onBlocked });
-  const localVideoRef = useStreamRef(call?.localStream);
+  const bindLocalVideo = useStreamRef(call?.localStream);
+  const remoteBlurRef = useStreamRef(call?.remoteStream, { onBlocked: noop });
+  const remoteShape = useVideoShape(bindRemoteVideo);
+  const localShape = useVideoShape(bindLocalVideo);
+  const remoteVideoRef = remoteShape.ref;
+  const localVideoRef = localShape.ref;
+  const viewportShape = useViewportShape();
 
   const isVideoCall = call?.kind === "video";
   const canShare = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
@@ -238,8 +312,8 @@ export default function CallOverlay() {
   useEffect(() => {
     if (!call) {
       setAudioBlocked(false);
-      setMinimized(false);
       setMoreOpen(false);
+      setFillMode(false);
     }
   }, [call]);
 
@@ -293,11 +367,26 @@ export default function CallOverlay() {
   const hasRemoteVideo = !!call.remoteStream?.getVideoTracks().some((t) => t.readyState === "live");
   const showRemoteVideo = isVideo && isActive && hasRemoteVideo && !call.remoteCameraOff;
 
+  // ---- Picture layout --------------------------------------------------
+  // Portrait picture on a landscape screen (phone → computer) or landscape
+  // picture on a portrait screen (computer → phone) would be badly cropped by
+  // "cover", so it is FITTED (whole picture visible, centred, with a blurred
+  // copy of itself behind). Same-shaped picture + screen fills edge to edge.
+  const rShape = remoteShape.shape; // portrait | landscape | square | unknown
+  // A square picture never fills a tall or wide screen without cropping, so it counts as a mismatch too.
+  const mismatch = rShape === "unknown" ? false : rShape === "square" ? true : rShape !== viewportShape;
+  const fitted = showRemoteVideo && mismatch && !fillMode;
+  const lShape = localShape.shape === "unknown" ? (call.localDevice?.type === "desktop" ? "landscape" : "portrait") : localShape.shape;
+  const remoteDevice = call.remoteDevice;
+  function toggleFit() {
+    if (showRemoteVideo && mismatch) setFillMode((v) => !v);
+  }
+
   return createPortal(
     <div
       className={`call-overlay ${minimized ? "minimized" : ""} ${isVideo && isActive ? "video-mode" : ""} ${
         controlsVisible || !isVideo || !isActive ? "" : "controls-hidden"
-      }`}
+      } view-${viewportShape} remote-${rShape} ${fitted ? "pic-fit" : "pic-fill"} local-${lShape}`}
       onPointerDown={isVideo && isActive ? wake : undefined}
       onMouseMove={isVideo && isActive ? wake : undefined}
     >
@@ -312,12 +401,16 @@ export default function CallOverlay() {
         playsInline
         muted={speaker.loud}
       />
+      {fitted && (
+        <video ref={remoteBlurRef} className="call-remote-blur" autoPlay playsInline muted aria-hidden="true" />
+      )}
       <video
         ref={remoteVideoRef}
         className={`call-remote-video ${showRemoteVideo ? "" : "hidden"}`}
         autoPlay
         playsInline
         muted
+        onDoubleClick={toggleFit}
       />
 
       {!showRemoteVideo && (
@@ -342,6 +435,11 @@ export default function CallOverlay() {
           {call.status === "connected" && (
             <span className="call-timer">
               <LockIcon size={11} /> {elapsed}
+            </span>
+          )}
+          {remoteDevice?.type && call.status !== "ringing" && (
+            <span className="call-device-chip" title={`${call.peer.displayName} is on a ${deviceLabel(remoteDevice.type).toLowerCase()}`}>
+              <DeviceGlyph type={remoteDevice.type} /> {deviceLabel(remoteDevice.type)}
             </span>
           )}
         </div>
@@ -375,19 +473,11 @@ export default function CallOverlay() {
       {isVideo && call.localStream && !isIncoming && (
         <video
           ref={localVideoRef}
-          className={`call-local-video ${call.cameraOff ? "hidden" : ""} ${call.mirrored === false ? "unmirrored" : ""}`}
+          className={`call-local-video ${call.cameraOff ? "hidden" : ""} ${call.mirrored === false ? "unmirrored" : ""} ${lShape}`}
           autoPlay
           playsInline
           muted
         />
-      )}
-
-      {minimized && (
-        <button className="call-mini" onClick={() => setMinimized(false)} title="Return to call">
-          <span className="call-mini-dot" />
-          <span className="call-mini-name">{call.peer.displayName}</span>
-          <span className="call-mini-time">{call.status === "connected" ? elapsed : "…"}</span>
-        </button>
       )}
 
       {!minimized && !isIncoming && (
@@ -420,6 +510,11 @@ export default function CallOverlay() {
               {canShare && (
                 <button role="menuitem" onClick={() => { setMoreOpen(false); toggleScreenShare(); }}>
                   <ScreenShareIcon size={18} /> {call.sharing ? "Stop sharing screen" : "Share screen"}
+                </button>
+              )}
+              {showRemoteVideo && mismatch && (
+                <button role="menuitem" onClick={() => { setMoreOpen(false); toggleFit(); }}>
+                  <MinimizeIcon size={18} /> {fillMode ? "Fit whole picture" : "Fill screen"}
                 </button>
               )}
               <button role="menuitem" onClick={openChatDuringCall}>

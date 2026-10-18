@@ -1,0 +1,172 @@
+/* "+" at the end of the quick reaction row */
+.quick-reactions .quick-reactions-more {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  margin: auto 2px auto 4px;
+  border-radius: 50%;
+  background: var(--surface-3, rgba(255, 255, 255, 0.1));
+  color: var(--text-dim, #c9ced6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  transform: none;
+}
+
+.quick-reactions .quick-reactions-more:hover {
+  transform: none;
+  background: var(--surface-hover, rgba(255, 255, 255, 0.18));
+}
+
+/* The row sitting over a message that is being selected */
+.quick-reactions.in-select {
+  top: -58px;
+  z-index: 40;
+  animation: reactPop 180ms cubic-bezier(.34, 1.56, .64, 1);
+}
+
+@keyframes reactPop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- full picker ---- */
+.react-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  animation: reactFade 160ms ease-out;
+}
+
+.react-sheet {
+  width: 100%;
+  max-width: 440px;
+  box-sizing: border-box;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0;
+  background: var(--surface-2, #1b1f26);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+  animation: reactSheetUp 240ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.react-sheet-handle {
+  width: 38px;
+  height: 4px;
+  margin: 2px auto 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes reactSheetUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@media (min-width: 859px) {
+  .react-sheet-backdrop {
+    align-items: center;
+  }
+
+  .react-sheet {
+    border-radius: 18px;
+    padding-bottom: 8px;
+  }
+}
+
+/* ---- swipe a message to reply ---- */
+.bubble-row {
+  position: relative;
+  touch-action: pan-y;
+  --swipe-x: 0px;
+}
+
+.bubble-row.swiping>.bubble-stack,
+.bubble-row.swiping>.bubble-avatar-slot,
+.bubble-row.swipe-return>.bubble-stack,
+.bubble-row.swipe-return>.bubble-avatar-slot {
+  transform: translate3d(var(--swipe-x), 0, 0);
+}
+
+.bubble-row.swipe-return>.bubble-stack,
+.bubble-row.swipe-return>.bubble-avatar-slot {
+  transition: transform 220ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.bubble-row.swiping>.bubble-stack,
+.bubble-row.swiping>.bubble-avatar-slot {
+  will-change: transform;
+}
+
+.swipe-reply-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin-top: -17px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3, rgba(255, 255, 255, 0.12));
+  color: var(--text, #fff);
+  opacity: 0;
+  transform: scale(0.5);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 160ms cubic-bezier(.34, 1.56, .64, 1), background 140ms ease;
+}
+
+.bubble-row.swiping .swipe-reply-icon {
+  opacity: calc(var(--swipe-x) / 56);
+  transform: scale(calc(0.5 + var(--swipe-x) / 112));
+}
+
+.bubble-row.swipe-armed .swipe-reply-icon {
+  opacity: 1;
+  transform: scale(1.12);
+  background: var(--wisp-dim, rgba(94, 242, 192, 0.25));
+  color: var(--wisp, #5ef2c0);
+}
+
+/* ---- selecting: highlight + top action bar on phones ---- */
+@media (max-width: 858px) {
+  .message-list-wrap .select-toolbar {
+    position: fixed;
+    top: 0;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    padding-bottom: 10px;
+    z-index: 3300;
+  }
+
+  body.has-call-bar .message-list-wrap .select-toolbar {
+    top: var(--call-bar-h);
+    padding-top: 8px;
+  }
+}
+
+@keyframes reactFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

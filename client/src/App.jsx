@@ -4,6 +4,7 @@ import AuthPage from "./pages/AuthPage";
 import ChatApp from "./pages/ChatApp";
 import PwaManager from "./components/common/PwaManager";
 import CallOverlay from "./components/Call/CallOverlay";
+import CallBar from "./components/Call/CallBar";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -27,6 +28,7 @@ export default function App() {
       </Routes>
       <PwaManager />
       <CallOverlay />
+      <CallBar />
     </>
   );
 }

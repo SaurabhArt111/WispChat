@@ -1,3 +1,26 @@
+# WispChat — WhatsApp-parity update
+
+| Request (from your videos / screenshots) | Where |
+|---|---|
+| Tabs slide with your finger; the next page is right beside the current one, springs back or settles on release | `hooks/useTabSwipe.js`, `pages/ChatApp.jsx` (`renderPanel`, `.tab-peek`), `styles/layout.css` |
+| Media viewer: swipe left/right through **all photos/videos in the chat** with a gap between pages and edge rubber-banding; swipe up/down to dismiss (picture shrinks, backdrop fades); single tap hides controls, double tap zooms; animated open/close | `Chat/Lightbox.jsx`, `styles/lightbox.css`, `context/GalleryContext.jsx`, `Chat/AttachmentView.jsx` |
+| Media file missing → tapping it opens a dialog ("Sorry, this media file isn't available…" + OK) and returns to the chat | `Lightbox.jsx` (`lb-dialog`), `AttachmentView.jsx` |
+| Swipe a message right to reply (reply arrow pops in, haptic at threshold, bubble springs back) | `hooks/useBubbleGestures.js`, `styles/reactions.css` |
+| Long-press a message → selection mode: top action bar (Reply · Copy · Forward · Delete), reaction row floats above the message with a **+** that opens the full emoji picker | `MessageBubble.jsx`, `MessageList.jsx`, `QuickReactions.jsx`, `ReactionPickerSheet.jsx` |
+| Reaction row order now matches WhatsApp: 👍 ❤️ 😂 😮 😢 🙏 | `QuickReactions.jsx` |
+| Green **call-in-progress bar** at the top while a call is minimised (mute · name – Ringing/timer · hang up); tap to return to the call; whole app is pushed down so nothing is covered | `Call/CallBar.jsx`, `styles/callBar.css`, `CallContext.jsx` (`minimized`) |
+| **Phone ↔ computer video calls**: each side announces its device type + orientation (and updates when rotated); the real pixel shape of each stream is measured. Matching shapes fill the screen; mismatched (portrait phone on a landscape monitor, or the reverse) are *fitted* in full over a blurred backdrop. Self-view takes the shape of its own camera (tall on phones, wide on computers). Phones capture 9:16, computers 16:9. A device chip ("Phone"/"Computer") shows in the call header; More → *Fill screen / Fit whole picture* (or double-click the picture) | `utils/device.js`, `CallContext.jsx`, `Call/CallOverlay.jsx`, `styles/callLayout.css`, `server/src/sockets/index.js` (`call:device`, `device` on invite/answer) |
+
+## Changed behaviour
+- Drag-to-close for the chat now only starts from the left edge / header / composer, because dragging a message right now means *reply*.
+- The old floating "minimised call" pill is replaced by the call bar.
+- Old lightbox CSS removed from `chat.css` (now `lightbox.css`).
+
+## Notes
+- Server needs a restart (new `call:device` event; `device` field on invite/answer, sanitised server-side).
+- Tab swipe previews Chats / Status / Explore / Calls side by side; Profile is a full page and switches with the existing slide.
+- Not verified on physical devices — please test the swipe gestures and a phone↔desktop call.
+
 # WispChat — latest update
 
 | Request | Where |
