@@ -29,7 +29,7 @@
   --wisp-dim: rgba(94, 242, 192, 0.12);
   --wisp-glow: rgba(94, 242, 192, 0.35);
   --wisp-gradient: linear-gradient(135deg, #5ef2c0 0%, #3ddba7 100%);
-  --bubble-mine-bg: linear-gradient(135deg, rgba(94, 242, 192, 0.18) 0%, rgba(61, 219, 167, 0.12) 100%);
+  --bubble-mine-bg: linear-gradient(135deg, rgba(94, 242, 192, 0.58) 0%, rgba(61, 219, 167, 0.42) 100%);
 
   /* --- Accent Colors --- */
   --ember: #f5a65b;
@@ -90,7 +90,7 @@
   --wisp-dim: rgba(56, 189, 248, 0.12);
   --wisp-glow: rgba(56, 189, 248, 0.35);
   --wisp-gradient: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
-  --bubble-mine-bg: linear-gradient(135deg, rgba(56, 189, 248, 0.18) 0%, rgba(14, 165, 233, 0.12) 100%);
+  --bubble-mine-bg: linear-gradient(135deg, rgba(56, 189, 248, 0.58) 0%, rgba(14, 165, 233, 0.42) 100%);
   --border-glow: rgba(56, 189, 248, 0.25);
 }
 
@@ -101,7 +101,7 @@
   --wisp-dim: rgba(167, 139, 250, 0.14);
   --wisp-glow: rgba(167, 139, 250, 0.35);
   --wisp-gradient: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
-  --bubble-mine-bg: linear-gradient(135deg, rgba(167, 139, 250, 0.2) 0%, rgba(139, 92, 246, 0.12) 100%);
+  --bubble-mine-bg: linear-gradient(135deg, rgba(167, 139, 250, 0.58) 0%, rgba(139, 92, 246, 0.42) 100%);
   --border-glow: rgba(167, 139, 250, 0.25);
 }
 
@@ -112,7 +112,7 @@
   --wisp-dim: rgba(245, 166, 91, 0.14);
   --wisp-glow: rgba(245, 166, 91, 0.35);
   --wisp-gradient: linear-gradient(135deg, #f5a65b 0%, #ea913e 100%);
-  --bubble-mine-bg: linear-gradient(135deg, rgba(245, 166, 91, 0.2) 0%, rgba(234, 145, 62, 0.12) 100%);
+  --bubble-mine-bg: linear-gradient(135deg, rgba(245, 166, 91, 0.58) 0%, rgba(234, 145, 62, 0.42) 100%);
   --border-glow: rgba(245, 166, 91, 0.25);
 }
 
