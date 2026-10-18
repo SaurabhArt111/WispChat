@@ -21,6 +21,7 @@ import {
   SparklesIcon,
   LogOutIcon,
 } from "../common/Icons";
+import { usePwaUpdate, checkForUpdate, applyUpdate, APP_VERSION, APP_BUILD } from "../../utils/pwaUpdate";
 import "../../styles/settingsModal.css";
 
 const ACCENTS = [
@@ -164,19 +165,53 @@ export default function SettingsModal({ onClose, onOpenProfile }) {
 }
 
 function GeneralPanel() {
+  const { needRefresh, checking, applying, supported } = usePwaUpdate();
+  const [checkedOnce, setCheckedOnce] = useState(false);
+  const built = APP_BUILD ? new Date(APP_BUILD).toLocaleString() : "";
+
+  async function check() {
+    await checkForUpdate({ force: true });
+    setCheckedOnce(true);
+  }
+
   return (
     <div className="settings-section">
       <div className="settings-app-badge">
         <div className="settings-app-badge-mark">W</div>
         <div>
           <div className="settings-app-badge-name">Wisp Chat</div>
-          <div className="settings-app-badge-version">Version 1.0.0 · Installable PWA</div>
+          <div className="settings-app-badge-version">Version {APP_VERSION} · Installable PWA</div>
         </div>
       </div>
       <p className="settings-hint">
         Fast, real-time messaging with instant file sharing, pre-send editing tools, Status
         updates, and rich reactions — installable on desktop, Android and iOS.
       </p>
+
+      <div className="settings-section-title" style={{ marginTop: 20 }}>App updates</div>
+      {built && (
+        <div className="settings-kv">
+          <span>This build</span>
+          <strong>{built}</strong>
+        </div>
+      )}
+      <div className="settings-kv">
+        <span>Status</span>
+        <strong>
+          {applying ? "Updating…" : needRefresh ? "New version ready" : checking ? "Checking…" : checkedOnce ? "You're up to date" : supported ? "Checked automatically" : "Updates unavailable here"}
+        </strong>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {needRefresh ? (
+          <button className="btn btn-primary btn-sm" onClick={applyUpdate} disabled={applying}>
+            {applying ? "Updating…" : "Update now"}
+          </button>
+        ) : (
+          <button className="btn btn-ghost btn-sm" onClick={check} disabled={checking || !supported}>
+            {checking ? "Checking…" : "Check for updates"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

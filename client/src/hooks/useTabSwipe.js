@@ -145,13 +145,13 @@ export default function useTabSwipe({ enabled, shellRef, order, current, canPeek
           live.current.onCommit(s.nb, { live: true });
           // Remove the helper layer in the same tick the route changes.
           reset();
-        }, 250);
+        }, 290);
       } else {
         setDx(0);
         settleTimer = setTimeout(() => {
           st = null;
           reset();
-        }, 230);
+        }, 285);
       }
     }
 

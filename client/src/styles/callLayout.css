@@ -121,3 +121,21 @@
   animation: none;
   background: transparent;
 }
+
+/* In a video call the name / timer sit at the TOP over the picture (the
+   overlay is a bottom-aligned column, which had pushed them under the buttons). */
+.call-overlay.call-overlay.video-mode .call-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  padding-left: 64px;
+  padding-right: 64px;
+  pointer-events: none;
+}
+
+/* A phone held upright shows ITS OWN picture vertically, whatever the other side is. */
+.call-overlay.call-overlay.local-portrait .call-local-video.call-local-video {
+  object-fit: cover;
+}

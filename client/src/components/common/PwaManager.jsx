@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DownloadIcon, CloseIcon, RefreshIcon } from "./Icons";
+import { applyUpdate, attachUpdater, checkForUpdate, markNeedRefresh, usePwaUpdate } from "../../utils/pwaUpdate";
 import "../../styles/pwa.css";
 
 const INSTALL_DISMISS_KEY = "wisp_pwa_install_dismissed_at";
@@ -30,12 +31,13 @@ function isIos() {
  *     "Add to Home Screen" instruction tip.
  */
 export default function PwaManager() {
-  const [needRefresh, setNeedRefresh] = useState(false);
+  const { needRefresh: updateReady, applying: updating } = usePwaUpdate();
+  const [snoozedUntil, setSnoozedUntil] = useState(0);
+  const needRefresh = updateReady && !snoozedUntil;
   const [installEvent, setInstallEvent] = useState(null);
   const [showIosTip, setShowIosTip] = useState(false);
   const updateSWRef = useRef(null);
   const cleanupRef = useRef(null);
-  const [updating, setUpdating] = useState(false);
 
   // --- Service worker registration + update detection ---
   useEffect(() => {
@@ -55,34 +57,43 @@ export default function PwaManager() {
     import("virtual:pwa-register")
       .then(({ registerSW }) => {
         if (cancelled) return;
-        updateSWRef.current = registerSW({
+        const update = registerSW({
           immediate: true,
           onNeedRefresh() {
-            setNeedRefresh(true);
+            markNeedRefresh();
+            // A phone app that was just opened (cold start) with a new version
+            // already waiting: switch to it straight away, before anything is
+            // typed — nobody has to tap anything to get the latest build.
+            if (performance.now() < 6000) applyUpdate();
           },
-          // An installed PWA can stay open for days without a navigation, and
-          // browsers only re-check for a new service worker on navigation —
-          // so poll, and also check whenever the app returns to the
-          // foreground. Either finding a new build triggers onNeedRefresh.
           onRegisteredSW(_url, registration) {
             if (!registration) return;
-            const check = () => {
-              if (navigator.onLine) registration.update().catch(() => {});
-            };
-            const timer = setInterval(check, 10 * 60 * 1000);
+            attachUpdater({ update, reg: registration });
+            // Installed PWAs can sit in memory for days and browsers only look for a
+            // new build on navigation — so also check on a timer, whenever the app
+            // comes back to the foreground, regains the network, or is shown from the
+            // back/forward cache.
+            const check = () => checkForUpdate();
+            check();
+            const timer = setInterval(check, 5 * 60 * 1000);
             const onVisible = () => document.visibilityState === "visible" && check();
             document.addEventListener("visibilitychange", onVisible);
+            window.addEventListener("focus", check);
             window.addEventListener("online", check);
+            window.addEventListener("pageshow", check);
             cleanupRef.current = () => {
               clearInterval(timer);
               document.removeEventListener("visibilitychange", onVisible);
+              window.removeEventListener("focus", check);
               window.removeEventListener("online", check);
+              window.removeEventListener("pageshow", check);
             };
           },
           onRegisterError(err) {
             console.warn("[pwa] service worker registration failed", err);
           },
         });
+        attachUpdater({ update });
       })
       .catch(() => {
         // Dev server without the PWA virtual module, or SW unsupported —
@@ -94,6 +105,13 @@ export default function PwaManager() {
       cleanupRef.current?.();
     };
   }, []);
+
+  // "Later" only snoozes the card — it comes back so an old build can't be forgotten.
+  useEffect(() => {
+    if (!snoozedUntil) return undefined;
+    const t = setTimeout(() => setSnoozedUntil(0), Math.max(0, snoozedUntil - Date.now()));
+    return () => clearTimeout(t);
+  }, [snoozedUntil]);
 
   // --- Install prompt (Android/desktop Chrome/Edge) ---
   useEffect(() => {
@@ -144,14 +162,11 @@ export default function PwaManager() {
   }
 
   function handleReload() {
-    setUpdating(true);
-    // Activates the waiting service worker and reloads the page once it takes
-    // over. If that hand-off ever stalls, fall back to a plain reload so the
-    // button can never appear to do nothing.
-    updateSWRef.current?.(true);
-    setTimeout(() => window.location.reload(), 4000);
+    applyUpdate();
   }
 
+  // The service worker was meant to be updated by hand — keep a reference to the
+  // last registration only inside utils/pwaUpdate.js.
   return (
     <>
       {needRefresh && (
@@ -161,10 +176,10 @@ export default function PwaManager() {
           </div>
           <div className="pwa-update-text">
             <strong>Update available</strong>
-            <span>A new version of Wisp is ready. Update now to get the latest features and fixes.</span>
+            <span>A new version of Wisp is ready. It only takes a second — your chats stay as they are.</span>
           </div>
           <div className="pwa-update-actions">
-            <button className="btn btn-ghost btn-sm" onClick={() => setNeedRefresh(false)} disabled={updating}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSnoozedUntil(Date.now() + 20 * 60 * 1000)} disabled={updating}>
               Later
             </button>
             <button className="btn btn-primary btn-sm" onClick={handleReload} disabled={updating}>

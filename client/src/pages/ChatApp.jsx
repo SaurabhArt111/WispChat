@@ -196,6 +196,45 @@ export default function ChatApp() {
     }
   }, [infoRequest, activeId]);
 
+  // Tabs you've already opened stay mounted (hidden) on phones, so coming back
+  // to them is instant — no skeleton flash, scroll position kept — and a
+  // swiped-in page is the SAME instance that was sliding beside you, not a
+  // fresh copy that re-loads. (React keeps them by `key`.)
+  const visitedRef = useRef(new Set());
+  if (!isDesktop && PEEKABLE.includes(activePanel)) visitedRef.current.add(activePanel);
+  const slotIds = [activePanel];
+  if (peek && !slotIds.includes(peek.id)) slotIds.push(peek.id);
+  if (!isDesktop) visitedRef.current.forEach((id) => !slotIds.includes(id) && slotIds.push(id));
+
+  // Tapping a tab slides to it the same way a swipe does.
+  const tabAnimRef = useRef(false);
+  function changeTab(id) {
+    const shell = shellRef.current;
+    const from = activePanel;
+    const canSlide =
+      !isDesktop && shell && id !== from && !tabAnimRef.current && PEEKABLE.includes(id) &&
+      (PEEKABLE.includes(from) || from === "profile") && !(activeId && from === "chats");
+    if (!canSlide) return changeView(id);
+    const dir = TAB_ORDER.indexOf(id) > TAB_ORDER.indexOf(from) ? 1 : -1;
+    tabAnimRef.current = true;
+    setPeek({ id, side: dir });
+    shell.classList.add("tab-dragging");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        shell.classList.add("tab-settling");
+        shell.style.setProperty("--tab-dx", `${-dir * (window.innerWidth + 14)}px`);
+      })
+    );
+    setTimeout(() => {
+      suppressSlideRef.current = true;
+      changeView(id);
+      setPeek(null);
+      shell.classList.remove("tab-dragging", "tab-settling");
+      shell.style.removeProperty("--tab-dx");
+      tabAnimRef.current = false;
+    }, 290);
+  }
+
   function renderPanel(id) {
     switch (id) {
       case "chats":
@@ -232,18 +271,22 @@ export default function ChatApp() {
       <ConnectionBanner />
       <AsideRail
         view={activePanel}
-        onChangeView={changeView}
+        onChangeView={changeTab}
         onOpenProfile={openProfile}
         onOpenSettings={openSettings}
         hasUnreadStatus={hasUnread}
       />
 
-      {renderPanel(activePanel)}
-      {peek && (
-        <div className="tab-peek" style={{ "--peek-side": peek.side }}>
-          {renderPanel(peek.id)}
-        </div>
-      )}
+      {slotIds.map((id) => {
+        const content = renderPanel(id);
+        if (!content) return null;
+        const role = id === activePanel ? "is-active" : peek?.id === id ? "is-peek" : "is-parked";
+        return (
+          <div key={id} className={`tab-slot ${role}`} style={role === "is-peek" ? { "--peek-side": peek.side } : undefined}>
+            {content}
+          </div>
+        );
+      })}
 
       <div className="app-main">
         {postFullPage ? (

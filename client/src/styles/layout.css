@@ -257,8 +257,18 @@
 }
 
 /* ---------- Live swiping between the main tabs (mobile) ----------
-   The current page follows the finger (--tab-dx, set by useTabSwipe) and the
-   neighbouring tab is rendered right beside it inside .tab-peek. */
+   Each opened tab lives in a .tab-slot. The current one is `display: contents`
+   (so its panel is a normal grid item); the neighbour being swiped in is
+   absolutely positioned beside it; the rest are parked (hidden, still mounted).
+   --tab-dx is written by useTabSwipe / changeTab. */
+.tab-slot.is-active {
+  display: contents;
+}
+
+.tab-slot.is-parked {
+  display: none;
+}
+
 @media (max-width: 858px) {
   .app-shell {
     --tab-dx: 0px;
@@ -268,15 +278,15 @@
     touch-action: pan-y;
   }
 
-  .app-shell.tab-dragging>.sidebar,
-  .app-shell.tab-dragging>.rail-panel,
+  .app-shell.tab-dragging .tab-slot.is-active>.sidebar,
+  .app-shell.tab-dragging .tab-slot.is-active>.rail-panel,
   .app-shell.tab-dragging>.app-main {
     transform: translate3d(var(--tab-dx), 0, 0);
     will-change: transform;
     animation: none !important;
   }
 
-  .tab-peek {
+  .tab-slot.is-peek {
     position: absolute;
     inset: 0;
     z-index: 12;
@@ -288,8 +298,8 @@
     pointer-events: none;
   }
 
-  .tab-peek>.sidebar,
-  .tab-peek>.rail-panel {
+  .tab-slot.is-peek>.sidebar,
+  .tab-slot.is-peek>.rail-panel {
     display: flex;
     flex: 1;
     width: 100%;
@@ -297,10 +307,10 @@
     border-right: none;
   }
 
-  .app-shell.tab-settling>.sidebar,
-  .app-shell.tab-settling>.rail-panel,
+  .app-shell.tab-settling .tab-slot.is-active>.sidebar,
+  .app-shell.tab-settling .tab-slot.is-active>.rail-panel,
   .app-shell.tab-settling>.app-main,
-  .app-shell.tab-settling .tab-peek {
-    transition: transform 250ms cubic-bezier(.22, 1, .36, 1);
+  .app-shell.tab-settling .tab-slot.is-peek {
+    transition: transform 280ms cubic-bezier(.22, 1, .36, 1);
   }
 }

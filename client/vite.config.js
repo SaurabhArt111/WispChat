@@ -2,7 +2,16 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
+import { readFileSync } from "node:fs";
+
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
+
 export default defineConfig({
+  // Shown in Settings → General so you can tell which build a phone is running.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version || "1.0.0"),
+    __APP_BUILD__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     VitePWA({
@@ -14,7 +23,7 @@ export default defineConfig({
       // clientsClaim below) instead of waiting for someone to click an
       // "Update available" card — waiting on that click is a big reason the
       // app looked stuck on an old build.
-      registerType: "autoUpdate",
+      registerType: "prompt",
       // We call the registration hook ourselves (see src/pwa.js) so we can
       // show a custom "update available" toast instead of the plugin's
       // default silent/prompt behavior.
@@ -38,7 +47,10 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//, /^\/socket\.io\//],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true,
+        // The new version waits until the person taps "Update now" (or the app is
+        // cold-started) — see PwaManager. Activating it behind their back made the
+        // "update available" card impossible to show and swapped code under a running page.
+        skipWaiting: false,
         runtimeCaching: [
           {
             // REST API + realtime: NEVER cache. The app keeps its own

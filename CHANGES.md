@@ -1,3 +1,18 @@
+# WispChat — smoothness, PWA updates & phone↔desktop video (revision 3)
+
+| Issue | Fix | Where |
+|---|---|---|
+| Phone sent a **landscape** picture (self-view was a wide box, desktop got a wide frame) | A phone held upright now crops its camera to a true 9:16 frame before sending, so its own preview is vertical and the desktop shows it as a vertical picture (centred, blurred sides). Desktop stays landscape. Works with camera flip / camera-on-mid-call | `utils/portraitTrack.js`, `CallContext.jsx` |
+| Name / "Connecting… Computer" text sat under the buttons in video calls | Pinned to the top over the picture | `styles/callLayout.css` |
+| "Connecting…" could stay forever on some phones | Also uses the ICE connection state as a second "connected" signal | `CallContext.jsx` |
+| **Flicker when sliding between pages** (destination remounted and showed skeletons again) | Opened tabs stay mounted (hidden) on phones; the page sliding in beside you is the *same* instance that becomes the active page, so nothing reloads. Tapping a bottom-nav tab now slides exactly like a swipe | `pages/ChatApp.jsx` (`tab-slot`, `changeTab`), `styles/layout.css`, `hooks/useTabSwipe.js` |
+| **PWA not picking up updates on mobile / no popup** | Config was `autoUpdate` + `skipWaiting`, which made the "Update available" card impossible. Now: new version waits → card appears (Update now / Later = snooze 20 min). Checks on start, every 5 min, on returning to the app, on focus, on reconnect. If the app is cold-started with an update already waiting it switches silently. Settings → General shows version/build and a **Check for updates** button | `vite.config.js`, `utils/pwaUpdate.js`, `PwaManager.jsx`, `SettingsModal.jsx` |
+
+Notes
+- Deploy the new build once; phones on the OLD build need one manual refresh/reinstall to receive the new update logic — after that updates arrive by themselves.
+- Make sure your host serves `/sw.js` with `Cache-Control: no-cache`.
+- Not tested on physical devices.
+
 # WispChat — WhatsApp-parity update
 
 | Request (from your videos / screenshots) | Where |

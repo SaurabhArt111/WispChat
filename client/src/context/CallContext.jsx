@@ -5,6 +5,7 @@ import { useToast } from "./ToastContext";
 import { logError } from "../utils/logger";
 import client from "../api/client";
 import { getDeviceInfo, videoConstraintsFor } from "../utils/device";
+import { normalizeVideoForDevice } from "../utils/portraitTrack";
 
 const CallContext = createContext(null);
 
@@ -40,10 +41,11 @@ const AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, auto
 
 async function getLocalMedia(kind) {
   try {
-    return await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: AUDIO_CONSTRAINTS,
       video: kind === "video" ? videoConstraintsFor() : false,
     });
+    return normalizeVideoForDevice(stream, "user");
   } catch (err) {
     // Camera missing/busy on a video call: fall back to audio-only rather than failing the call.
     if (kind === "video" && err?.name !== "NotAllowedError") {
@@ -249,7 +251,7 @@ export function CallProvider({ children }) {
     if (pcRef.current) {
       const pc = pcRef.current;
       pcRef.current = null;
-      pc.onicecandidate = pc.ontrack = pc.onconnectionstatechange = pc.onnegotiationneeded = null;
+      pc.onicecandidate = pc.ontrack = pc.onconnectionstatechange = pc.oniceconnectionstatechange = pc.onnegotiationneeded = null;
       try {
         pc.close();
       } catch {
@@ -344,8 +346,16 @@ export function CallProvider({ children }) {
         }
       };
 
+      // Some mobile browsers are slow/odd about `connectionState`; the older
+      // ICE state is a reliable second signal that media is flowing.
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          if (callRef.current?.callId === callId && callRef.current.status !== "connected") pc.onconnectionstatechange?.();
+        }
+      };
+
       pc.onconnectionstatechange = () => {
-        const state = pc.connectionState;
+        const state = pc.connectionState === "connected" || pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed" ? "connected" : pc.connectionState;
         if (state === "connected") {
           clearTimeout(disconnectTimerRef.current);
           clearTimeout(failTimerRef.current);
@@ -577,7 +587,7 @@ export function CallProvider({ children }) {
       return false;
     }
     try {
-      const cam = await navigator.mediaDevices.getUserMedia({ video: videoConstraintsFor() });
+      const cam = normalizeVideoForDevice(await navigator.mediaDevices.getUserMedia({ video: videoConstraintsFor() }), "user");
       const track = cam.getVideoTracks()[0];
       stream.addTrack(track);
       pc.addTrack(track, stream);
@@ -613,11 +623,15 @@ export function CallProvider({ children }) {
     const stream = localStreamRef.current;
     const oldTrack = stream?.getVideoTracks()[0];
     if (!pc || !stream || !oldTrack) return;
-    const facing = oldTrack.getSettings?.().facingMode === "environment" ? "user" : "environment";
+    const current = oldTrack.__facing || oldTrack.getSettings?.().facingMode;
+    const facing = current === "environment" ? "user" : "environment";
     try {
-      const fresh = await navigator.mediaDevices.getUserMedia({
-        video: { ...videoConstraintsFor(), facingMode: { exact: facing } },
-      });
+      const fresh = normalizeVideoForDevice(
+        await navigator.mediaDevices.getUserMedia({
+          video: { ...videoConstraintsFor(), facingMode: { exact: facing } },
+        }),
+        facing
+      );
       const newTrack = fresh.getVideoTracks()[0];
       const sender = pc.getSenders().find((s) => s.track?.kind === "video");
       await sender?.replaceTrack(newTrack);
