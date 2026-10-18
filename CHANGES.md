@@ -1,3 +1,12 @@
+# WispChat — revision 4 (one menu per message, device-driven call framing)
+
+| Issue | Fix | Where |
+|---|---|---|
+| Two different context menus on one message (one on the photo, another on the bubble) | One menu per message: reactions + Reply / Copy / Forward + (if you clicked an attachment) Open in new tab, Copy image, Save as…, File info + Select / Delete | `Chat/MessageBubble.jsx`, `Chat/AttachmentView.jsx` |
+| Phone's video not shown vertically | Framing now follows the DEVICE, not just the pixels: an upright phone is always a vertical 9:16 frame (cropped if its camera sent a wide picture); everything else is horizontal. On a wide screen the phone's picture is a centred tall column over a blurred backdrop; on a phone screen a computer's wide picture is shown whole, full width. Same orientation as the screen → fills it. Self-view follows the same rule. Double-click / More → Fill screen toggles | `Call/CallOverlay.jsx`, `styles/callLayout.css` |
+
+Note: a phone still running an old build (screenshots showed the old call layout) must be refreshed ONCE — close the app fully and reopen it, or Chrome → ⋮ → reload. After that, updates arrive with a popup.
+
 # WispChat — smoothness, PWA updates & phone↔desktop video (revision 3)
 
 | Issue | Fix | Where |

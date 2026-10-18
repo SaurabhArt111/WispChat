@@ -251,35 +251,10 @@ export default function AttachmentView({
     else setLightbox({ list: images, index: i, url: resolvedUrl });
   }
 
-  function imageContextMenu(e, a, resolvedUrl) {
-    openMenu(e, [
-      onReply && { label: "Reply", icon: <ReplyIcon size={15} />, onClick: onReply },
-      onForward && { label: "Forward", icon: <ForwardIcon size={15} />, onClick: onForward },
-      resolvedUrl && {
-        label: "Open in new tab",
-        icon: <ExternalLinkIcon size={15} />,
-        onClick: () => window.open(resolvedUrl, "_blank", "noopener,noreferrer"),
-      },
-      resolvedUrl && a.kind === "image" && {
-        label: "Copy image",
-        icon: <CopyIcon size={15} />,
-        onClick: () => copyImageToClipboard(resolvedUrl, showToast),
-      },
-      resolvedUrl && {
-        label: "Save as…",
-        icon: <DownloadIcon size={15} />,
-        onClick: () => {
-          const link = document.createElement("a");
-          link.href = resolvedUrl;
-          link.download = a.name || "file";
-          link.click();
-        },
-      },
-      { label: "File info", icon: <InfoIcon size={15} />, onClick: () => showToast(`${a.name} · ${formatBytes(a.size)}`) },
-      onDeleteRequest && { divider: true },
-      onDeleteRequest && { label: "Delete", danger: true, icon: <TrashIcon size={15} />, onClick: onDeleteRequest },
-    ].filter(Boolean));
-  }
+  // Attachments no longer open a menu of their own: the right-click / long-press
+  // bubbles up to the message, which shows ONE menu (reactions + message actions
+  // + this attachment's own actions such as "Save as…").
+  function imageContextMenu() {}
 
   return (
     <div className="attachments">

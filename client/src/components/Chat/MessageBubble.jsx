@@ -4,7 +4,8 @@ import { useToast } from "../../context/ToastContext";
 import { useDecryptedText } from "../../hooks/useDecryptedMessage";
 import useDoubleTap from "../../hooks/useDoubleTap";
 import useBubbleGestures from "../../hooks/useBubbleGestures";
-import { formatClock } from "../../utils/time";
+import { formatClock, formatBytes } from "../../utils/time";
+import { copyImageToClipboard } from "../../utils/copyImage";
 import { LockIcon } from "../common/Icons";
 import Avatar from "../common/Avatar";
 import ActionSheetModal from "../common/ActionSheetModal";
@@ -29,6 +30,9 @@ import {
   SmileIcon,
   PhoneIcon,
   VideoIcon,
+  ExternalLinkIcon,
+  DownloadIcon,
+  InfoIcon,
 } from "../common/Icons";
 
 const URL_SRC = makeUrlRegex().source;
@@ -322,7 +326,44 @@ function MessageBubble({
       e.preventDefault();
       return;
     }
-    openMenu(e, menuItems, null, {
+    // If the click landed on an attachment, add that attachment's actions to the
+    // SAME menu (instead of the attachment popping up a second, different one).
+    let items = menuItems;
+    const target = e.target instanceof Element ? e.target : null;
+    const holder = target?.closest(".image-grid-item, .attachment-video-wrap, .attachment-file, .attachment-audio-wrap");
+    if (holder && message.attachments?.length) {
+      const isImage = holder.classList.contains("image-grid-item");
+      const siblings = Array.from(
+        holder.parentElement.querySelectorAll(
+          isImage ? ":scope > .image-grid-item" : ":scope > .attachment-video-wrap, :scope > .attachment-file, :scope > .attachment-audio-wrap"
+        )
+      );
+      const pool = message.attachments.filter((x) => (isImage ? x.kind === "image" : x.kind !== "image"));
+      const att = pool[siblings.indexOf(holder)] || pool[0];
+      const media = holder.querySelector("img, video, audio");
+      const src = media?.currentSrc || media?.src || null;
+      const extra = [
+        src && { label: "Open in new tab", icon: <ExternalLinkIcon size={15} />, onClick: () => window.open(src, "_blank", "noopener,noreferrer") },
+        src && isImage && { label: "Copy image", icon: <CopyIcon size={15} />, onClick: () => copyImageToClipboard(src, showToast) },
+        src && {
+          label: "Save as…",
+          icon: <DownloadIcon size={15} />,
+          onClick: () => {
+            const link = document.createElement("a");
+            link.href = src;
+            link.download = att?.name || "file";
+            link.click();
+          },
+        },
+        att && { label: "File info", icon: <InfoIcon size={15} />, onClick: () => showToast(`${att.name} · ${formatBytes(att.size)}`) },
+      ].filter(Boolean);
+      if (extra.length) {
+        items = [...menuItems];
+        const at = items.findIndex((i) => i.label === "Select");
+        items.splice(at < 0 ? items.length : at, 0, ...extra);
+      }
+    }
+    openMenu(e, items, null, {
       reactions: {
         emojis: QUICK_EMOJI,
         current: myReaction,

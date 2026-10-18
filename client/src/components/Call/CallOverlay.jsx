@@ -368,25 +368,44 @@ export default function CallOverlay() {
   const showRemoteVideo = isVideo && isActive && hasRemoteVideo && !call.remoteCameraOff;
 
   // ---- Picture layout --------------------------------------------------
-  // Portrait picture on a landscape screen (phone → computer) or landscape
-  // picture on a portrait screen (computer → phone) would be badly cropped by
-  // "cover", so it is FITTED (whole picture visible, centred, with a blurred
-  // copy of itself behind). Same-shaped picture + screen fills edge to edge.
-  const rShape = remoteShape.shape; // portrait | landscape | square | unknown
-  // A square picture never fills a tall or wide screen without cropping, so it counts as a mismatch too.
-  const mismatch = rShape === "unknown" ? false : rShape === "square" ? true : rShape !== viewportShape;
-  const fitted = showRemoteVideo && mismatch && !fillMode;
-  const lShape = localShape.shape === "unknown" ? (call.localDevice?.type === "desktop" ? "landscape" : "portrait") : localShape.shape;
-  const remoteDevice = call.remoteDevice;
+  // The rule: a PHONE held upright is always shown VERTICALLY (a tall 9:16
+  // frame — cropped to fit if its camera sent a wide picture), anything else is
+  // shown HORIZONTALLY. Then the frame is placed on this screen:
+  //   • same orientation as the screen → fills it edge to edge
+  //   • different → shown whole, centred, over a blurred copy of itself
+  const rDev = call.remoteDevice;
+  const lDev = call.localDevice;
+  const rShape = remoteShape.shape; // measured: portrait | landscape | square | unknown
+  const remoteIsUprightPhone = rDev?.type === "mobile" && rDev?.orientation === "portrait";
+  const subject = remoteIsUprightPhone ? "portrait" : rShape === "portrait" ? "portrait" : "landscape";
+  const naturalFrame =
+    subject === "portrait" && viewportShape === "landscape"
+      ? "portrait-box"
+      : subject === "landscape" && viewportShape === "portrait"
+      ? "landscape-box"
+      : "fill";
+  const mismatch = naturalFrame !== "fill";
+  const frame = fillMode ? "fill" : naturalFrame;
+  const fitted = showRemoteVideo && frame !== "fill";
+  // Self-view: vertical for an upright phone, otherwise follow what the camera really sends.
+  const lShape =
+    lDev?.type === "mobile" && lDev?.orientation === "portrait"
+      ? "portrait"
+      : localShape.shape === "portrait"
+      ? "portrait"
+      : localShape.shape === "unknown" && lDev?.type !== "desktop"
+      ? "portrait"
+      : "landscape";
+  const remoteDevice = rDev;
   function toggleFit() {
-    if (showRemoteVideo && mismatch) setFillMode((v) => !v);
+    if (showRemoteVideo && (mismatch || fillMode)) setFillMode((v) => !v);
   }
 
   return createPortal(
     <div
       className={`call-overlay ${minimized ? "minimized" : ""} ${isVideo && isActive ? "video-mode" : ""} ${
         controlsVisible || !isVideo || !isActive ? "" : "controls-hidden"
-      } view-${viewportShape} remote-${rShape} ${fitted ? "pic-fit" : "pic-fill"} local-${lShape}`}
+      } view-${viewportShape} remote-${rShape} frame-${showRemoteVideo ? frame : "fill"} ${fitted ? "pic-fit" : "pic-fill"} local-${lShape}`}
       onPointerDown={isVideo && isActive ? wake : undefined}
       onMouseMove={isVideo && isActive ? wake : undefined}
     >
@@ -512,7 +531,7 @@ export default function CallOverlay() {
                   <ScreenShareIcon size={18} /> {call.sharing ? "Stop sharing screen" : "Share screen"}
                 </button>
               )}
-              {showRemoteVideo && mismatch && (
+              {showRemoteVideo && (mismatch || fillMode) && (
                 <button role="menuitem" onClick={() => { setMoreOpen(false); toggleFit(); }}>
                   <MinimizeIcon size={18} /> {fillMode ? "Fit whole picture" : "Fill screen"}
                 </button>

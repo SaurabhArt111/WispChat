@@ -139,3 +139,26 @@
 .call-overlay.call-overlay.local-portrait .call-local-video.call-local-video {
   object-fit: cover;
 }
+
+/* ---- Vertical frame for an upright phone, shown on a wide screen ----
+   Tall 9:16 column, centred; if the phone's camera actually sent a wide
+   picture it is cropped (cover) so the preview is still vertical. */
+.call-overlay.call-overlay.frame-portrait-box .call-remote-video {
+  inset: auto;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  transform: translateX(-50%);
+  object-fit: cover;
+  background: #000;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+}
+
+/* A computer's wide picture on a tall (phone) screen: shown whole, full width. */
+.call-overlay.call-overlay.frame-landscape-box .call-remote-video {
+  object-fit: contain;
+}
