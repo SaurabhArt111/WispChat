@@ -244,3 +244,25 @@ export async function getBlockedContacts(req, res) {
   const populated = await req.user.populate("blocked", "username displayName avatar avatarColor");
   res.json({ blocked: populated.blocked });
 }
+
+// ---- push notification devices (Android app) -------------------------------
+
+// A token belongs to exactly one account: when someone logs in on a phone that
+// another account used, the old account must stop receiving that phone's pushes.
+export async function registerPushToken(req, res) {
+  const token = String(req.body?.token || "").trim();
+  if (!token || token.length > 4096) return res.status(400).json({ message: "Token required" });
+  await User.updateMany({ _id: { $ne: req.user._id } }, { $pull: { pushTokens: { token } } });
+  await User.updateOne({ _id: req.user._id }, { $pull: { pushTokens: { token } } });
+  await User.updateOne(
+    { _id: req.user._id },
+    { $push: { pushTokens: { $each: [{ token, platform: "android", updatedAt: new Date() }], $slice: -10 } } }
+  );
+  res.json({ ok: true });
+}
+
+export async function removePushToken(req, res) {
+  const token = String(req.body?.token || req.query?.token || "").trim();
+  if (token) await User.updateOne({ _id: req.user._id }, { $pull: { pushTokens: { token } } });
+  res.json({ ok: true });
+}

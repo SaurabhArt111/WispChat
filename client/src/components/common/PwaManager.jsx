@@ -1,3 +1,4 @@
+import { isNative } from "../../native/wispNative";
 import { useEffect, useRef, useState } from "react";
 import { DownloadIcon, CloseIcon, RefreshIcon } from "./Icons";
 import { applyUpdate, attachUpdater, checkForUpdate, markNeedRefresh, usePwaUpdate } from "../../utils/pwaUpdate";
@@ -41,7 +42,7 @@ export default function PwaManager() {
 
   // --- Service worker registration + update detection ---
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
+    if (isNative || !("serviceWorker" in navigator)) return; // the Android app ships its own web bundle
 
     // Remove service workers created by older development builds. They can
     // intercept /manifest.webmanifest and return the SPA HTML fallback.

@@ -17,6 +17,16 @@ const userSchema = new mongoose.Schema(
     contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     blocked: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
+    // FCM registration tokens of this person's Android devices (one per install).
+    pushTokens: [
+      {
+        token: { type: String, required: true },
+        platform: { type: String, default: "android" },
+        updatedAt: { type: Date, default: Date.now },
+        _id: false,
+      },
+    ],
+
     // Who can see this user's Status updates — mirrors WhatsApp's three
     // modes. "contacts" (default) is everyone in `contacts`; the other two
     // modes carve out an allow/deny list on top of that same audience.

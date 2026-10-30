@@ -1,6 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { requireAuth } from "../middleware/auth.js";
+import { declineCallById } from "../sockets/index.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -35,6 +36,13 @@ router.get("/ice", (req, res) => {
   }
 
   res.json({ iceServers, hasTurn: iceServers.length > 1 });
+});
+
+// "Decline" pressed on the Android incoming-call notification while the app is
+// closed (no socket to send call:decline on).
+router.post("/:callId/decline", async (req, res) => {
+  const ok = await declineCallById(req.io, String(req.user._id), req.params.callId);
+  res.json({ ok });
 });
 
 export default router;

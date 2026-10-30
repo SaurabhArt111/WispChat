@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android/media/<package>/  (the WispChat folder on Android 10+) -->
+    <external-media-path name="wisp_media" path="." />
+    <!-- top-level /WispChat on Android 9 and older -->
+    <external-path name="my_images" path="." />
+    <cache-path name="my_cache_images" path="." />
+</paths>

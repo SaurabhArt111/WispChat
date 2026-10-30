@@ -1,3 +1,5 @@
+import { isNative } from "../../native/wispNative";
+import { nativeDownload } from "../../native/nativeMedia";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
@@ -343,7 +345,18 @@ export default function ContactInfoPanel({ conversation, onClose }) {
           <div className="ci-files-list">
             {files.map((a, i) => (
               <div key={a.url + i} className="ci-file-row">
-                <a href={mediaUrl(a.url)} download={a.name} target="_blank" rel="noreferrer" className="ci-file-link">
+                <a
+                  href={mediaUrl(a.url)}
+                  download={a.name}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ci-file-link"
+                  onClick={(e) => {
+                    if (!isNative || a.encrypted) return; // encrypted files are decrypted + saved from the chat itself
+                    e.preventDefault();
+                    nativeDownload({ url: a.url, name: a.name, mimeType: a.mimeType, kind: "file" }, showToast);
+                  }}
+                >
                   <div className="ci-file-icon">
                     <FileIcon size={16} />
                   </div>

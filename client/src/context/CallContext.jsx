@@ -1,3 +1,4 @@
+import { isNative, native } from "../native/wispNative";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
@@ -145,6 +146,13 @@ export function CallProvider({ children }) {
   const { user } = useAuth();
   const { socket } = useSocket();
   const { showToast } = useToast();
+  // Android: "Accept" tapped on the incoming-call notification while the app was closed.
+  const autoAcceptRef = useRef({ callId: null, until: 0 });
+  const [autoAcceptTick, setAutoAcceptTick] = useState(0);
+  const requestAutoAccept = useCallback((callId) => {
+    autoAcceptRef.current = { callId, until: Date.now() + 60000 };
+    setAutoAcceptTick((n) => n + 1); // re-check now: the invite may already be ringing in-app
+  }, []);
 
   // `call` drives the UI; `callRef` mirrors it so socket/WebRTC callbacks
   // always see the *current* call instead of a stale closure (the old
@@ -896,6 +904,28 @@ export function CallProvider({ children }) {
     };
   }, [socket, patchCall]);
 
+  // Auto-join once the invite that the notification pointed at arrives.
+  useEffect(() => {
+    const want = autoAcceptRef.current;
+    if (!want.callId || !call || call.callId !== want.callId) return;
+    if (call.direction === "incoming" && call.status === "ringing" && Date.now() < want.until) {
+      autoAcceptRef.current = { callId: null, until: 0 };
+      acceptCall();
+    }
+  }, [call, acceptCall, autoAcceptTick]);
+
+  // Android: keep the microphone/camera alive (foreground service) while a call is on.
+  const callActive = !!call && call.status !== "ringing";
+  const callVideo = call?.kind === "video";
+  const callTitle = call?.peer?.displayName;
+  useEffect(() => {
+    if (!isNative || !callActive) return undefined;
+    native.startCallService(callTitle ? `Call with ${callTitle}` : "WispChat call", callVideo);
+    return () => {
+      native.stopCallService();
+    };
+  }, [callActive, callVideo, callTitle]);
+
   // Leaving the page mid-call shouldn't leave the other person hanging.
   useEffect(() => {
     const onUnload = () => {
@@ -915,6 +945,7 @@ export function CallProvider({ children }) {
         startCall,
         acceptCall,
         declineCall,
+        requestAutoAccept,
         endCall,
         toggleMute,
         toggleCamera,

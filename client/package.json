@@ -7,9 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:sheets": "node --test \"src/**/__tests__/*.test.js\""
+    "test:sheets": "node --test \"src/**/__tests__/*.test.js\"",
+    "android:build": "vite build --mode android && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "npm run android:build && cap run android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
     "@ffmpeg/core": "^0.12.6",
     "@ffmpeg/ffmpeg": "^0.12.10",
     "@ffmpeg/util": "^0.12.1",
@@ -23,6 +29,7 @@
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@vitejs/plugin-react": "^4.3.1",
     "patch-package": "^8.0.1",
     "vite": "^5.3.1",

@@ -1,0 +1,18 @@
+{
+  "appId": "com.wispchat.app",
+  "appName": "WispChat",
+  "webDir": "dist",
+  "backgroundColor": "#0b0e12",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK"
+    }
+  }
+}

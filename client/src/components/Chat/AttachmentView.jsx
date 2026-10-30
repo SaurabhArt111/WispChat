@@ -1,8 +1,9 @@
+import { nativeDownload } from "../../native/nativeMedia";
+import { useToast } from "../../context/ToastContext";
 import { useState } from "react";
 import { formatBytes } from "../../utils/time";
 import { copyImageToClipboard } from "../../utils/copyImage";
 import { useContextMenu } from "../../context/ContextMenuContext";
-import { useToast } from "../../context/ToastContext";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
 import Lightbox from "./Lightbox";
 import ForwardModal from "./ForwardModal";
@@ -181,11 +182,13 @@ function AttachmentAudio({ message, a }) {
 }
 
 function AttachmentFile({ message, a, onContextMenu }) {
+  const { showToast } = useToast();
   const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
   const canOpen = !!url && !loading && !error;
 
-  function save() {
+  async function save() {
     if (!canOpen) return;
+    if (await nativeDownload({ url, name: a.name, mimeType: a.mimeType, kind: "file" }, showToast)) return; // Android: save into WispChat/Media
     const link = document.createElement("a");
     link.href = url;
     link.download = a.name || "file";

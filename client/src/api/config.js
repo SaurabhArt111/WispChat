@@ -1,6 +1,7 @@
 const backendOrigin = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, "");
 const localBackendOrigin = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?=\/|$)/i;
 
+export const backendOriginUrl = backendOrigin;
 export const apiBaseUrl = `${backendOrigin}/api`;
 export const socketUrl = backendOrigin || undefined;
 

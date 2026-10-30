@@ -46,10 +46,14 @@ const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
 const isProd = process.env.NODE_ENV === "production";
 const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:192\.168\.\d{1,3}\.\d{1,3})|(?:172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}))(:\d+)?$/i;
 
+// The Android app (Capacitor WebView) serves its UI from https://localhost —
+// always allowed so the app works without hand-editing CLIENT_ORIGIN.
+const NATIVE_APP_ORIGINS = ["https://localhost", "http://localhost", "capacitor://localhost"];
+
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // same-origin / non-browser requests (curl, server-to-server)
-    if (CLIENT_ORIGINS.includes(origin)) return callback(null, true);
+    if (CLIENT_ORIGINS.includes(origin) || NATIVE_APP_ORIGINS.includes(origin)) return callback(null, true);
     if (!isProd && LOCAL_ORIGIN_RE.test(origin)) return callback(null, true);
     console.warn(`[cors] rejected origin "${origin}" — add it to CLIENT_ORIGIN in server/.env if this is expected`);
     return callback(new Error("Origin is not allowed by CORS"));

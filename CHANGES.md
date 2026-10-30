@@ -1,3 +1,11 @@
+# WispChat — Android app (Capacitor) + push + closed-app calls
+
+See **ANDROID-SETUP.md**. Adds: `client/android` (Android Studio project, native Java: FCM service, ringing
+full-screen call screen, foreground call service, WhatsApp-style storage folder), `client/src/native/*`
+(plugin wrapper, media mirroring, backup, `useNativeApp`), Settings → General "Notifications & calls / Storage /
+Back up chats" (Android only), server push (`utils/push.js`), `/users/push-token`, `/calls/:id/decline`, and ringing
+calls that survive the callee's app being closed. The browser/PWA build is unchanged.
+
 # WispChat — native-style TopSheet / BottomSheet (mobile module)
 
 | What | Where |

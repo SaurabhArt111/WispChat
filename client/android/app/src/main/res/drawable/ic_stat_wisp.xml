@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome chat-bubble glyph for the status bar (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2C6.48,2 2,6.03 2,11c0,2.6 1.23,4.94 3.2,6.58L4.5,21.5l4.1,-1.9c1.1,0.3 2.2,0.4 3.4,0.4c5.52,0 10,-4.03 10,-9S17.52,2 12,2z" />
+</vector>

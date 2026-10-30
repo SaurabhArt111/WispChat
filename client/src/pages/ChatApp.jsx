@@ -20,6 +20,7 @@ import SettingsModal from "../components/Sidebar/SettingsModal";
 import ChatWindow from "../components/Chat/ChatWindow";
 import ConnectionBanner from "../components/common/ConnectionBanner";
 import useMediaQuery from "../hooks/useMediaQuery";
+import useNativeApp from "../native/useNativeApp";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
 import MobileDrawer from "../components/Sidebar/MobileDrawer";
@@ -57,6 +58,7 @@ export default function ChatApp() {
   const [slide, setSlide] = useState(null); // "next" | "prev" while a tab transition plays
   const settingsReturnRef = useRef("/");
   const shellRef = useRef(null);
+  useNativeApp(); // Android shell: push, folder, back button, call accept (no-op in a browser)
 
   const rawSegment = location.pathname.split("/")[1] || "";
   // /new and /new/call are routes (shareable, back-button friendly). The page

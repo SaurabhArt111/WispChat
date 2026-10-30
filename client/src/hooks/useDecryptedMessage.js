@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { mediaUrl } from "../api/config";
 import { peekDecrypted } from "../utils/decryptCache";
+import { isNative } from "../native/wispNative";
+import { saveAttachment } from "../native/nativeMedia";
 import { fetchMediaBuffer, isKnownMissing, forgetMissing, MediaError } from "../utils/fetchMedia";
 
 /**
@@ -56,7 +58,8 @@ const objectUrlCache = new Map(); // attachment url -> blob object URL, for this
  * short-lived blob: URL.
  */
 export function useDecryptedMediaUrl(message, attachment) {
-  const { e2ee } = useAuth();
+  const { e2ee, user } = useAuth();
+  const sentByMe = !!user && String(message?.sender?._id || message?.sender) === String(user._id);
   const plainUrl = attachment?.url ? mediaUrl(attachment.url) : null;
   const [attempt, setAttempt] = useState(0); // bumped by retry()
   const [state, setState] = useState(() => {
@@ -73,6 +76,8 @@ export function useDecryptedMediaUrl(message, attachment) {
 
     if (!attachment?.encrypted) {
       setState({ url: plainUrl, loading: false, error: false, errorCode: null });
+      // Android: keep a copy in the WispChat folder (Android downloads it itself).
+      if (isNative && attachment?.url) saveAttachment(attachment, { sent: sentByMe, auto: true });
       return undefined;
     }
 
@@ -98,6 +103,7 @@ export function useDecryptedMediaUrl(message, attachment) {
         const blob = new Blob([plainBuffer], { type: attachment.mimeType || "application/octet-stream" });
         const objectUrl = URL.createObjectURL(blob);
         objectUrlCache.set(cacheKey, objectUrl);
+        if (isNative) saveAttachment(attachment, { blob, sent: sentByMe, auto: true }); // decrypted copy → WispChat folder
         if (!cancelled) setState({ url: objectUrl, loading: false, error: false, errorCode: null });
       } catch (err) {
         if (cancelled) return;

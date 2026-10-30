@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import client from "../../api/client";
+import NativeSettingsSection from "./NativeSettingsSection";
 import Avatar from "../common/Avatar";
 import ConfirmModal from "../common/ConfirmModal";
 import WallpaperPicker from "../common/WallpaperPicker";
@@ -212,6 +213,8 @@ function GeneralPanel() {
           </button>
         )}
       </div>
+
+      <NativeSettingsSection />
     </div>
   );
 }

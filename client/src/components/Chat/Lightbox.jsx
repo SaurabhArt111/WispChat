@@ -1,10 +1,12 @@
+import { isNative } from "../../native/wispNative";
+import { nativeDownload } from "../../native/nativeMedia";
+import { useToast } from "../../context/ToastContext";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon, DownloadIcon, ForwardIcon, ExternalLinkIcon, CopyIcon, AlertIcon } from "../common/Icons";
 import { copyImageToClipboard } from "../../utils/copyImage";
 import { useDecryptedMediaUrl } from "../../hooks/useDecryptedMessage";
 import { useContextMenu } from "../../context/ContextMenuContext";
-import { useToast } from "../../context/ToastContext";
 import { QUICK_EMOJI } from "./QuickReactions";
 import "../../styles/lightbox.css";
 
@@ -524,6 +526,11 @@ export default function Lightbox({
             className={`lightbox-icon-btn ${resolvedUrl ? "" : "disabled"}`}
             href={resolvedUrl || undefined}
             download={img.name || "image.png"}
+            onClick={(e) => {
+              if (!isNative || !resolvedUrl) return;
+              e.preventDefault(); // Android WebView ignores <a download> — save into the WispChat folder instead
+              nativeDownload({ url: resolvedUrl, name: img.name, mimeType: img.mimeType, kind: img.kind === "video" ? "video" : "image" }, showToast);
+            }}
             title="Download"
             aria-label="Download"
           >

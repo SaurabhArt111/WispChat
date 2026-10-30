@@ -1,3 +1,4 @@
+import { unregisterPush } from "../native/push";
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import client from "../api/client";
 import {
@@ -215,6 +216,7 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(async () => {
+    await unregisterPush(); // Android: stop pushes to this phone (no-op elsewhere)
     try {
       await client.post("/auth/logout");
     } catch (e) {

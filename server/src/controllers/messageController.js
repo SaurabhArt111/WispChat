@@ -2,6 +2,7 @@ import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 import Status from "../models/Status.js";
 import { kindFromMime } from "../middleware/upload.js";
+import { pushNewMessage } from "../utils/push.js";
 
 // Recipients need the sender's public key to unwrap the per-message
 // encryption key from a message's `keys` envelope, so it rides along
@@ -171,6 +172,7 @@ export async function sendMessage(req, res) {
 
   const io = req.io;
   conv.participants.forEach((uid) => io?.to(`user:${uid}`).emit("message:new", msg));
+  pushNewMessage(conv, msg).catch(() => {}); // Android notification for devices that aren't looking at the app
 
   res.status(201).json({ message: msg });
 }
@@ -429,6 +431,7 @@ export async function forwardMessage(req, res) {
     await conv.save();
 
     conv.participants.forEach((uid) => req.io?.to(`user:${uid}`).emit("message:new", msg));
+    pushNewMessage(conv, msg).catch(() => {});
     results.push(msg);
   }
 
@@ -453,6 +456,7 @@ export async function forwardMessage(req, res) {
     await conv.save();
 
     conv.participants.forEach((uid) => req.io?.to(`user:${uid}`).emit("message:new", msg));
+    pushNewMessage(conv, msg).catch(() => {});
     results.push(msg);
   }
 

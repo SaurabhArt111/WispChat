@@ -11,6 +11,8 @@ import {
   respondFriendRequest,
   toggleBlock,
   getBlockedContacts,
+  registerPushToken,
+  removePushToken,
 } from "../controllers/userController.js";
 
 const router = Router();
@@ -26,5 +28,7 @@ router.get("/friend-requests", listFriendRequests);
 router.post("/friend-requests/:requestId/respond", respondFriendRequest);
 router.get("/blocked", getBlockedContacts);
 router.post("/block/:userId", toggleBlock);
+router.post("/push-token", registerPushToken);
+router.delete("/push-token", removePushToken);
 
 export default router;
