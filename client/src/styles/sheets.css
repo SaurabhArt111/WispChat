@@ -1,0 +1,251 @@
+/* ------------------------------------------------------------------
+   TopSheet / BottomSheet (components/common/Sheet).
+   Position is driven from JS (transform on .wsheet, --wsheet-p on the
+   root for the backdrop) so nothing here animates; CSS only lays out.
+------------------------------------------------------------------- */
+.wsheet-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* bottom is set inline = on-screen keyboard height */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.wsheet-root.is-measuring {
+  visibility: hidden;
+}
+
+.wsheet-root.is-inline {
+  pointer-events: none;
+}
+
+.wsheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 6, 9, 0.55);
+  opacity: var(--wsheet-p, 0);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wsheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: var(--wsheet-max);
+  background: var(--surface-2);
+  color: var(--text);
+  outline: none;
+  pointer-events: auto;
+  contain: layout style;
+}
+
+.wsheet--tall {
+  height: var(--wsheet-max);
+}
+
+.wsheet.is-moving {
+  will-change: transform;
+}
+
+.wsheet--bottom {
+  bottom: 0;
+  border-radius: 22px 22px 0 0;
+  border-top: 1px solid var(--border-glass);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* a spring may overshoot past "expanded" by a few px: keep the gap filled */
+.wsheet--bottom::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--surface-2);
+}
+
+.wsheet--top {
+  top: 0;
+  border-radius: 0 0 22px 22px;
+  border-bottom: 1px solid var(--border-glass);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.wsheet-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: var(--wsheet-max);
+  background: var(--surface-2);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.wsheet--tall .wsheet-panel {
+  height: 100%;
+}
+
+.wsheet--bottom .wsheet-panel {
+  border-radius: 22px 22px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.wsheet--bottom.kb-open .wsheet-panel {
+  padding-bottom: 0;
+}
+
+.wsheet--top .wsheet-panel {
+  border-radius: 0 0 22px 22px;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: 26px; /* room for the grip that sits on the bottom edge */
+}
+
+/* ---- grip / header: the always-draggable zones ---- */
+.wsheet-grip,
+.wsheet-header {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.wsheet-grip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  outline: none;
+}
+
+.wsheet--top .wsheet-grip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.wsheet-grip-bar {
+  width: 38px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border);
+  transition: background var(--fast) var(--ease), width var(--fast) var(--ease);
+}
+
+.wsheet-grip:hover .wsheet-grip-bar,
+.wsheet-grip:focus-visible .wsheet-grip-bar {
+  width: 48px;
+  background: var(--text-faint);
+}
+
+.wsheet-grip:focus-visible .wsheet-grip-bar {
+  background: var(--wisp);
+  box-shadow: 0 0 0 3px var(--wisp-dim);
+}
+
+.wsheet-root.is-dragging .wsheet-grip,
+.wsheet-root.is-dragging .wsheet-header {
+  cursor: grabbing;
+}
+
+.wsheet-header {
+  flex: none;
+}
+
+/* ---- scrolling body: the nested-scroll child ---- */
+.wsheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain; /* never chain into the page / pull-to-refresh */
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.wsheet-root.is-dragging .wsheet-inner {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.wsheet-footer {
+  flex: none;
+}
+
+.wsheet-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+html.wsheet-open {
+  overscroll-behavior: none;
+}
+
+html.wsheet-dragging,
+html.wsheet-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+/* ---- adapting existing content that now lives in a sheet ---- */
+.wsheet .post-sheet-head {
+  padding: 4px 16px 8px;
+}
+
+.wsheet .post-sheet-body {
+  flex: none;
+  min-height: 80px;
+  overflow: visible; /* the sheet body scrolls, not this wrapper */
+}
+
+.wsheet .post-sheet .post-viewer-form,
+.wsheet-footer .post-viewer-form {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.wsheet .action-sheet-card {
+  max-width: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 4px 16px 12px;
+  animation: none;
+}
+
+.wsheet .react-sheet-picker {
+  padding: 0 8px 8px;
+}
+
+@media (min-width: 640px) {
+  .wsheet--bottom {
+    bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wsheet-grip-bar {
+    transition: none;
+  }
+}
+
+.more-sheet-list {
+  padding: 2px 12px 12px;
+}

@@ -1,4 +1,6 @@
 import { ArchiveIcon, LayersIcon, MegaphoneIcon, SettingsIcon, UsersIcon } from "../common/Icons";
+import BottomSheet from "../common/Sheet/BottomSheet";
+import TopSheet from "../common/Sheet/TopSheet";
 import "../../styles/bottomNav.css";
 
 const MORE_ITEMS = [
@@ -8,36 +10,42 @@ const MORE_ITEMS = [
   { id: "broadcast", label: "Broadcast Lists", icon: MegaphoneIcon },
 ];
 
-export default function MoreMenuSheet({ open, onClose, onChangeView, onOpenSettings }) {
-  if (!open) return null;
+/**
+ * The "More" menu. Drag it away (or tap outside / Back / Esc) to dismiss.
+ * `from="top"` drops it down from the top edge — handy when it is opened from
+ * the MobileMoreButton in a panel header; the default rises from the bottom.
+ */
+export default function MoreMenuSheet({ open, onClose, onChangeView, onOpenSettings, from = "bottom" }) {
+  const Sheet = from === "top" ? TopSheet : BottomSheet;
   return (
-    <div className="bottom-nav-more-overlay" onClick={onClose}>
-      <div className="bottom-nav-more-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="bottom-nav-more-handle" />
-        {MORE_ITEMS.map((m) => (
+    <Sheet open={open} fit title="More" onClose={onClose}>
+      {({ close }) => (
+        <div className="more-sheet-list">
+          {MORE_ITEMS.map((m) => (
+            <button
+              key={m.id}
+              className="bottom-nav-more-item"
+              onClick={() => {
+                onChangeView(m.id);
+                close();
+              }}
+            >
+              <m.icon size={19} />
+              <span>{m.label}</span>
+            </button>
+          ))}
           <button
-            key={m.id}
             className="bottom-nav-more-item"
             onClick={() => {
-              onChangeView(m.id);
-              onClose();
+              close();
+              onOpenSettings();
             }}
           >
-            <m.icon size={19} />
-            <span>{m.label}</span>
+            <SettingsIcon size={19} />
+            <span>Settings</span>
           </button>
-        ))}
-        <button
-          className="bottom-nav-more-item"
-          onClick={() => {
-            onClose();
-            onOpenSettings();
-          }}
-        >
-          <SettingsIcon size={19} />
-          <span>Settings</span>
-        </button>
-      </div>
-    </div>
+        </div>
+      )}
+    </Sheet>
   );
 }

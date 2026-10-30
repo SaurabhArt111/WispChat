@@ -5,6 +5,7 @@ import Avatar from "../common/Avatar";
 import { SafeImage, SafeVideo } from "../common/SafeMedia";
 import { mediaUrl } from "../../api/config";
 import { addPostComment, deletePost, deletePostComment, updatePost, updatePostComment } from "../../api/posts";
+import BottomSheet from "../common/Sheet/BottomSheet";
 import usePostLike from "../../hooks/usePostLike";
 import useDoubleTap from "../../hooks/useDoubleTap";
 import {
@@ -85,64 +86,71 @@ function CommentsSheet({ post, onChange, onClose }) {
   }
 
   return (
-    <div className="post-sheet-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="post-sheet" role="dialog" aria-label="Comments">
+    <BottomSheet
+      title="Comments"
+      onClose={onClose}
+      snapStates={["hidden", "half", "expanded"]}
+      defaultState="half"
+      header={({ close }) => (
         <div className="post-sheet-head">
           <strong>Comments · {post.commentCount}</strong>
-          <button className="icon-btn btn-sm" onClick={onClose} title="Close">
+          <button className="icon-btn btn-sm" onClick={close} title="Close">
             <CloseIcon size={16} />
           </button>
         </div>
-        <div className="post-sheet-body">
-          {comments.length === 0 ? (
-            <p className="post-viewer-empty">No comments yet. Be the first.</p>
-          ) : (
-            comments.map((c) => (
-              <div className="post-comment" key={c._id}>
-                <Avatar user={c.user} size={30} />
-                {editingId === c._id ? (
-                  <div className="post-comment-edit">
-                    <input
-                      className="input"
-                      autoFocus
-                      value={draft}
-                      maxLength={500}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && saveEdit(c)}
-                    />
-                    <button className="icon-btn btn-sm" onClick={() => saveEdit(c)} title="Save"><CheckIcon size={14} /></button>
-                    <button className="icon-btn btn-sm" onClick={() => setEditingId(null)} title="Cancel"><CloseIcon size={14} /></button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="post-comment-body">
-                      <span className="post-comment-name">{c.user?.displayName}</span> {c.text}
-                      {c.edited && <span className="post-edited-tag"> · edited</span>}
-                    </div>
-                    {c.mine && (
-                      <button className="icon-btn btn-sm" onClick={() => { setEditingId(c._id); setDraft(c.text); }} title="Edit comment">
-                        <EditIcon size={13} />
-                      </button>
-                    )}
-                    {(c.mine || isOwner) && (
-                      <button className="icon-btn btn-sm" onClick={() => remove(c)} title="Delete comment">
-                        <TrashIcon size={13} />
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+      )}
+      footer={
         <form className="post-viewer-form" onSubmit={submit}>
           <input className="input" placeholder="Add a comment…" value={text} maxLength={500} onChange={(e) => setText(e.target.value)} />
           <button className="icon-btn primary-icon-btn" type="submit" disabled={!text.trim() || busy} title="Post comment">
             <SendPostIcon size={16} />
           </button>
         </form>
+      }
+    >
+      <div className="post-sheet-body">
+        {comments.length === 0 ? (
+          <p className="post-viewer-empty">No comments yet. Be the first.</p>
+        ) : (
+          comments.map((c) => (
+            <div className="post-comment" key={c._id}>
+              <Avatar user={c.user} size={30} />
+              {editingId === c._id ? (
+                <div className="post-comment-edit">
+                  <input
+                    className="input"
+                    autoFocus
+                    value={draft}
+                    maxLength={500}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveEdit(c)}
+                  />
+                  <button className="icon-btn btn-sm" onClick={() => saveEdit(c)} title="Save"><CheckIcon size={14} /></button>
+                  <button className="icon-btn btn-sm" onClick={() => setEditingId(null)} title="Cancel"><CloseIcon size={14} /></button>
+                </div>
+              ) : (
+                <>
+                  <div className="post-comment-body">
+                    <span className="post-comment-name">{c.user?.displayName}</span> {c.text}
+                    {c.edited && <span className="post-edited-tag"> · edited</span>}
+                  </div>
+                  {c.mine && (
+                    <button className="icon-btn btn-sm" onClick={() => { setEditingId(c._id); setDraft(c.text); }} title="Edit comment">
+                      <EditIcon size={13} />
+                    </button>
+                  )}
+                  {(c.mine || isOwner) && (
+                    <button className="icon-btn btn-sm" onClick={() => remove(c)} title="Delete comment">
+                      <TrashIcon size={13} />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          ))
+        )}
       </div>
-    </div>
+    </BottomSheet>
   );
 }
 
@@ -181,37 +189,41 @@ function OwnerSheet({ post, onChange, onClose, onDeleted }) {
   }
 
   return (
-    <div className="post-sheet-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="post-sheet" role="dialog" aria-label="Edit post">
+    <BottomSheet
+      title="Edit post"
+      fit
+      onClose={onClose}
+      header={({ close }) => (
         <div className="post-sheet-head">
           <strong>Your post</strong>
-          <button className="icon-btn btn-sm" onClick={onClose} title="Close"><CloseIcon size={16} /></button>
+          <button className="icon-btn btn-sm" onClick={close} title="Close"><CloseIcon size={16} /></button>
         </div>
-        <div className="post-sheet-body post-edit-box">
-          <textarea
-            className="input post-upload-caption"
-            rows={3}
-            maxLength={500}
-            value={draft}
-            placeholder="Write a caption…"
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          <div className="post-edit-actions">
-            <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()} disabled={saving}>
-              <ImageIcon size={14} /> {file ? file.name.slice(0, 18) : "Change photo/video"}
-            </button>
-            <span className="post-edit-spacer" />
-            <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
-              <CheckIcon size={14} /> {saving ? (file ? `${Math.round(progress * 100)}%` : "Saving…") : "Save"}
-            </button>
-          </div>
-          <button className="btn btn-ghost btn-sm post-danger-btn" onClick={remove}>
-            <TrashIcon size={14} /> Delete post
+      )}
+    >
+      <div className="post-sheet-body post-edit-box">
+        <textarea
+          className="input post-upload-caption"
+          rows={3}
+          maxLength={500}
+          value={draft}
+          placeholder="Write a caption…"
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <div className="post-edit-actions">
+          <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()} disabled={saving}>
+            <ImageIcon size={14} /> {file ? file.name.slice(0, 18) : "Change photo/video"}
+          </button>
+          <span className="post-edit-spacer" />
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+            <CheckIcon size={14} /> {saving ? (file ? `${Math.round(progress * 100)}%` : "Saving…") : "Save"}
           </button>
         </div>
+        <button className="btn btn-ghost btn-sm post-danger-btn" onClick={remove}>
+          <TrashIcon size={14} /> Delete post
+        </button>
       </div>
-    </div>
+    </BottomSheet>
   );
 }
 
