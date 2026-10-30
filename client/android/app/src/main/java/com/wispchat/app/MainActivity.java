@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.view.WindowManager;
 
 import androidx.activity.EdgeToEdge;
+import androidx.core.splashscreen.SplashScreen;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -13,6 +14,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        SplashScreen.installSplashScreen(this);
         registerPlugin(WispNativePlugin.class); // must be before super.onCreate
         EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
