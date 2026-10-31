@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { haptic } from "../../utils/haptics";
 import { Virtuoso } from "react-virtuoso";
 import { useChat } from "../../context/ChatContext";
 import { useAuth } from "../../context/AuthContext";
@@ -18,7 +20,7 @@ const START_INDEX = 1_000_000;
 
 export default function MessageList({ conversation, onReply, onEdit, searchQuery = "" }) {
   const chat = useChat();
-  const { messages, hasMore, loadMoreMessages, typing } = chat;
+  const { messages, hasMore, loadMoreMessages, typing, messageLoadState, retryMessages, unreadAtOpen } = chat;
   const { user, e2ee } = useAuth();
   const { showToast } = useToast();
   const typingUsers = Object.values(typing[conversation._id] || {});
@@ -39,6 +41,12 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
     []
   );
   const virtuosoRef = useRef(null);
+  const wrapRef = useRef(null);
+  // Self-healing: if there are messages but the virtualized list ended up
+  // rendering none of them (it measured a 0-height viewport — seen on some
+  // Android WebViews), remount it. Bounded, and invisible when all is well.
+  const [listKey, setListKey] = useState(0);
+  const healTries = useRef(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
@@ -72,6 +80,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
       reactToMessage: (...a) => latest.current.chat.reactToMessage(...a),
       requestDeleteMessage: (...a) => latest.current.chat.requestDeleteMessage(...a),
       undoDeleteMessage: (...a) => latest.current.chat.undoDeleteMessage(...a),
+      retryFailed: (...a) => latest.current.chat.retryFailed?.(...a),
       onEndSelect: () => setSelection(null),
       onStartSelect: (id) => setSelection((cur) => (cur ? (cur.includes(id) ? cur : [...cur, id]) : [id])),
       onToggleSelect: (id) =>
@@ -84,7 +93,37 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
     []
   );
 
-  // Leave select mode with Esc, and when switching chats.
+  // Selecting messages is a route (/chat/:id/selected): the system Back button
+  // and Esc leave select mode instead of leaving the chat — like WhatsApp.
+  //   • first message selected  → push …/selected
+  //   • Back / Esc / swipe-back → route pops → selection clears
+  //   • Cancel / action done    → selection clears → route pops
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onSelectedRoute = /\/selected\/?$/.test(location.pathname);
+  const enteredSelectRoute = useRef(false);
+  useEffect(() => {
+    if (selectMode && !onSelectedRoute) {
+      if (!enteredSelectRoute.current) {
+        enteredSelectRoute.current = true;
+        haptic("heavy"); // entering select mode, like a long-press on a native list
+        navigate(`${location.pathname.replace(/\/$/, "")}/selected`, { state: { ...(location.state || {}), viaSelect: true } });
+      } else {
+        // the route went away underneath us (Back) → leave select mode
+        enteredSelectRoute.current = false;
+        setSelection(null);
+      }
+    } else if (!selectMode && onSelectedRoute) {
+      enteredSelectRoute.current = false;
+      if (location.state?.viaSelect) navigate(-1);
+      else navigate(location.pathname.replace(/\/selected\/?$/, ""), { replace: true });
+    } else if (selectMode && onSelectedRoute) {
+      enteredSelectRoute.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectMode, onSelectedRoute]);
+
+  // Esc on a keyboard = the same as Back.
   useEffect(() => {
     if (!selectMode) return undefined;
     const onKey = (e) => e.key === "Escape" && setSelection(null);
@@ -161,6 +200,19 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
   // per row so itemContent doesn't need neighbour lookups.
   const rows = useMemo(() => {
     let lastDay = null;
+    // "N unread messages" divider: the unread ones are the newest N that aren't mine
+    let unreadIndex = -1;
+    if (unreadAtOpen > 0) {
+      let seen = 0;
+      for (let i = displayedMessages.length - 1; i >= 0; i--) {
+        const m = displayedMessages[i];
+        if ((m.sender?._id || m.sender) === user._id) continue;
+        if (++seen === unreadAtOpen) {
+          unreadIndex = i;
+          break;
+        }
+      }
+    }
     return displayedMessages.map((msg, i) => {
       const day = formatDayLabel(msg.createdAt);
       const showDay = day !== lastDay;
@@ -172,9 +224,9 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
         prev &&
         (prev.sender?._id || prev.sender) === (msg.sender?._id || msg.sender) &&
         new Date(msg.createdAt) - new Date(prev.createdAt) < 3 * 60 * 1000;
-      return { key: msg._id || msg.clientId || i, msg, day, showDay, isMine, grouped };
+      return { key: msg._id || msg.clientId || i, msg, day, showDay, isMine, grouped, unread: i === unreadIndex ? unreadAtOpen : 0 };
     });
-  }, [displayedMessages, user._id]);
+  }, [displayedMessages, user._id, unreadAtOpen]);
 
   // Keeps scroll position steady when older history is prepended: lowering
   // firstItemIndex by the number of prepended rows keeps every visible row's
@@ -318,6 +370,18 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
   useEffect(() => () => clearTimeout(scrollIdleRef.current), []);
 
   const showEmptySearch = searchQuery && rows.length === 0;
+  useEffect(() => {
+    healTries.current = 0;
+  }, [conversation._id]);
+  useEffect(() => {
+    if (!rows.length || showEmptySearch) return undefined;
+    const t = setTimeout(() => {
+      const wrap = wrapRef.current;
+      if (!wrap || wrap.querySelector(".message-row-item")) return;
+      if (healTries.current++ < 4) setListKey((k) => k + 1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [rows.length, listKey, showEmptySearch, conversation._id]);
   const typingKey = typingUsers.join(", ");
 
   const components = useMemo(
@@ -362,7 +426,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
 
   return (
     <GalleryProvider value={gallery}>
-    <div className="message-list-wrap" style={wallpaperStyle}>
+    <div className="message-list-wrap" style={wallpaperStyle} ref={wrapRef}>
       {showEmptySearch ? (
         <div className="message-list">
           <div className="messages-empty-search">
@@ -371,6 +435,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
         </div>
       ) : (
         <Virtuoso
+          key={listKey}
           ref={virtuosoRef}
           className="message-list"
           data={rows}
@@ -405,6 +470,11 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
                   <span>{row.day}</span>
                 </div>
               )}
+              {row.unread > 0 && (
+                <div className="unread-divider" role="separator">
+                  <span>{row.unread === 1 ? "1 unread message" : `${row.unread} unread messages`}</span>
+                </div>
+              )}
               <MessageBubble
                 message={row.msg}
                 isMine={row.isMine}
@@ -418,6 +488,7 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
                 reactToMessage={stable.reactToMessage}
                 requestDeleteMessage={stable.requestDeleteMessage}
                 undoDeleteMessage={stable.undoDeleteMessage}
+                retryFailed={stable.retryFailed}
                 selectMode={selectMode}
                 isSelected={!!selection?.includes(row.msg._id)}
                 onStartSelect={stable.onStartSelect}
@@ -494,6 +565,23 @@ export default function MessageList({ conversation, onReply, onEdit, searchQuery
           <ChevronDownIcon size={18} />
           {newCount > 0 && <span className="scroll-bottom-badge">{newCount > 99 ? "99+" : newCount}</span>}
         </button>
+      )}
+      {rows.length === 0 && !searchQuery && messageLoadState === "loading" && (
+        <div className="msg-skeleton" aria-busy="true" aria-label="Loading messages">
+          {[62, 40, 74, 52, 34, 66].map((w, i) => (
+            <div key={i} className={`msg-skeleton-row ${i % 3 === 1 ? "mine" : ""}`}>
+              <div className="msg-skeleton-bubble" style={{ width: `${w}%` }} />
+            </div>
+          ))}
+        </div>
+      )}
+      {rows.length === 0 && !searchQuery && messageLoadState === "error" && (
+        <div className="msg-load-error" role="alert">
+          <p>Couldn’t load this chat.</p>
+          <button className="btn btn-primary btn-sm" onClick={() => retryMessages()}>
+            Try again
+          </button>
+        </div>
       )}
     </div>
     </GalleryProvider>

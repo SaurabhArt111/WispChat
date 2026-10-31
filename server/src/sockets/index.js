@@ -2,9 +2,13 @@ import { verifyToken } from "../utils/jwt.js";
 import User from "../models/User.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
-import { pushCallEnded, pushEnabled, pushIncomingCall } from "../utils/push.js";
+import { attachIo, emitCallTo, pushCallEnded, pushEnabled, pushIncomingCall } from "../utils/push.js";
 
 const onlineUsers = new Map(); // userId -> Set(socketIds)
+// Presence-less sockets held open by the Android app's background service so it
+// can notify / ring with the app closed. They are NOT "online" (no presence,
+// no typing, no read state) — they only receive `push` events.
+const bgUsers = new Map(); // userId -> Set(socketIds)
 
 // Calls are signaled entirely through sockets (offer/answer/ICE relay) —
 // the server never touches audio/video, it only passes SDP/ICE metadata
@@ -129,8 +133,29 @@ export function initSockets(io) {
     }
   });
 
+  attachIo(io);
+
   io.on("connection", async (socket) => {
     const userId = String(socket.user._id);
+
+    if (socket.handshake.auth?.background) {
+      socket.join(`bg:${userId}`);
+      if (!bgUsers.has(userId)) bgUsers.set(userId, new Set());
+      bgUsers.get(userId).add(socket.id);
+      socket.on("disconnect", () => {
+        const set = bgUsers.get(userId);
+        set?.delete(socket.id);
+        if (set && !set.size) bgUsers.delete(userId);
+      });
+      // a call that is ringing right now should ring on this phone too
+      const ringingId = userActiveCall.get(userId);
+      const ringing = ringingId && activeCalls.get(ringingId);
+      if (ringing && ringing.calleeId === userId && ringing.status === "ringing" && ringing.incoming) {
+        emitCallTo(socket, { callId: ringingId, conversationId: ringing.conversationId, kind: ringing.kind, from: ringing.incoming.from });
+      }
+      return;
+    }
+
     socket.join(`user:${userId}`);
     socket.join("explore");
 
@@ -222,7 +247,7 @@ export function initSockets(io) {
       // Callee has no live connection: if they have the Android app, ring it via
       // push (full-screen call screen). Otherwise nobody can be rung — log a miss.
       const callee = await User.findById(calleeId).select("pushTokens");
-      const canPush = !onlineUsers.has(calleeId) && (callee?.pushTokens?.length || 0) > 0 && (await pushEnabled());
+      const canPush = !onlineUsers.has(calleeId) && (bgUsers.has(calleeId) || ((callee?.pushTokens?.length || 0) > 0 && (await pushEnabled())));
       if (!onlineUsers.has(calleeId) && !canPush) {
         socket.emit("call:unavailable", { callId });
         await logCallMessage(io, { conversationId, callerId: userId, kind, status: "missed" });

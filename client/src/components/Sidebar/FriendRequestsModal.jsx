@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import client from "../../api/client";
 import Avatar from "../common/Avatar";
-import Modal from "../common/Modal";
+import TopSheet from "../common/Sheet/TopSheet";
 import { useToast } from "../../context/ToastContext";
 import { CheckIcon, CloseIcon, BellIcon } from "../common/Icons";
 import useLiveRefresh from "../../hooks/useLiveRefresh";
@@ -43,7 +43,20 @@ export default function FriendRequestsModal({ onClose, onCountChange }) {
   }
 
   return (
-    <Modal title="Friend Requests" onClose={onClose}>
+    <TopSheet
+      title="Friend Requests"
+      fit
+      onClose={onClose}
+      header={({ close }) => (
+        <div className="modal-header sheet-modal-header">
+          <h2>Friend Requests</h2>
+          <button className="icon-btn btn-sm" onClick={close} title="Close (Esc)">
+            <CloseIcon size={18} />
+          </button>
+        </div>
+      )}
+    >
+      <div className="modal-body sheet-modal-body">
       <div className="auth-tabs" style={{ marginBottom: "12px" }}>
         <button
           className={tab === "incoming" ? "active" : ""}
@@ -107,6 +120,7 @@ export default function FriendRequestsModal({ onClose, onCountChange }) {
           ))}
         </div>
       )}
-    </Modal>
+      </div>
+    </TopSheet>
   );
 }

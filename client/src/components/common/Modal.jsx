@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "./Icons";
+import BottomSheet from "./Sheet/BottomSheet";
+import useMediaQuery from "../../hooks/useMediaQuery";
 
 export default function Modal({ title, onClose, children, footer, width }) {
+  const isPhone = useMediaQuery("(max-width: 858px)");
   // On phones the sheet slides back down before it unmounts (see
   // styles/mobileSheets.css); on desktop it closes immediately.
   const [closing, setClosing] = useState(false);
@@ -19,12 +22,37 @@ export default function Modal({ title, onClose, children, footer, width }) {
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useEffect(() => {
+    if (isPhone) return undefined; // the bottom sheet handles Esc / Back itself
     function onKeyDown(e) {
       if (e.key === "Escape") requestClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [requestClose]);
+  }, [requestClose, isPhone]);
+
+  // Phones: every dialog is a draggable Android-style bottom sheet — drag the
+  // grip/header or pull the content down to dismiss, Back closes it, and it
+  // rides above the keyboard. (The hooks above still run; they're inert here.)
+  if (isPhone) {
+    return (
+      <BottomSheet
+        title={title}
+        fit
+        onClose={onClose}
+        header={({ close }) => (
+          <div className="modal-header sheet-modal-header">
+            <h2>{title}</h2>
+            <button className="icon-btn btn-sm" onClick={close} title="Close">
+              <CloseIcon size={18} />
+            </button>
+          </div>
+        )}
+        footer={footer ? <div className="modal-footer">{footer}</div> : undefined}
+      >
+        <div className="modal-body sheet-modal-body">{children}</div>
+      </BottomSheet>
+    );
+  }
 
   // Rendered into document.body via a portal rather than in place: if any
   // ancestor in the component tree has a CSS transform/filter/contain

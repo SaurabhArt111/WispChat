@@ -9,6 +9,9 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Base64;
+import android.graphics.Color;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
 
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.FileProvider;
@@ -96,12 +99,14 @@ public class WispNativePlugin extends Plugin {
         String apiBase = call.getString("apiBase");
         if (token == null || apiBase == null) { call.reject("token and apiBase required"); return; }
         WispPrefs.setSession(getContext(), token, apiBase);
+        if (WispPrefs.backgroundEnabled(getContext())) WispSocketService.start(getContext());
         call.resolve();
     }
 
     @PluginMethod
     public void clearSession(PluginCall call) {
         WispPrefs.clearSession(getContext());
+        WispSocketService.stop(getContext());
         call.resolve();
     }
 
@@ -127,6 +132,76 @@ public class WispNativePlugin extends Plugin {
         if (pendingLaunchAction != null) ret.put("action", pendingLaunchAction);
         pendingLaunchAction = null;
         call.resolve(ret);
+    }
+
+    // ------------------------------------------------- background connection
+
+    /** On/off for the Firebase-free background connection (Settings). */
+    @PluginMethod
+    public void setBackgroundEnabled(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("enabled", true));
+        WispPrefs.setBackgroundEnabled(getContext(), on);
+        if (on && WispPrefs.token(getContext()) != null) WispSocketService.start(getContext());
+        else WispSocketService.stop(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getBackgroundStatus(PluginCall call) {
+        Context c = getContext();
+        JSObject ret = new JSObject();
+        ret.put("enabled", WispPrefs.backgroundEnabled(c));
+        ret.put("connected", WispSocketService.connected);
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        ret.put("ignoringBatteryOptimizations", pm != null && pm.isIgnoringBatteryOptimizations(c.getPackageName()));
+        call.resolve(ret);
+    }
+
+    /** Asks Android to exempt WispChat from battery optimisation (needed for reliable delivery in Doze). */
+    @PluginMethod
+    public void requestIgnoreBatteryOptimizations(PluginCall call) {
+        try {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getContext().getPackageName()))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Couldn't open battery settings");
+        }
+    }
+
+    // ----------------------------------------------------- native feel
+
+    /** kind: tick | click | heavy | success | reject — a small vibration like a native control. */
+    @PluginMethod
+    public void haptic(PluginCall call) {
+        final String kind = call.getString("kind", "tick");
+        getBridge().executeOnMainThread(() -> {
+            View v = getBridge().getWebView();
+            int f;
+            switch (kind) {
+                case "heavy": f = HapticFeedbackConstants.LONG_PRESS; break;
+                case "click": f = HapticFeedbackConstants.VIRTUAL_KEY; break;
+                case "success": f = Build.VERSION.SDK_INT >= 30 ? HapticFeedbackConstants.CONFIRM : HapticFeedbackConstants.VIRTUAL_KEY; break;
+                case "reject": f = Build.VERSION.SDK_INT >= 30 ? HapticFeedbackConstants.REJECT : HapticFeedbackConstants.LONG_PRESS; break;
+                default: f = Build.VERSION.SDK_INT >= 27 ? HapticFeedbackConstants.CLOCK_TICK : HapticFeedbackConstants.KEYBOARD_TAP;
+            }
+            v.performHapticFeedback(f);
+        });
+        call.resolve();
+    }
+
+    /** Colour behind the status/navigation bars, e.g. "#0b0e12". */
+    @PluginMethod
+    public void setSystemBarColor(PluginCall call) {
+        try {
+            int color = Color.parseColor(call.getString("color", "#0B0E12"));
+            MainActivity a = (MainActivity) getActivity();
+            if (a != null) a.setSystemBarBackground(color);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Bad colour");
+        }
     }
 
     // ------------------------------------------------------------- push

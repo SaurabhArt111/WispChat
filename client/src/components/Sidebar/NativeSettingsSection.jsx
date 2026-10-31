@@ -14,6 +14,7 @@ const fmtBytes = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n > 10
 export default function NativeSettingsSection() {
   const { showToast } = useToast();
   const [status, setStatus] = useState(null);
+  const [bg, setBg] = useState(null);
   const [storage, setStorage] = useState(null);
   const [backups, setBackups] = useState([]);
   const [busy, setBusy] = useState("");
@@ -21,6 +22,7 @@ export default function NativeSettingsSection() {
 
   const refresh = useCallback(async () => {
     setStatus(await native.getNotificationStatus());
+    setBg(await native.getBackgroundStatus());
     setStorage(await native.getStorageInfo());
     setBackups(await native.listFiles("Backups"));
   }, []);
@@ -36,6 +38,12 @@ export default function NativeSettingsSection() {
     if (!s?.granted) native.openSettings("notifications"); // already denied once: only Settings can change it
     await registerPush();
     refresh();
+  }
+
+  async function toggleBackground(on) {
+    await native.setBackgroundEnabled(on);
+    setTimeout(refresh, 1200); // give the service a moment to connect
+    setBg((b) => ({ ...(b || {}), enabled: on }));
   }
 
   async function runBackup() {
@@ -57,6 +65,19 @@ export default function NativeSettingsSection() {
   return (
     <>
       <div className="settings-section-title" style={{ marginTop: 20 }}>Notifications &amp; calls</div>
+      <label className="settings-toggle-row" style={{ display: "flex", justifyContent: "space-between", gap: 12, cursor: "pointer", marginBottom: 6 }}>
+        <span>
+          Stay connected in the background
+          <small style={{ display: "block", color: "var(--text-dim)" }}>
+            Notifications and calls even when the app is closed — no Google services needed.
+          </small>
+        </span>
+        <input type="checkbox" checked={!!bg?.enabled} onChange={(e) => toggleBackground(e.target.checked)} />
+      </label>
+      <div className="settings-kv">
+        <span>Background connection</span>
+        <strong>{!bg ? "…" : !bg.enabled ? "Off" : bg.connected ? "Connected" : "Connecting…"}</strong>
+      </div>
       <div className="settings-kv">
         <span>Message notifications</span>
         <strong>{status ? (status.granted ? "On" : "Off") : "…"}</strong>
@@ -79,6 +100,11 @@ export default function NativeSettingsSection() {
         )}
         {status && !status.fullScreenIntent && (
           <button className="btn btn-ghost btn-sm" onClick={() => native.openSettings("fullscreen")}>Allow call screen</button>
+        )}
+        {bg && !bg.ignoringBatteryOptimizations && (
+          <button className="btn btn-primary btn-sm" onClick={() => native.requestIgnoreBatteryOptimizations()}>
+            Allow unrestricted battery
+          </button>
         )}
         <button className="btn btn-ghost btn-sm" onClick={() => native.openSettings("battery")}>Battery settings</button>
       </div>

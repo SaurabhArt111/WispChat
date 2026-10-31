@@ -23,6 +23,7 @@ import {
 } from "../common/Icons";
 import { formatListTime } from "../../utils/time";
 import useLiveRefresh from "../../hooks/useLiveRefresh";
+import { readLocalCalls, saveCalls } from "../../utils/callLog";
 import "../../styles/railPanels.css";
 
 // First paint only needs one screenful; older logs stream in on scroll.
@@ -215,6 +216,23 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
   const [favPeople, setFavPeople] = useState([]);
   const [retry, setRetry] = useState(0);
   const reloadRef = useRef(() => {});
+  // The full history lives on the phone; the list pages through it locally.
+  const localAllRef = useRef([]);
+
+  // Local-first: the on-device log paints immediately (and is all there is offline).
+  useEffect(() => {
+    let alive = true;
+    readLocalCalls(user._id).then((local) => {
+      if (!alive || !local.length) return;
+      localAllRef.current = local;
+      setCalls((prev) => (prev.length >= Math.min(local.length, PAGE) ? prev : local.slice(0, PAGE)));
+      setHasMore(local.length > PAGE);
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [user._id]);
 
   const load = useCallback(
     async ({ silent = false } = {}) => {
@@ -222,6 +240,9 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
       try {
         const res = await client.get("/messages/calls", { params: { limit: PAGE } });
         const next = res.data.calls || [];
+        saveCalls(user._id, next).then((all) => {
+          localAllRef.current = all;
+        });
         if (silent) {
           // Background refresh: update the newest page but keep any older
           // pages the person already scrolled through.
@@ -268,8 +289,21 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
     setLoadingMore(true);
     try {
       const before = calls[calls.length - 1].createdAt;
+      // Older entries we already hold on the phone: no network needed.
+      const older = localAllRef.current.filter((c) => new Date(c.createdAt) < new Date(before)).slice(0, PAGE);
+      if (older.length) {
+        setCalls((prev) => {
+          const have = new Set(prev.map((c) => c._id));
+          return [...prev, ...older.filter((c) => !have.has(c._id))];
+        });
+        setHasMore(true);
+        return;
+      }
       const res = await client.get("/messages/calls", { params: { limit: PAGE, before } });
       const next = res.data.calls || [];
+      saveCalls(user._id, next).then((all) => {
+        localAllRef.current = all;
+      });
       setCalls((prev) => {
         const have = new Set(prev.map((c) => c._id));
         return [...prev, ...next.filter((c) => !have.has(c._id))];
@@ -280,7 +314,7 @@ export default function CallsPanel({ onOpenSettings, onOpenNewCall }) {
     } finally {
       setLoadingMore(false);
     }
-  }, [calls, hasMore, loadingMore]);
+  }, [calls, hasMore, loadingMore, user._id]);
 
   // Favourites: stored locally, resolved to people from the contact list.
   useEffect(() => {

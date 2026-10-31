@@ -142,6 +142,7 @@ function StatusReplyQuote({ reply, isMine }) {
 }
 
 function MessageBubble({
+  retryFailed,
   message,
   isMine,
   grouped,
@@ -527,7 +528,15 @@ function MessageBubble({
               </span>
             )}
             {message.failed && (
-              <span className="bubble-ticks failed-mark" title="Failed to send">
+              <span
+                className="bubble-ticks failed-mark"
+                title="Failed to send — tap to retry"
+                role="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  retryFailed?.(message.clientId);
+                }}
+              >
                 <AlertIcon size={13} />
               </span>
             )}

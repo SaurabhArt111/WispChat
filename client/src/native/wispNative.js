@@ -38,6 +38,15 @@ export const native = {
   requestNotificationPermission: () => call("requestNotificationPermission", undefined, null),
   openSettings: (kind) => call("openSettings", { kind }),
 
+  // background connection (notifications + calls with the app closed, no Firebase)
+  setBackgroundEnabled: (enabled) => call("setBackgroundEnabled", { enabled }),
+  getBackgroundStatus: () => call("getBackgroundStatus", undefined, null),
+  requestIgnoreBatteryOptimizations: () => call("requestIgnoreBatteryOptimizations"),
+
+  // native feel
+  haptic: (kind) => call("haptic", { kind }),
+  setSystemBarColor: (color) => call("setSystemBarColor", { color }),
+
   // calls
   startCallService: (title, video) => call("startCallService", { title, video: !!video }),
   stopCallService: () => call("stopCallService"),

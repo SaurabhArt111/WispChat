@@ -1,0 +1,149 @@
+/* ---------------------------------------------------------------------------
+   Android-app / WebView hardening + native feel. Loaded last.
+--------------------------------------------------------------------------- */
+
+/* The chat column's height used to be a chain of `height: 100%` through a
+   flex item that starts at `height: 0`. Older Android WebViews resolve that to
+   0, so the message list measured an empty viewport and rendered nothing until
+   something else forced a re-layout. Fill by position instead — no percentage
+   resolution involved. */
+.chat-window-main {
+  height: auto;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.message-list-wrap {
+  flex: 1 1 0%;
+  height: auto;
+  min-height: 0;
+  position: relative;
+}
+
+.message-list {
+  position: absolute !important;
+  inset: 0;
+  height: auto !important;
+}
+
+/* Loading skeleton + retry card for a chat whose messages haven't arrived. */
+.msg-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px clamp(10px, 4%, 56px) 12px;
+  pointer-events: none;
+}
+
+.msg-skeleton-row {
+  display: flex;
+}
+
+.msg-skeleton-row.mine {
+  justify-content: flex-end;
+}
+
+.msg-skeleton-bubble {
+  height: 40px;
+  max-width: 78%;
+  border-radius: 16px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: msgShimmer 1.2s linear infinite;
+}
+
+@keyframes msgShimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.msg-load-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-dim);
+}
+
+/* ---- native feel ---- */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.is-native {
+  -webkit-touch-callout: none;
+}
+
+/* App chrome isn't text: no accidental selection / callout when pressing it. */
+body.is-native .bottom-nav,
+body.is-native .chat-header,
+body.is-native .conversation-item,
+body.is-native .icon-btn,
+body.is-native button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Message text stays selectable. */
+body.is-native .message-bubble,
+body.is-native .composer textarea,
+body.is-native input,
+body.is-native textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+button,
+a,
+[role="button"],
+.icon-btn {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-skeleton-bubble {
+    animation: none;
+  }
+}
+
+/* ---- emoji panel docked where the keyboard was (phones) ---- */
+.emoji-dock {
+  flex: none;
+  overflow: hidden;
+  background: var(--surface);
+  border-top: 1px solid var(--border-glass);
+}
+
+.emoji-dock .emoji-panel,
+.emoji-dock .wa-panel {
+  height: 100%;
+}
+
+.emoji-dock .EmojiPickerReact {
+  --epr-picker-border-radius: 0;
+  border: 0;
+}
+
+/* "N unread messages" divider */
+.unread-divider {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 6px;
+}
+
+.unread-divider span {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wisp);
+  background: color-mix(in srgb, var(--wisp) 14%, transparent);
+}

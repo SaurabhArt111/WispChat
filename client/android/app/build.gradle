@@ -46,6 +46,8 @@ dependencies {
     // Push notifications (Firebase Cloud Messaging). Needs google-services.json — see ANDROID-SETUP.md.
     implementation platform('com.google.firebase:firebase-bom:33.16.0')
     implementation 'com.google.firebase:firebase-messaging'
+    // Firebase-free notifications: WebSocket client for the background connection
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation "androidx.core:core:$androidxCoreVersion"
     implementation "androidx.activity:activity:$androidxActivityVersion"
     testImplementation "junit:junit:$junitVersion"

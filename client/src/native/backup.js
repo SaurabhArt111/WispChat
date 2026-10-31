@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 import client from "../api/client";
 import { native, isNative } from "./wispNative";
+import { syncCallsFromServer } from "../utils/callLog";
 
 const PAGE = 60;
 const MAX_PER_CHAT = 5000;
@@ -26,13 +27,11 @@ async function fetchCalls() {
 }
 
 /** Keeps Databases/call-log.json fresh so the call history also lives in the WispChat folder. */
-export async function syncCallLog() {
-  if (!isNative) return;
+export async function syncCallLog(userId) {
   try {
-    const calls = await fetchCalls();
-    await native.writeText("Databases", "call-log.json", JSON.stringify({ savedAt: new Date().toISOString(), calls }));
+    await syncCallsFromServer(userId, { limit: 100 }); // merges into the on-device log + the Android folder
   } catch {
-    /* offline — try again next time */
+    /* offline — the on-device log is still there */
   }
 }
 

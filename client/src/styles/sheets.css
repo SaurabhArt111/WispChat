@@ -249,3 +249,28 @@ html.wsheet-dragging * {
 .more-sheet-list {
   padding: 2px 12px 12px;
 }
+
+/* Dialogs rendered through <Modal> on phones live in a sheet now */
+.wsheet .sheet-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 16px 8px;
+  border: 0;
+}
+
+.wsheet .sheet-modal-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.wsheet .sheet-modal-body {
+  max-height: none;
+  overflow: visible;
+  padding: 4px 16px 16px;
+}
+
+.wsheet .modal-footer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border-soft);
+}

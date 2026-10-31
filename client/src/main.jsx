@@ -11,6 +11,7 @@ import { ToastProvider } from "./context/ToastContext.jsx";
 import { ContextMenuProvider } from "./context/ContextMenuContext.jsx";
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 import { installMediaFallbacks } from "./lib/mediaFallback";
+import { isNative } from "./native/wispNative";
 
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -21,8 +22,10 @@ import "./styles/call.css";
 import "./styles/mobileSheets.css";
 import "./styles/newChat.css";
 import "./styles/improvements.css";
+import "./styles/native.css";
 
 installMediaFallbacks();
+if (isNative) document.body.classList.add("is-native");
 
 // Restore stored user accent theme
 const savedAccent = localStorage.getItem("wisp_accent");

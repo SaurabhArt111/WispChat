@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import useMediaQuery from "../../hooks/useMediaQuery";
+import { haptic } from "../../utils/haptics";
+import { registerSheet, nextSheetId } from "../../utils/sheetStack";
 import EmojiPanel from "./EmojiPanel";
 import { clearDraft, getDraft, saveDraft } from "../../utils/drafts";
 import { useChat } from "../../context/ChatContext";
@@ -30,6 +33,11 @@ export default function Composer({
   // Restore whatever was typed here but never sent (see utils/drafts.js).
   const [text, setText] = useState(() => getDraft(user._id, conversation._id));
   const [showEmoji, setShowEmoji] = useState(false);
+  const isPhone = useMediaQuery("(max-width: 858px)");
+  // WhatsApp-style: on phones the emoji panel sits where the keyboard was, at
+  // the keyboard's own height, so switching between the two doesn't jump.
+  const [emojiWarm, setEmojiWarm] = useState(false);
+  const [kbHeight, setKbHeight] = useState(() => Number(localStorage.getItem("wisp_kb_h")) || 300);
   const [enterToSend, setEnterToSend] = useState(() => {
     const saved = localStorage.getItem("wisp_enter_send");
     return saved !== null ? saved === "true" : true;
@@ -117,7 +125,7 @@ export default function Composer({
 
   // Click outside listener for emoji picker
   useEffect(() => {
-    if (!showEmoji) return;
+    if (!showEmoji || isPhone) return;
     function onMouseDown(e) {
       if (emojiPopRef.current && !emojiPopRef.current.contains(e.target)) {
         setShowEmoji(false);
@@ -125,7 +133,77 @@ export default function Composer({
     }
     window.addEventListener("mousedown", onMouseDown);
     return () => window.removeEventListener("mousedown", onMouseDown);
-  }, [showEmoji]);
+  }, [showEmoji, isPhone]);
+
+  // Warm the emoji panel while the phone is idle so the first open isn't blank.
+  useEffect(() => {
+    if (!isPhone) return undefined;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 700));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const h = idle(() => setEmojiWarm(true), { timeout: 1500 }); // timeout: never starve behind animations
+    return () => cancel(h);
+  }, [isPhone]);
+
+  // Remember how tall the keyboard is (the WebView shrinks by that much when it opens).
+  useEffect(() => {
+    if (!isPhone) return undefined;
+    let base = window.innerHeight;
+    const onResize = () => {
+      base = Math.max(base, window.innerHeight);
+      const diff = base - window.innerHeight;
+      if (diff > 150 && document.activeElement === textareaRef.current) {
+        localStorage.setItem("wisp_kb_h", String(diff));
+        setKbHeight(diff);
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isPhone]);
+
+  // Android Back / Esc closes the emoji panel (not the chat).
+  useEffect(() => {
+    if (!showEmoji || !isPhone) return undefined;
+    return registerSheet({ id: nextSheetId(), back: true, requestClose: () => (setShowEmoji(false), true) });
+  }, [showEmoji, isPhone]);
+
+  function toggleEmoji() {
+    haptic("tick");
+    if (!isPhone) {
+      setShowEmoji((s) => !s);
+      return;
+    }
+    if (showEmoji) {
+      // back to the keyboard: focus first so it opens as the panel goes away
+      setShowEmoji(false);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } else {
+      setShowEmoji(true);
+      textareaRef.current?.blur(); // hides the keyboard; the panel takes its place
+    }
+  }
+
+  // Insert at the cursor (not just at the end), keep the caret after it.
+  function insertEmoji(emoji) {
+    const el = textareaRef.current;
+    haptic("tick");
+    if (!el) {
+      setText((t) => t + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? textRef.current.length;
+    const end = el.selectionEnd ?? start;
+    const next = textRef.current.slice(0, start) + emoji + textRef.current.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      const pos = start + emoji.length;
+      try {
+        el.setSelectionRange(pos, pos);
+      } catch {
+        /* not focusable yet */
+      }
+      autoGrow(el);
+    });
+  }
 
   function autoGrow(el) {
     el.style.height = "auto";
@@ -147,6 +225,7 @@ export default function Composer({
     e?.preventDefault();
     const value = text.trim();
     if (!value) return;
+    haptic("click");
 
     if (editingMessage) {
       await editMessage(editingMessage._id, value);
@@ -269,7 +348,8 @@ export default function Composer({
               type="button"
               className={`icon-btn ${showEmoji ? "active" : ""}`}
               title="Emoji picker"
-              onClick={() => setShowEmoji((s) => !s)}
+              onClick={toggleEmoji}
+              onMouseDown={(e) => isPhone && e.preventDefault()} /* keep focus where it is */
             >
               <SmileIcon size={20} />
             </button>
@@ -294,6 +374,7 @@ export default function Composer({
                   : `Message ${recipientName}…`
               }
               value={text}
+              inputMode={showEmoji && isPhone ? "none" : undefined}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
             />
@@ -332,13 +413,10 @@ export default function Composer({
         </button>
       </div>
 
-      {showEmoji && (
-        <div className="emoji-popover" ref={emojiPopRef}>
-          <EmojiPanel
-            onEmoji={(emoji) => {
-              setText((t) => t + emoji);
-              textareaRef.current?.focus();
-            }}
+      {(() => {
+        const panel = (
+          <EmojiPanel docked={isPhone}
+            onEmoji={(emoji) => insertEmoji(emoji)}
             onSticker={async (emoji) => {
               // Stickers go out immediately as a big, bubble-less emoji.
               setShowEmoji(false);
@@ -354,8 +432,23 @@ export default function Composer({
               }
             }}
           />
-        </div>
-      )}
+        );
+        if (isPhone) {
+          // one long-lived instance (warm), shown at keyboard height
+          return (
+            emojiWarm || showEmoji ? (
+              <div className="emoji-dock" style={{ height: kbHeight, display: showEmoji ? undefined : "none" }}>
+                {panel}
+              </div>
+            ) : null
+          );
+        }
+        return showEmoji ? (
+          <div className="emoji-popover" ref={emojiPopRef}>
+            {panel}
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }

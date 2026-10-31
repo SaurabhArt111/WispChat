@@ -15,6 +15,8 @@ import {
   writeCachedMessages,
   clearCache,
 } from "../utils/messageCache";
+import { readMessagesDb, writeMessagesDb, clearLocalDb } from "../utils/localDb";
+import { recordCall } from "../utils/callLog";
 
 const ChatContext = createContext(null);
 
@@ -29,10 +31,15 @@ export function ChatProvider({ children }) {
   const [typingByConv, setTypingByConv] = useState({});
   const [presence, setPresence] = useState({});
   const [loadingConversations, setLoadingConversations] = useState(true);
+  // "loading" | "error" | "ok" per chat, so an empty pane is never a mystery:
+  // it shows a skeleton while loading and a Retry card if the request failed.
+  const [loadStateByConv, setLoadStateByConv] = useState({});
 
   const hasMoreSeenRef = useRef({});
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
+  // how many unread messages a chat had when it was opened — drives the "N unread messages" divider
+  const unreadAtOpenRef = useRef({});
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
   const messagesByConvRef = useRef(messagesByConv);
@@ -70,7 +77,10 @@ export function ChatProvider({ children }) {
   useEffect(() => {
     if (!user) return;
     for (const [convId, msgs] of Object.entries(messagesByConv)) {
-      if (msgs?.length) writeCachedMessages(user._id, convId, msgs);
+      if (msgs?.length) {
+        writeCachedMessages(user._id, convId, msgs);
+        writeMessagesDb(user._id, convId, msgs); // deep copy on the phone (IndexedDB)
+      }
     }
   }, [user, messagesByConv]);
 
@@ -118,18 +128,64 @@ export function ChatProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // The first request after launch can fail (radio still waking, socket not up
+  // yet, server briefly busy). Never leave the chat blank because of that:
+  // retry with backoff, and record the outcome so the UI can show it.
+  const loadWithRetry = useCallback(
+    async (conversationId) => {
+      const has = !!messagesByConvRef.current[conversationId]?.length;
+      setLoadStateByConv((p) => ({ ...p, [conversationId]: has ? "ok" : "loading" }));
+      const delays = [0, 700, 1800, 4000];
+      for (let i = 0; i < delays.length; i++) {
+        if (delays[i]) {
+          await new Promise((r) => setTimeout(r, delays[i]));
+          // (only retries check this: on the first attempt React hasn't committed the new activeId yet)
+          if (activeIdRef.current !== conversationId) return false; // the person moved on
+        }
+        try {
+          await loadMessages(conversationId);
+          setLoadStateByConv((p) => ({ ...p, [conversationId]: "ok" }));
+          return true;
+        } catch {
+          /* try again */
+        }
+      }
+      setLoadStateByConv((p) => ({ ...p, [conversationId]: messagesByConvRef.current[conversationId]?.length ? "ok" : "error" }));
+      return false;
+    },
+    [loadMessages]
+  );
+
+  // Warm a chat in the background (no UI state) so opening it is instant.
+  const prefetchMessages = useCallback(
+    async (conversationId) => {
+      if (messagesByConvRef.current[conversationId]?.length) return;
+      try {
+        await loadMessages(conversationId);
+      } catch {
+        /* best effort */
+      }
+    },
+    [loadMessages]
+  );
+
   // Loads a conversation's data and marks it active — but doesn't touch the
   // URL. This is the low-level "activate" step, driven off the current
   // route (see the sync effect below) rather than called directly by UI.
   const activateConversation = useCallback(
     async (conversationId) => {
+      if (conversationId && activeIdRef.current !== conversationId) {
+        // remember how many were unread at the moment this chat was opened
+        const c = conversationsRef.current.find((x) => x._id === conversationId);
+        unreadAtOpenRef.current[conversationId] = c?.unreadCount || 0;
+      }
       if (!conversationId) {
         setActiveId(null);
         return;
       }
       setActiveId(conversationId);
       // Show whatever we already have instantly (memory, then the local
-      // cache) — but ALWAYS revalidate against the server. Previously a
+      // caches) — but ALWAYS revalidate against the server. Previously a
       // chat that had been opened once was never re-fetched, so anything
       // that arrived while its socket was asleep never showed up until a
       // full page reload.
@@ -137,18 +193,19 @@ export function ChatProvider({ children }) {
         const cached = user && readCachedMessages(user._id, conversationId);
         if (cached && cached.length) {
           setMessagesByConv((prev) => (prev[conversationId] ? prev : { ...prev, [conversationId]: cached }));
+        } else if (user) {
+          // nothing in the quick cache: the on-device database may still have it
+          readMessagesDb(user._id, conversationId).then((saved) => {
+            if (saved?.length) setMessagesByConv((prev) => (prev[conversationId]?.length ? prev : { ...prev, [conversationId]: saved }));
+          });
         }
       }
-      try {
-        await loadMessages(conversationId);
-      } catch {
-        /* offline — keep showing the cached copy */
-      }
+      await loadWithRetry(conversationId);
       client.post(`/messages/${conversationId}/read`).catch(() => {});
       socket?.emit("conversation:join", { conversationId });
       setConversations((prev) => prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c)));
     },
-    [loadMessages, socket, user]
+    [loadMessages, loadWithRetry, socket, user]
   );
 
   // Public entry point used throughout the UI: pushes /chat/:id onto the
@@ -177,6 +234,11 @@ export function ChatProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]
   );
+
+  // Text messages that failed to send (offline, server blip) are kept so they
+  // can be re-sent automatically when the connection returns, or by tapping the
+  // red mark. Same clientId → the server can recognise a duplicate.
+  const failedSendsRef = useRef(new Map()); // clientId -> { conversationId, payload }
 
   const sendMessage = useCallback(
     async (conversationId, payload) => {
@@ -245,11 +307,45 @@ export function ChatProvider({ children }) {
             m._id === optimisticId ? { ...m, pending: false, failed: true } : m
           ),
         }));
+        if (!payload.attachments?.length && !payload._optimisticId) {
+          failedSendsRef.current.set(clientId, { conversationId, payload: { ...payload, clientId } });
+        }
         throw err;
       }
     },
     [conversations, upsertConversation, e2ee]
   );
+
+  const retryFailed = useCallback(
+    async (onlyClientId) => {
+      for (const [clientId, { conversationId, payload }] of [...failedSendsRef.current.entries()]) {
+        if (onlyClientId && clientId !== onlyClientId) continue;
+        failedSendsRef.current.delete(clientId);
+        // drop the red bubble; sendMessage shows a fresh pending one
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).filter((m) => m.clientId !== clientId),
+        }));
+        try {
+          await sendMessage(conversationId, payload);
+        } catch {
+          /* still offline — it's back in failedSendsRef for next time */
+        }
+      }
+    },
+    [sendMessage]
+  );
+  const retryFailedRef = useRef(retryFailed);
+  retryFailedRef.current = retryFailed;
+  useEffect(() => {
+    const go = () => retryFailedRef.current();
+    window.addEventListener("online", go);
+    socket?.on("connect", go);
+    return () => {
+      window.removeEventListener("online", go);
+      socket?.off("connect", go);
+    };
+  }, [socket]);
 
   // Used by the media composer/status editor. Unlike sendMessage, this
   // shows the pending bubble *immediately* — with local (uncompressed)
@@ -637,6 +733,7 @@ export function ChatProvider({ children }) {
     if (!socket) return;
 
     const onNewMessage = (msg) => {
+      if (msg.callInfo) recordCall(user?._id, msg); // call log lives on the device first
       setMessagesByConv((prev) => {
         const list = prev[msg.conversation] || [];
         if (list.some((m) => m._id === msg._id || (m.clientId && m.clientId === msg.clientId))) {
@@ -889,6 +986,11 @@ export function ChatProvider({ children }) {
     openConversation,
     closeActiveChat: () => navigate("/"),
     loadMoreMessages: (before) => loadMessages(activeId, before),
+    messageLoadState: loadStateByConv[activeId] || "ok",
+    unreadAtOpen: unreadAtOpenRef.current[activeId] || 0,
+    retryMessages: () => loadWithRetry(activeId),
+    prefetchMessages,
+    retryFailed,
     sendMessage,
     sendMediaMessage,
     editMessage,

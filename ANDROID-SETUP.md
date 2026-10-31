@@ -125,3 +125,49 @@ time on first build: a missing import or a Gradle version nit is possible. Pleas
 - `server`: `npm test` — 14 tests (real Socket.IO + fakes): closed-app call ringing, buffered ICE, REST decline,
   push payloads, mute/block filtering, dead-token cleanup
 - `client`: `npm run test:sheets` — sheet physics (18)
+
+---
+
+## Update 2 — what changed (on top of your working copy)
+
+**Fixes for what you reported**
+- **Chat blank until you send a message** — the chat column's height was a chain of `height:100%` through a flex
+  item that starts at `height:0`; some Android WebViews resolve that to 0, so the message list rendered nothing
+  until another layout happened. It now fills by position (`styles/native.css`), a watchdog remounts the list if it
+  ever renders empty, and an empty chat shows a skeleton while loading / a **Try again** card on failure (the first
+  request after launch is also retried 3× automatically). Chats are also kept in an on-device database (IndexedDB,
+  last 300 messages per chat) so they open instantly and offline.
+- **Header under the status bar / tabs under the navigation buttons / keyboard pushing the page up** — handled
+  natively now (`MainActivity.applyNativeInsets`): the app is padded by the status bar, navigation bar and the
+  keyboard, so when the keyboard opens the WebView simply gets shorter and the page re-lays out. Capacitor's own
+  inset handling is turned off (`capacitor.config.json` → `SystemBars.insetsHandling: "disable"`).
+- **Flicker between pages** — after the chat list loads, the app quietly prefetches your 8 most recent chats, their
+  avatars and newest photos while the phone is idle (`hooks/useWarmup.js`), so opening a chat shows content on the
+  first frame.
+
+**Notifications without Google / Firebase**
+- `WispSocketService` keeps one small presence-less connection to *your* server (it does not show you as online).
+  The server pushes it the same payloads it would send through Firebase, and the service shows message
+  notifications and the full-screen call screen. On by default; **Settings → General → Stay connected in the
+  background**. Restarts after reboot/update. Firebase still works too (if `google-services.json` is present) and
+  duplicates are suppressed.
+- For reliable delivery in Doze, tap **Allow unrestricted battery** in the same settings section. Android shows one
+  small silent "WispChat" notification while this is on — Android requires that for any app that stays connected.
+
+**Routes, sheets, calls**
+- `/chat/:id/selected` — selecting messages is a route: Back (or Esc on a PC) deselects instead of leaving the chat.
+- `/chat/:id/info` — contact / group info is a route: Back closes it.
+- **Friend Requests → TopSheet**; every dialog that used `Modal` is a **BottomSheet** on phones (drag, Back, rides
+  above the keyboard).
+- **Call log lives on the device** (IndexedDB + `WispChat/Databases/call-log.json`); the Calls tab renders from it
+  instantly, works offline, pages locally and only uses the server to catch up.
+- **Emoji**: WhatsApp-style panel docked where the keyboard was (same height, no jump), pre-warmed while idle,
+  inserts at the cursor, Back closes just the panel.
+- **Messaging**: "N unread messages" divider, failed sends re-send automatically when the connection returns (or tap
+  the red mark), haptic feedback on tab change / select / send / emoji.
+- **New logo** (`public/icons/*`, favicon, iOS splash, Android launcher + adaptive + splash + a proper monochrome
+  notification icon).
+
+**Not verified on a device** (no Android SDK here): the new Java (`WispSocketService`, `MainActivity` insets, plugin
+additions) was compile-checked against API 23 + stubs only. Web + server parts were tested in Chromium and with
+real Socket.IO (server: 20 tests).

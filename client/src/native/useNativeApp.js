@@ -28,6 +28,13 @@ export default function useNativeApp() {
   const acceptRef = useRef(requestAutoAccept);
   acceptRef.current = requestAutoAccept;
 
+  // Status / navigation bar colour = the app background, so there is no seam.
+  useEffect(() => {
+    if (!isNative) return;
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#0b0e12";
+    native.setSystemBarColor(bg);
+  }, []);
+
   // Login ↔ native session, folder, permissions, push token.
   useEffect(() => {
     if (!isNative || !user?._id) return undefined;
@@ -42,7 +49,7 @@ export default function useNativeApp() {
         await native.requestNotificationPermission(); // Android 13+: system prompt
       }
       await registerPush();
-      syncCallLog();
+      syncCallLog(user._id);
     })();
     const sub = native.onPushToken((t) => registerPush(t));
     return () => {

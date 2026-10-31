@@ -31,6 +31,10 @@ public final class WispPrefs {
     }
     public static String activeConversation(Context c) { return sp(c).getString("activeConversation", ""); }
 
+    /** "Stay connected in the background" — the Firebase-free notification path. On by default. */
+    public static boolean backgroundEnabled(Context c) { return sp(c).getBoolean("bgEnabled", true); }
+    public static void setBackgroundEnabled(Context c, boolean on) { sp(c).edit().putBoolean("bgEnabled", on).apply(); }
+
     private static String trimSlash(String s) {
         if (s == null) return null;
         while (s.endsWith("/")) s = s.substring(0, s.length() - 1);

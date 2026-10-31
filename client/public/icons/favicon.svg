@@ -1,30 +1,4 @@
-<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#141a22"/>
-      <stop offset="1" stop-color="#0b0e12"/>
-    </linearGradient>
-    <linearGradient id="wisp" x1="150" y1="140" x2="380" y2="400" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7bffd6"/>
-      <stop offset="1" stop-color="#3ddba7"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
-  <g transform="scale(0.125)">
-    <path d="M256 126
-             c96 0 168 62 168 142
-             c0 80 -72 142 -168 142
-             c-14.5 0 -28.5 -1.4 -41.7 -4.1
-             c-4.6 -0.9 -9.4 -0.2 -13.5 2.1
-             l-44 24.6
-             c-9.6 5.4 -21.1 -2.9 -19 -13.7
-             l9.8 -50.4
-             c1.2 -6.1 -0.6 -12.4 -4.8 -17
-             c-30.3 -26 -48.8 -61 -48.8 -83.5
-             c0 -80 72 -142 168 -142 Z"
-          fill="url(#wisp)"/>
-    <circle cx="196" cy="268" r="19" fill="#04211a"/>
-    <circle cx="256" cy="268" r="19" fill="#04211a"/>
-    <circle cx="316" cy="268" r="19" fill="#04211a"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d2733"/><stop offset="1" stop-color="#0c1117"/></linearGradient>
+<linearGradient id="mint" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#7bf5cd"/><stop offset="1" stop-color="#25b98a"/></linearGradient>
+<radialGradient id="glow" cx="0.3" cy="0.15" r="0.9"><stop offset="0" stop-color="#3ddba7" stop-opacity="0.22"/><stop offset="1" stop-color="#3ddba7" stop-opacity="0"/></radialGradient></defs><rect width="512" height="512" rx="116" fill="url(#bg)"/><rect width="512" height="512" rx="116" fill="url(#glow)"/><g transform="translate(0.00 0.00) scale(1)"><path fill="url(#mint)" d="M256 86C160 86 84 150 84 232c0 49 26 91 68 117l-17 64c-2 9 8 15 15 10l65-47c13 3 28 4 41 4 96 0 172-64 172-148S352 86 256 86z"/><path d="M150 186l50 112 56-92 56 92 50-112" fill="none" stroke="#0c1117" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></g></svg>

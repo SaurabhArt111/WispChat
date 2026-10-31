@@ -23,6 +23,7 @@ public final class NotificationHelper {
     public static final String CH_MESSAGES = "wisp_messages";
     public static final String CH_CALLS = "wisp_calls_v1";
     public static final String CH_ONGOING = "wisp_ongoing";
+    public static final String CH_BACKGROUND = "wisp_background";
 
     public static final String ACTION_OPEN_CHAT = "com.wispchat.app.OPEN_CHAT";
     public static final String ACTION_CALL_ACCEPT = "com.wispchat.app.CALL_ACCEPT";
@@ -70,6 +71,24 @@ public final class NotificationHelper {
         ongoing.setDescription("Shown while a call is in progress so Android keeps it alive");
         ongoing.setShowBadge(false);
         nm.createNotificationChannel(ongoing);
+
+        // The small permanent entry Android requires for an app that stays connected (no sound, no badge).
+        NotificationChannel bg = new NotificationChannel(CH_BACKGROUND, "Background connection", NotificationManager.IMPORTANCE_MIN);
+        bg.setDescription("Keeps WispChat connected so messages and calls arrive without Google services. You can hide this in system settings.");
+        bg.setShowBadge(false);
+        bg.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
+        nm.createNotificationChannel(bg);
+    }
+
+    // The same message can reach us twice (background connection + Firebase): show it once.
+    private static final java.util.LinkedHashMap<String, Boolean> SEEN = new java.util.LinkedHashMap<String, Boolean>() {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, Boolean> e) { return size() > 300; }
+    };
+
+    /** True the first time `key` is seen (per process). Empty keys are never de-duplicated. */
+    public static synchronized boolean firstTime(String key) {
+        if (key == null || key.isEmpty()) return true;
+        return SEEN.put(key, Boolean.TRUE) == null;
     }
 
     // ------------------------------------------------------------ messages
@@ -80,6 +99,7 @@ public final class NotificationHelper {
 
     public static void showMessage(Context ctx, Map<String, String> d) {
         if (WispApplication.isForeground()) return; // the open app already shows it live
+        if (!firstTime("m:" + d.get("messageId"))) return;
         String conversationId = d.get("conversationId");
         String sender = nonEmpty(d.get("senderName"), "New message");
         String preview = nonEmpty(d.get("preview"), "New message");
@@ -168,6 +188,7 @@ public final class NotificationHelper {
 
     public static void showIncomingCall(Context ctx, Map<String, String> d) {
         if (WispApplication.isForeground()) return; // in-app ringing UI handles it
+        if (!firstTime("c:" + d.get("callId"))) return;
         String callId = d.get("callId");
         String caller = nonEmpty(d.get("callerName"), "Someone");
         boolean video = "video".equals(d.get("kind"));

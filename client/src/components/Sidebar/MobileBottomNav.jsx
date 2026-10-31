@@ -1,3 +1,4 @@
+import { haptic } from "../../utils/haptics";
 import { ChatIcon, PhoneIcon, StatusRingIcon, CompassIcon } from "../common/Icons";
 import { useAuth } from "../../context/AuthContext";
 import Avatar from "../common/Avatar";
@@ -24,7 +25,10 @@ export default function MobileBottomNav({ view, onChangeView, hasUnreadStatus })
         <button
           key={t.id}
           className={`bottom-nav-btn ${view === t.id ? "active" : ""}`}
-          onClick={() => onChangeView(t.id)}
+          onClick={() => {
+            if (view !== t.id) haptic("tick");
+            onChangeView(t.id);
+          }}
         >
           <span className="bottom-nav-icon">
             {t.icon ? <t.icon size={25} /> : <span className="bottom-nav-avatar"><Avatar user={user} size={26} /></span>}

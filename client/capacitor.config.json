@@ -11,7 +11,7 @@
   },
   "plugins": {
     "SystemBars": {
-      "insetsHandling": "css",
+      "insetsHandling": "disable",
       "style": "DARK"
     }
   }

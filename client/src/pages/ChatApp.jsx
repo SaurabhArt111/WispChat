@@ -21,6 +21,7 @@ import ChatWindow from "../components/Chat/ChatWindow";
 import ConnectionBanner from "../components/common/ConnectionBanner";
 import useMediaQuery from "../hooks/useMediaQuery";
 import useNativeApp from "../native/useNativeApp";
+import useWarmup from "../hooks/useWarmup";
 import NewChatModal from "../components/Sidebar/NewChatModal";
 import NewGroupModal from "../components/Sidebar/NewGroupModal";
 import MobileDrawer from "../components/Sidebar/MobileDrawer";
@@ -51,14 +52,26 @@ export default function ChatApp() {
   const navigate = useNavigate();
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showProfileEditor, setShowProfileEditor] = useState(false);
-  const [showContactInfo, setShowContactInfo] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [peek, setPeek] = useState(null); // { id, side } neighbour tab rendered next to the current one while dragging
   const suppressSlideRef = useRef(false);
   const [slide, setSlide] = useState(null); // "next" | "prev" while a tab transition plays
   const settingsReturnRef = useRef("/");
   const shellRef = useRef(null);
+  useWarmup(); // get recent chats + their photos ready while idle → no blank/flicker on open
   useNativeApp(); // Android shell: push, folder, back button, call accept (no-op in a browser)
+
+  // Contact / group info is a real route (/chat/:id/info) so Back closes it —
+  // optionally with a selection on top (/chat/:id/info/selected).
+  const showContactInfo = !!activeId && /^\/chat\/[^/]+\/info(\/selected)?\/?$/.test(location.pathname);
+  function openContactInfo() {
+    if (activeId) navigate(`/chat/${activeId}/info`, { state: { viaInfo: true } });
+  }
+  function closeContactInfo() {
+    if (!activeId) return;
+    if (location.state?.viaInfo) navigate(-1);
+    else navigate(`/chat/${activeId}`, { replace: true });
+  }
 
   const rawSegment = location.pathname.split("/")[1] || "";
   // /new and /new/call are routes (shareable, back-button friendly). The page
@@ -175,17 +188,12 @@ export default function ChatApp() {
   }
 
   function openProfile() {
-    setShowContactInfo(false);
     navigate("/profile");
   }
 
   function openProfileEditor() {
     setShowProfileEditor(true);
   }
-
-  useEffect(() => {
-    setShowContactInfo(false);
-  }, [activeId]);
 
   // Long-press → "View info" (see ChatContext.viewConversationInfo). Declared
   // after the reset effect above so that, when the chat switch and the
@@ -194,7 +202,7 @@ export default function ChatApp() {
   useEffect(() => {
     if (infoRequest.n && infoRequest.n !== handledInfoRef.current && activeId === infoRequest.id) {
       handledInfoRef.current = infoRequest.n;
-      setShowContactInfo(true);
+      openContactInfo();
     }
   }, [infoRequest, activeId]);
 
@@ -302,7 +310,7 @@ export default function ChatApp() {
         ) : activeId ? (
           <ChatWindow
             key={activeId}
-            onOpenContactInfo={() => setShowContactInfo((open) => !open)}
+            onOpenContactInfo={() => (showContactInfo ? closeContactInfo() : openContactInfo())}
             contactInfoOpen={showContactInfo}
           />
         ) : (
@@ -342,7 +350,7 @@ export default function ChatApp() {
       </div>
       {postOverlay && <PostViewerPage />}
       {showContactInfo && activeConversation && (
-        <ContactInfoPanel conversation={activeConversation} onClose={() => setShowContactInfo(false)} />
+        <ContactInfoPanel conversation={activeConversation} onClose={closeContactInfo} />
       )}
 
       {!isDesktop && (

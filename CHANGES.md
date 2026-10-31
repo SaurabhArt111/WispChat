@@ -1,3 +1,7 @@
+# WispChat — update 2 (Android polish, no-Firebase notifications, routes, local-first)
+
+See the "Update 2" section of **ANDROID-SETUP.md**.
+
 # WispChat — Android app (Capacitor) + push + closed-app calls
 
 See **ANDROID-SETUP.md**. Adds: `client/android` (Android Studio project, native Java: FCM service, ringing
