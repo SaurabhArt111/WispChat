@@ -35,7 +35,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Bridge between the web app and Android: push token, notification permission,
- * the WispChat storage folder, call foreground service and "what opened the app".
+ * the Pingo storage folder, call foreground service and "what opened the app".
  * JS wrapper: client/src/native/wispNative.js
  */
 @CapacitorPlugin(
@@ -157,7 +157,7 @@ public class WispNativePlugin extends Plugin {
         call.resolve(ret);
     }
 
-    /** Asks Android to exempt WispChat from battery optimisation (needed for reliable delivery in Doze). */
+    /** Asks Android to exempt Pingo from battery optimisation (needed for reliable delivery in Doze). */
     @PluginMethod
     public void requestIgnoreBatteryOptimizations(PluginCall call) {
         try {
@@ -286,8 +286,15 @@ public class WispNativePlugin extends Plugin {
 
     @PluginMethod
     public void startCallService(PluginCall call) {
+        // Android 14+ refuses a microphone foreground service without RECORD_AUDIO and then
+        // crashes the app if it was started with startForegroundService(): check first.
+        if (Build.VERSION.SDK_INT >= 29
+                && getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            call.resolve(); // the call still works on screen; just no background keep-alive
+            return;
+        }
         Intent i = new Intent(getContext(), CallForegroundService.class)
-                .putExtra(CallForegroundService.EXTRA_TITLE, call.getString("title", "WispChat call"))
+                .putExtra(CallForegroundService.EXTRA_TITLE, call.getString("title", "Pingo call"))
                 .putExtra(CallForegroundService.EXTRA_VIDEO, call.getBoolean("video", false));
         try {
             if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(i);

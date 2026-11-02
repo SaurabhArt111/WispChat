@@ -23,6 +23,7 @@ import "./styles/mobileSheets.css";
 import "./styles/newChat.css";
 import "./styles/improvements.css";
 import "./styles/native.css";
+import "./styles/theme.css";
 
 installMediaFallbacks();
 if (isNative) document.body.classList.add("is-native");

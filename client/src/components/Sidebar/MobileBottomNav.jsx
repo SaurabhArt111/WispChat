@@ -24,6 +24,8 @@ export default function MobileBottomNav({ view, onChangeView, hasUnreadStatus })
       {TABS.map((t) => (
         <button
           key={t.id}
+          aria-label={t.label}
+          aria-current={view === t.id ? "page" : undefined}
           className={`bottom-nav-btn ${view === t.id ? "active" : ""}`}
           onClick={() => {
             if (view !== t.id) haptic("tick");
@@ -31,10 +33,9 @@ export default function MobileBottomNav({ view, onChangeView, hasUnreadStatus })
           }}
         >
           <span className="bottom-nav-icon">
-            {t.icon ? <t.icon size={25} /> : <span className="bottom-nav-avatar"><Avatar user={user} size={26} /></span>}
+            {t.icon ? <t.icon size={26} /> : <span className="bottom-nav-avatar"><Avatar user={user} size={26} /></span>}
             {t.id === "status" && hasUnreadStatus && <span className="bottom-nav-dot" />}
           </span>
-          <span className="bottom-nav-label">{t.label}</span>
         </button>
       ))}
     </nav>

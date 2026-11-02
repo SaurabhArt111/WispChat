@@ -26,14 +26,14 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * The WispChat folder on the phone — laid out like WhatsApp's:
+ * The Pingo folder on the phone — laid out like WhatsApp's:
  *
- *   Android/media/com.wispchat.app/WispChat/
+ *   Android/media/com.wispchat.app/Pingo/
  *     Media/
- *       WispChat Images/  (+ Sent/)      WispChat Video/  (+ Sent/)
- *       WispChat Audio/   (+ Sent/)      WispChat Voice Notes/
- *       WispChat Documents/ (+ Sent/)    WispChat Animated Gifs/
- *       WispChat Stickers/               WispChat Profile Photos/   WispChat Status/
+ *       Pingo Images/  (+ Sent/)      Pingo Video/  (+ Sent/)
+ *       Pingo Audio/   (+ Sent/)      Pingo Voice Notes/
+ *       Pingo Documents/ (+ Sent/)    Pingo Animated Gifs/
+ *       Pingo Stickers/               Pingo Profile Photos/   Pingo Status/
  *     Databases/   (call history, chat index)
  *     Backups/     (chat backups you can copy off the phone)
  *
@@ -41,17 +41,17 @@ import java.util.Locale;
  * storage ("scoped storage"). Android/media/<package>/ is the sanctioned
  * location: it needs NO storage permission, is visible in every file manager
  * and the gallery picks up images/videos in it. On Android 9 and older the
- * folder is created at the top level (/WispChat) like old WhatsApp did.
+ * folder is created at the top level (/Pingo) like old WhatsApp did.
  */
 public final class WispStorage {
-    public static final String ROOT_NAME = "WispChat";
+    public static final String ROOT_NAME = "Pingo";
     private static final String[] MEDIA_DIRS = {
-            "WispChat Images", "WispChat Video", "WispChat Audio", "WispChat Voice Notes",
-            "WispChat Documents", "WispChat Animated Gifs", "WispChat Stickers",
-            "WispChat Profile Photos", "WispChat Status"
+            "Pingo Images", "Pingo Video", "Pingo Audio", "Pingo Voice Notes",
+            "Pingo Documents", "Pingo Animated Gifs", "Pingo Stickers",
+            "Pingo Profile Photos", "Pingo Status"
     };
-    private static final String[] WITH_SENT = { "WispChat Images", "WispChat Video", "WispChat Audio", "WispChat Documents" };
-    private static final String[] HIDDEN_FROM_GALLERY = { "WispChat Stickers", "WispChat Profile Photos", "WispChat Status", "WispChat Voice Notes" };
+    private static final String[] WITH_SENT = { "Pingo Images", "Pingo Video", "Pingo Audio", "Pingo Documents" };
+    private static final String[] HIDDEN_FROM_GALLERY = { "Pingo Stickers", "Pingo Profile Photos", "Pingo Status", "Pingo Voice Notes" };
 
     private WispStorage() {}
 
@@ -92,15 +92,15 @@ public final class WispStorage {
     public static File dirFor(Context ctx, String kind, boolean sent) {
         String name;
         switch (kind == null ? "file" : kind) {
-            case "image": name = "WispChat Images"; break;
-            case "video": name = "WispChat Video"; break;
-            case "audio": name = "WispChat Audio"; break;
-            case "voice": name = "WispChat Voice Notes"; break;
-            case "gif": name = "WispChat Animated Gifs"; break;
-            case "sticker": name = "WispChat Stickers"; break;
-            case "profile": name = "WispChat Profile Photos"; break;
-            case "status": name = "WispChat Status"; break;
-            default: name = "WispChat Documents";
+            case "image": name = "Pingo Images"; break;
+            case "video": name = "Pingo Video"; break;
+            case "audio": name = "Pingo Audio"; break;
+            case "voice": name = "Pingo Voice Notes"; break;
+            case "gif": name = "Pingo Animated Gifs"; break;
+            case "sticker": name = "Pingo Stickers"; break;
+            case "profile": name = "Pingo Profile Photos"; break;
+            case "status": name = "Pingo Status"; break;
+            default: name = "Pingo Documents";
         }
         File dir = new File(new File(ensure(ctx), "Media"), name);
         boolean hasSent = false;
@@ -162,7 +162,7 @@ public final class WispStorage {
 
     /**
      * Append one base64 chunk of a file being saved. On the last chunk the part
-     * file is moved into the right WispChat folder and indexed. Returns the final
+     * file is moved into the right Pingo folder and indexed. Returns the final
      * path on the last chunk, otherwise null.
      */
     public static String saveChunk(Context ctx, String key, String kind, boolean sent, String name, String mime,
@@ -286,7 +286,7 @@ public final class WispStorage {
         return m == null ? "*/*" : m;
     }
 
-    /** True only for files that live inside the WispChat folder (guards open/share). */
+    /** True only for files that live inside the Pingo folder (guards open/share). */
     public static boolean isInsideRoot(Context ctx, File f) {
         try {
             return f.getCanonicalPath().startsWith(root(ctx).getCanonicalPath() + File.separator);

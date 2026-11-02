@@ -4,17 +4,39 @@ import { App as CapApp } from "@capacitor/app";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 import { useCall } from "../context/CallContext";
+import { useToast } from "../context/ToastContext";
 import { backendOriginUrl } from "../api/config";
 import { isNative, native } from "./wispNative";
 import { registerPush } from "./push";
 import { syncCallLog } from "./backup";
 
-const ASKED_KEY = "wisp_notif_asked";
+
+let hintedThisSession = false;
+
+/**
+ * Message and call notifications can't appear until the OS permission is granted
+ * (Android 13+ asks at runtime). The old code asked exactly ONCE, ever — a dismissed
+ * or interrupted prompt meant notifications were silently off forever. Now: ask on
+ * every start while it's still missing (Android ignores it once permanently denied),
+ * and if it's still off, say so once per session with a button to the right settings page.
+ */
+async function ensureNotificationsAllowed(showToast) {
+  let status = await native.getNotificationStatus();
+  if (status && !status.granted) status = (await native.requestNotificationPermission()) || status;
+  if (status && !status.granted && !hintedThisSession) {
+    hintedThisSession = true;
+    showToast?.("Notifications are off — you won’t see new messages or calls.", "danger", {
+      actionLabel: "Turn on",
+      onAction: () => native.openSettings("notifications"),
+      duration: 9000,
+    });
+  }
+}
 
 /**
  * Wires the Android shell to the web app. A no-op in a browser.
  *  • hands the login to the native side (notification buttons need it)
- *  • creates the WispChat folder, asks for notification permission
+ *  • creates the Pingo folder, asks for notification permission
  *  • registers the push token; reacts to taps on notifications / "Accept" on a call
  *  • Back button: close sheets / go back, and minimise instead of quitting
  */
@@ -22,6 +44,9 @@ export default function useNativeApp() {
   const { user } = useAuth();
   const { activeId } = useChat();
   const { requestAutoAccept } = useCall();
+  const { showToast } = useToast();
+  const toastRef = useRef(showToast);
+  toastRef.current = showToast;
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
@@ -44,10 +69,8 @@ export default function useNativeApp() {
       if (token) await native.setSession(token, backendOriginUrl);
       await native.ensureStorage();
       if (cancelled) return;
-      if (!localStorage.getItem(ASKED_KEY)) {
-        localStorage.setItem(ASKED_KEY, "1");
-        await native.requestNotificationPermission(); // Android 13+: system prompt
-      }
+      await ensureNotificationsAllowed(toastRef.current);
+      if (cancelled) return;
       await registerPush();
       syncCallLog(user._id);
     })();
@@ -73,6 +96,7 @@ export default function useNativeApp() {
       CapApp.addListener("appStateChange", ({ isActive }) => {
         if (isActive) {
           handle();
+          ensureNotificationsAllowed(toastRef.current);
           native.setActiveConversation(activeIdRef.current);
         }
       }),

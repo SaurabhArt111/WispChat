@@ -33,7 +33,7 @@ import okhttp3.WebSocket;
 import okhttp3.WebSocketListener;
 
 /**
- * Keeps a small, presence-less connection to YOUR WispChat server so messages
+ * Keeps a small, presence-less connection to YOUR Pingo server so messages
  * and incoming calls notify even with the app closed — with no Firebase and no
  * Google Play services. (Same idea as the "background connection" mode of other
  * self-hosted chat apps.)
@@ -101,11 +101,16 @@ public class WispSocketService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // Android kills the whole app ("keeps stopping") if a service started with
+        // startForegroundService() doesn't call startForeground() within ~5 s — and
+        // calling stopSelf() first doesn't excuse it. So ALWAYS go foreground first,
+        // and only then decide whether there is anything to do.
+        goForeground("Connecting…");
         if (!WispPrefs.backgroundEnabled(this) || WispPrefs.token(this) == null || WispPrefs.apiBase(this) == null) {
+            stopForegroundCompat();
             stopSelf();
             return START_NOT_STICKY;
         }
-        goForeground("Connecting…");
         if (socket == null) connect();
         if (!watchdogOn) { watchdogOn = true; scheduleWatchdog(); }
         return START_STICKY; // the system brings us back if it kills the process
@@ -129,7 +134,7 @@ public class WispSocketService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
         return new NotificationCompat.Builder(this, NotificationHelper.CH_BACKGROUND)
                 .setSmallIcon(R.drawable.ic_stat_wisp)
-                .setContentTitle("WispChat")
+                .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -139,13 +144,22 @@ public class WispSocketService extends Service {
                 .build();
     }
 
+    @SuppressWarnings("deprecation")
+    private void stopForegroundCompat() {
+        try {
+            if (Build.VERSION.SDK_INT >= 24) stopForeground(Service.STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+        } catch (Exception ignored) { }
+    }
+
     private void goForeground(String text) {
         Notification n = buildNotification(text);
         try {
             if (Build.VERSION.SDK_INT >= 34) startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             else startForeground(NOTIFICATION_ID, n);
         } catch (Exception e) {
-            stopSelf();
+            // e.g. the OS refused a background start. Keep going: the connection still works
+            // while the process lives, and the app restarts the service when it is opened.
         }
     }
 
@@ -204,6 +218,8 @@ public class WispSocketService extends Service {
                     // the saved login is no longer valid: stop until the app logs in again
                     WispPrefs.clearSession(this);
                     stopSelf();
+                } else {
+                    lost(ws); // "Server busy" / anything else: back off and try again
                 }
             } else if (text.startsWith("42")) { // event
                 JSONArray arr = new JSONArray(text.substring(2));

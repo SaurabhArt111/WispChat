@@ -26,7 +26,7 @@ function isIos() {
  *     small "Update available" banner, driven entirely by us so the user
  *     controls exactly when the new version activates.
  *  2. Listens for the browser's `beforeinstallprompt` event (Chrome/Edge/
- *     Android) and shows a custom "Install Wisp" banner instead of relying
+ *     Android) and shows a custom "Install Pingo" banner instead of relying
  *     on the browser's own mini-infobar.
  *  3. On iOS Safari, where no install prompt event exists, shows a one-time
  *     "Add to Home Screen" instruction tip.
@@ -177,7 +177,7 @@ export default function PwaManager() {
           </div>
           <div className="pwa-update-text">
             <strong>Update available</strong>
-            <span>A new version of Wisp is ready. It only takes a second — your chats stay as they are.</span>
+            <span>A new version of Pingo is ready. It only takes a second — your chats stay as they are.</span>
           </div>
           <div className="pwa-update-actions">
             <button className="btn btn-ghost btn-sm" onClick={() => setSnoozedUntil(Date.now() + 20 * 60 * 1000)} disabled={updating}>
@@ -193,7 +193,7 @@ export default function PwaManager() {
       {installEvent && (
         <div className="pwa-banner pwa-banner-install" role="status">
           <DownloadIcon size={16} />
-          <span>Install Wisp for a faster, full-screen app experience.</span>
+          <span>Install Pingo for a faster, full-screen app experience.</span>
           <button className="btn btn-primary btn-sm" onClick={handleInstallClick}>
             Install
           </button>
@@ -207,7 +207,7 @@ export default function PwaManager() {
         <div className="pwa-banner pwa-banner-ios" role="status">
           <DownloadIcon size={16} />
           <span>
-            Install Wisp: tap <strong>Share</strong> then <strong>Add to Home Screen</strong>.
+            Install Pingo: tap <strong>Share</strong> then <strong>Add to Home Screen</strong>.
           </span>
           <button className="icon-btn btn-sm" onClick={dismissIosTip} title="Dismiss">
             <CloseIcon size={14} />

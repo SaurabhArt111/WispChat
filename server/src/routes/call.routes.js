@@ -23,7 +23,12 @@ router.get("/ice", (req, res) => {
     { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] },
   ];
 
-  const urls = (process.env.TURN_URLS || "").split(",").map((u) => u.trim()).filter(Boolean);
+  // Ignore the placeholder from .env.example (turn.example.com never resolves; it only
+  // slows ICE gathering and makes the call look like it "connects but has no media").
+  const urls = (process.env.TURN_URLS || "")
+    .split(",")
+    .map((u) => u.trim())
+    .filter((u) => u && !/(^|[@:\/.])example\.(com|org|net)\b/i.test(u) && !/your-turn|changeme/i.test(u));
   if (urls.length) {
     if (process.env.TURN_SECRET) {
       const expiry = Math.floor(Date.now() / 1000) + 6 * 3600;

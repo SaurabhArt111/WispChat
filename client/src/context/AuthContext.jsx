@@ -48,6 +48,22 @@ async function loadLocalKeyCache(userId, token) {
   }
 }
 
+const PROFILE_KEY = "wisp_profile";
+function saveProfile(u) {
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(u));
+  } catch {
+    /* storage full — non-fatal */
+  }
+}
+function readSavedProfile() {
+  try {
+    return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -72,43 +88,81 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem("wisp_token");
     if (!token) {
       setLoading(false);
-      return;
+      return undefined;
     }
-    client
-      .get("/auth/me")
-      .then(async (res) => {
-        // A saved session whose encryption key can't be restored silently
-        // (no local key cache — e.g. the session predates it, or it was
-        // cleared) is sent back to the sign-in screen. The password typed
-        // there unlocks everything in one step, so there is never a second
-        // "unlock your chats" prompt on top of logging in.
-        const backToSignIn = () => {
-          localStorage.removeItem("wisp_token");
-          setUser(null);
-          setSessionNotice("Please sign in again to unlock your encrypted chats on this device.");
-        };
+    let cancelled = false;
 
+    // A saved session whose encryption key can't be restored silently (no local key
+    // cache — e.g. the session predates it, or it was cleared) is sent back to the
+    // sign-in screen. The password typed there unlocks everything in one step.
+    const backToSignIn = () => {
+      localStorage.removeItem("wisp_token");
+      setUser(null);
+      setSessionNotice("Please sign in again to unlock your encrypted chats on this device.");
+    };
+
+    (async () => {
+      // IMPORTANT: only a real 401/403 means "this login is dead". Previously ANY failure —
+      // a sleeping server, bad signal, a 502 — deleted the token and signed the person out
+      // (and with the token gone the on-device key cache could no longer be unlocked).
+      // Now a transient failure is retried with back-off while the boot screen stays up.
+      let res = null;
+      for (let attempt = 0; !cancelled; attempt++) {
+        try {
+          res = await client.get("/auth/me", { timeout: 20000 });
+          break;
+        } catch (err) {
+          const status = err?.response?.status;
+          if (status === 401 || status === 403) {
+            localStorage.removeItem("wisp_token");
+            if (!cancelled) setLoading(false);
+            return;
+          }
+          if (attempt >= 6) break; // ~1 minute of trying, then fall back to the saved profile
+          await new Promise((r) => setTimeout(r, Math.min(1500 * (attempt + 1), 8000)));
+        }
+      }
+      if (cancelled) return;
+
+      try {
+        if (!res) {
+          // Server unreachable for a long time: open the app from the on-device copy so
+          // chats are still readable; live data resumes automatically when it is back.
+          const saved = readSavedProfile();
+          const cachedKey = saved ? await loadLocalKeyCache(saved._id, token) : null;
+          if (saved && (cachedKey || !saved.e2ee?.publicKeyJwk)) {
+            privateKeyRef.current = cachedKey;
+            setUser(saved);
+            setE2eeReady(!!cachedKey);
+          }
+          return;
+        }
         if (res.data.needsE2EESetup) return backToSignIn();
         if (!res.data.user?.e2ee?.publicKeyJwk) {
+          saveProfile(res.data.user);
           setUser(res.data.user);
           return;
         }
-
         const cached = await loadLocalKeyCache(res.data.user._id, token);
         if (!cached) return backToSignIn();
-
         privateKeyRef.current = cached;
+        saveProfile(res.data.user);
         setUser(res.data.user);
         setE2eeReady(true);
-      })
-      .catch(() => localStorage.removeItem("wisp_token"))
-      .finally(() => setLoading(false));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = useCallback(async (identifier, password) => {
     if (!window.crypto?.subtle) {
       throw new Error(
-        "Secure chats need a secure connection (HTTPS or localhost). Open Wisp over https:// and try again."
+        "Secure chats need a secure connection (HTTPS or localhost). Open Pingo over https:// and try again."
       );
     }
     const res = await client.post("/auth/login", { identifier, password });
@@ -130,6 +184,7 @@ export function AuthProvider({ children }) {
     }
     localStorage.setItem("wisp_token", res.data.token);
     setSessionNotice("");
+    saveProfile(res.data.user);
     setUser(res.data.user);
     return res.data.user;
   }, []);
@@ -178,7 +233,7 @@ export function AuthProvider({ children }) {
   // ---------------- Google sign-in ----------------
   // Step 1: verify the Google credential with our server. It does NOT sign the
   // person in yet — end-to-end encryption still needs a secret only they know.
-  // Google accounts have no Wisp password, so they choose an "encryption
+  // Google accounts have no Pingo password, so they choose an "encryption
   // passcode" once (stage "setup") and re-enter it on each new device
   // (stage "unlock"). Step 2 is finishGoogleEncryption().
   const googleLogin = useCallback(async (credential) => {
@@ -218,7 +273,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await unregisterPush(); // Android: stop pushes to this phone (no-op elsewhere)
     try {
-      await client.post("/auth/logout");
+      await client.post("/auth/logout", null, { timeout: 5000 });
     } catch (e) {
       /* ignore */
     }
@@ -226,6 +281,7 @@ export function AuthProvider({ children }) {
     if (user?._id) clearMessageCache(user._id);
     if (user?._id) clearDrafts(user._id);
     clearDecryptCache();
+    localStorage.removeItem(PROFILE_KEY);
     localStorage.removeItem("wisp_token");
     setUser(null);
     privateKeyRef.current = null;

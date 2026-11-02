@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Chat + call-history backup into WispChat/Backups and WispChat/Databases.
+// Chat + call-history backup into Pingo/Backups and Pingo/Databases.
 // Your messages live on the server (that's how they reach your other devices);
 // this writes a copy you can keep on the phone or copy elsewhere.
 // End-to-end encrypted messages are saved as they are on the server: still
@@ -26,7 +26,7 @@ async function fetchCalls() {
   return calls;
 }
 
-/** Keeps Databases/call-log.json fresh so the call history also lives in the WispChat folder. */
+/** Keeps Databases/call-log.json fresh so the call history also lives in the Pingo folder. */
 export async function syncCallLog(userId) {
   try {
     await syncCallsFromServer(userId, { limit: 100 }); // merges into the on-device log + the Android folder
@@ -39,7 +39,7 @@ export async function backupChats(onProgress) {
   if (!isNative) throw new Error("Backups are only available in the Android app");
   const convRes = await client.get("/conversations");
   const conversations = convRes.data?.conversations || convRes.data || [];
-  const out = { app: "WispChat", version: 1, exportedAt: new Date().toISOString(), conversations: [], calls: [] };
+  const out = { app: "Pingo", version: 1, exportedAt: new Date().toISOString(), conversations: [], calls: [] };
 
   for (let i = 0; i < conversations.length; i++) {
     const conv = conversations[i];
@@ -60,7 +60,7 @@ export async function backupChats(onProgress) {
   out.calls = await fetchCalls().catch(() => []);
 
   const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-");
-  const name = `WispChat-backup-${stamp}.json`;
+  const name = `Pingo-backup-${stamp}.json`;
   await native.writeText("Backups", name, JSON.stringify(out));
   await native.writeText("Databases", "call-log.json", JSON.stringify({ savedAt: out.exportedAt, calls: out.calls }));
   return { name, chats: out.conversations.length, messages: out.conversations.reduce((n, c) => n + c.messages.length, 0), calls: out.calls.length };

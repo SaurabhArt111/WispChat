@@ -3,7 +3,7 @@
 //
 // Every call entry that reaches the app (from the server list or live over the
 // socket) is merged into the on-device database (IndexedDB) and mirrored to
-// WispChat/Databases/call-log.json on Android. The Calls tab renders from here
+// Pingo/Databases/call-log.json on Android. The Calls tab renders from here
 // instantly, works offline, and the server is only used to catch up.
 // ---------------------------------------------------------------------------
 import client from "../api/client";

@@ -37,7 +37,7 @@ public class CallForegroundService extends Service {
 
         Notification n = new NotificationCompat.Builder(this, NotificationHelper.CH_ONGOING)
                 .setSmallIcon(R.drawable.ic_stat_wisp)
-                .setContentTitle(title == null ? "WispChat call" : title)
+                .setContentTitle(title == null ? "Pingo call" : title)
                 .setContentText("Call in progress — tap to return")
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setOngoing(true)
@@ -54,7 +54,11 @@ public class CallForegroundService extends Service {
         try {
             if (type != 0) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, type);
             else startForeground(NOTIFICATION_ID, n);
-        } catch (Exception e) {
+        } catch (Exception first) {
+            // Last resort so the process isn't killed for not answering startForegroundService():
+            // retry with the plain call, then give up quietly (the call itself keeps working
+            // while the app is on screen).
+            try { startForeground(NOTIFICATION_ID, n); } catch (Exception ignored) { }
             stopSelf();
         }
         return START_NOT_STICKY;

@@ -188,7 +188,7 @@ function AttachmentFile({ message, a, onContextMenu }) {
 
   async function save() {
     if (!canOpen) return;
-    if (await nativeDownload({ url, name: a.name, mimeType: a.mimeType, kind: "file" }, showToast)) return; // Android: save into WispChat/Media
+    if (await nativeDownload({ url, name: a.name, mimeType: a.mimeType, kind: "file" }, showToast)) return; // Android: save into Pingo/Media
     const link = document.createElement("a");
     link.href = url;
     link.download = a.name || "file";

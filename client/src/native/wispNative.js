@@ -52,7 +52,7 @@ export const native = {
   stopCallService: () => call("stopCallService"),
   dismissIncomingCall: (callId) => call("dismissIncomingCall", { callId }),
 
-  // storage (the WispChat folder)
+  // storage (the Pingo folder)
   ensureStorage: () => call("ensureStorage", undefined, null),
   getStorageInfo: () => call("getStorageInfo", undefined, null),
   saveFileChunk: (args) => call("saveFileChunk", args, null),

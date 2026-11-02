@@ -920,7 +920,7 @@ export function CallProvider({ children }) {
   const callTitle = call?.peer?.displayName;
   useEffect(() => {
     if (!isNative || !callActive) return undefined;
-    native.startCallService(callTitle ? `Call with ${callTitle}` : "WispChat call", callVideo);
+    native.startCallService(callTitle ? `Call with ${callTitle}` : "Pingo call", callVideo);
     return () => {
       native.stopCallService();
     };

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Logo from "../common/Logo";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
@@ -43,7 +44,7 @@ const REVEALED_KEY = "wisp_archive_row_revealed";
 
 export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived, onOpenProfile, onOpenSettings }) {
   const { user, logout } = useAuth();
-  const { conversations, activeId, openConversation, loadingConversations, upsertConversation } = useChat();
+  const { conversations, activeId, openConversation, loadingConversations, conversationsError, refreshConversations, upsertConversation } = useChat();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -379,8 +380,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
           <Avatar user={user} size={38} showStatus online />
         </button>
         <div className="sidebar-brand">
-          <span className="sidebar-title">Wisp</span>
-          <span className="sidebar-badge">chat</span>
+          <Logo size={30} title="Pingo" />
         </div>
         <div className="sidebar-actions">
           <button
@@ -536,7 +536,17 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
           </div>
         )}
 
-        {!loadingConversations && filtered.length === 0 && (
+        {!loadingConversations && conversationsError && conversations.length === 0 && (
+          <div className="sidebar-empty" role="alert">
+            <div className="empty-chat-icon">📡</div>
+            <p>Can’t reach the server right now.</p>
+            <button className="btn btn-primary btn-sm" onClick={() => refreshConversations().catch(() => {})}>
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!loadingConversations && !(conversationsError && conversations.length === 0) && filtered.length === 0 && (
           <div className="sidebar-empty">
             <div className="empty-chat-icon">💬</div>
             <p>{query ? "No chats found matching your search." : "No conversations yet."}</p>

@@ -1,6 +1,6 @@
 {
   "appId": "com.wispchat.app",
-  "appName": "WispChat",
+  "appName": "Pingo",
   "webDir": "dist",
   "backgroundColor": "#0b0e12",
   "server": {

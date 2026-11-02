@@ -1,3 +1,6 @@
+// Load .env BEFORE any other module is evaluated (ESM hoists imports, so the old
+// dotenv.config() call below ran too late for modules that read process.env at import time).
+import "dotenv/config";
 import express from "express";
 import http from "http";
 import cors from "cors";
@@ -10,6 +13,7 @@ import { Server } from "socket.io";
 import { connectDB } from "./src/config/db.js";
 import { initSockets } from "./src/sockets/index.js";
 import { UPLOAD_DIR } from "./src/middleware/upload.js";
+import { installAsyncErrorHandling } from "./src/utils/asyncErrors.js";
 
 import authRoutes from "./src/routes/auth.routes.js";
 import userRoutes from "./src/routes/user.routes.js";
@@ -21,6 +25,11 @@ import callRoutes from "./src/routes/call.routes.js";
 import linkRoutes from "./src/routes/link.routes.js";
 
 dotenv.config();
+installAsyncErrorHandling();
+
+// Last line of defence: log and keep serving instead of exiting the whole server.
+process.on("unhandledRejection", (reason) => console.error("[unhandledRejection]", reason));
+process.on("uncaughtException", (err) => console.error("[uncaughtException]", err));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -110,6 +119,14 @@ app.use("/uploads", (req, res) => {
     return;
   }
   res.status(404).json({ message: "File not found" });
+});
+
+// While the database is (re)connecting, answer immediately with a clear 503 so the
+// app can retry, instead of letting the request hang until the client times out.
+app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/health") || mongoose.connection.readyState === 1) return next();
+  res.set("Retry-After", "3");
+  return res.status(503).json({ message: "Server is starting up — please retry in a moment", retry: true });
 });
 
 // Attach io to every request so controllers can emit events

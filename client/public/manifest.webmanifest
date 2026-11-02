@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "WispChat",
-  "short_name": "WispChat",
+  "name": "Pingo",
+  "short_name": "Pingo",
   "description": "Fast, modern realtime chat/messages, media, groups and calls in one place.",
   "start_url": "/",
   "scope": "/",

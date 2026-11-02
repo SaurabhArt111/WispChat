@@ -50,14 +50,33 @@ export function SocketProvider({ children }) {
     };
 
     s.on("connect", () => setConnected(true));
-    s.on("disconnect", () => setConnected(false));
+    s.on("disconnect", (reason) => {
+      setConnected(false);
+      // "io server disconnect" = the server hung up on us; socket.io does NOT auto-reconnect then.
+      if (reason === "io server disconnect") setTimeout(() => s.connect(), 1000);
+    });
+
+    // When the SERVER's auth middleware rejects a handshake (e.g. the host/database was
+    // still waking up), socket.io gives up and never tries again on its own — live
+    // messages and calls then stay dead until the app is reopened. Retry ourselves, with
+    // back-off. A genuinely bad login (expired/removed account) is not retried.
+    let retryTimer = null;
+    let retryCount = 0;
+    s.on("connect", () => {
+      retryCount = 0;
+    });
     s.on("connect_error", (err) => {
       console.warn("[socket] connection error:", err.message);
       setConnected(false);
+      const fatal = /^(No token|User not found|Auth failed)$/.test(err.message || "");
+      if (fatal || s.active) return; // socket.io is already retrying by itself
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => s.connect(), Math.min(1000 * 2 ** retryCount++, 15000));
     });
     setSocket(s);
 
     return () => {
+      clearTimeout(retryTimer);
       s.wakeCleanup?.();
       s.disconnect();
       setSocket(null);

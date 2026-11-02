@@ -528,7 +528,7 @@ export default function Lightbox({
             download={img.name || "image.png"}
             onClick={(e) => {
               if (!isNative || !resolvedUrl) return;
-              e.preventDefault(); // Android WebView ignores <a download> — save into the WispChat folder instead
+              e.preventDefault(); // Android WebView ignores <a download> — save into the Pingo folder instead
               nativeDownload({ url: resolvedUrl, name: img.name, mimeType: img.mimeType, kind: img.kind === "video" ? "video" : "image" }, showToast);
             }}
             title="Download"

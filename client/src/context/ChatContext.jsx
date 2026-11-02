@@ -45,10 +45,19 @@ export function ChatProvider({ children }) {
   const messagesByConvRef = useRef(messagesByConv);
   messagesByConvRef.current = messagesByConv;
 
+  const [conversationsError, setConversationsError] = useState(false);
   const refreshConversations = useCallback(async () => {
-    const res = await client.get("/conversations");
-    setConversations(res.data.conversations);
-    setLoadingConversations(false);
+    try {
+      const res = await client.get("/conversations"); // (the client already retries transient failures)
+      setConversations(res.data.conversations);
+      setConversationsError(false);
+    } catch (err) {
+      // Never leave the list in an eternal "loading" state: show what we have + a retry affordance.
+      setConversationsError(true);
+      throw err;
+    } finally {
+      setLoadingConversations(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -62,7 +71,7 @@ export function ChatProvider({ children }) {
         setConversations(cached);
         setLoadingConversations(false);
       }
-      refreshConversations();
+      refreshConversations().catch(() => {});
     } else {
       setConversations([]);
       setMessagesByConv({});
@@ -135,7 +144,7 @@ export function ChatProvider({ children }) {
     async (conversationId) => {
       const has = !!messagesByConvRef.current[conversationId]?.length;
       setLoadStateByConv((p) => ({ ...p, [conversationId]: has ? "ok" : "loading" }));
-      const delays = [0, 700, 1800, 4000];
+      const delays = [0, 700, 1800, 4000, 8000, 15000]; // covers a sleeping free-tier host
       for (let i = 0; i < delays.length; i++) {
         if (delays[i]) {
           await new Promise((r) => setTimeout(r, delays[i]));
@@ -977,6 +986,7 @@ export function ChatProvider({ children }) {
   const value = {
     conversations,
     loadingConversations,
+    conversationsError,
     activeId,
     activeConversation: conversations.find((c) => c._id === activeId) || null,
     messages: messagesByConv[activeId] || [],

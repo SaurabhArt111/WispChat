@@ -1,0 +1,57 @@
+/* ---------------------------------------------------------------------------
+   Pingo theme refresh + icon-led ("infographic") UI. Loaded last.
+--------------------------------------------------------------------------- */
+:root {
+  --ink: #080b12;
+  --surface: #0f141d;
+  --surface-2: #151c28;
+  --surface-3: #1e2736;
+  --surface-4: #2a3548;
+  --border: #212b3b;
+  --border-soft: #182030;
+  --wisp: #6ff7cf;
+  --wisp-strong: #38bdf8;
+  --wisp-ink: #04141c;
+  --wisp-dim: rgba(111, 247, 207, 0.12);
+  --wisp-glow: rgba(56, 189, 248, 0.38);
+  --wisp-gradient: linear-gradient(135deg, #6ff7cf 0%, #38bdf8 60%, #8b7cf6 130%);
+  --bubble-mine-bg: linear-gradient(135deg, rgba(111, 247, 207, 0.55) 0%, rgba(56, 189, 248, 0.45) 100%);
+  --radius-bubble: 20px;
+}
+
+/* Logo */
+.app-logo { display: block; flex-shrink: 0; }
+.app-logo.is-pulsing { animation: logoPulse 2.2s ease-in-out infinite; filter: drop-shadow(0 0 18px var(--wisp-glow)); }
+.app-logo.is-pulsing .app-logo-rings path { animation: ringPing 2.2s ease-in-out infinite; transform-origin: 256px 226px; }
+@keyframes logoPulse { 0%,100% { transform: scale(0.96); opacity: .85; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes ringPing { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+.app-boot-mark { animation: none; text-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .app-logo.is-pulsing, .app-logo.is-pulsing .app-logo-rings path { animation: none; } }
+
+/* Glyph tiles */
+.auth-glyphs { list-style: none; display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 28px 0 0; padding: 0; }
+.auth-glyph { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border-glass); box-shadow: var(--shadow-sm); }
+.auth-glyph.g-mint { color: #6ff7cf; background: rgba(111,247,207,.12); }
+.auth-glyph.g-cyan { color: #38bdf8; background: rgba(56,189,248,.14); }
+.auth-glyph.g-violet { color: #a78bfa; background: rgba(167,139,250,.14); }
+.auth-glyph.g-ember { color: #f5a65b; background: rgba(245,166,91,.14); }
+.welcome-glyphs { margin: 18px 0 26px; }
+.welcome-logo-badge { background: none; box-shadow: none; }
+.auth-brand-mark { display: flex; justify-content: center; font-size: 0; }
+.sidebar-brand { display: flex; align-items: center; }
+
+/* Icon-only bottom navigation with a pill behind the active tab */
+@media (max-width: 858px) {
+  .bottom-nav { height: 64px; background: rgba(15, 20, 29, .92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .bottom-nav-btn { position: relative; }
+  .bottom-nav-icon { display: grid; place-items: center; width: 58px; height: 36px; border-radius: 18px; transition: background var(--fast) var(--ease), color var(--fast) var(--ease); }
+  .bottom-nav-btn.active .bottom-nav-icon { background: var(--wisp-dim); box-shadow: 0 0 18px var(--wisp-glow) inset; }
+  .bottom-nav-dot { top: 4px; right: 14px; }
+}
+
+/* Native feel: no text selection on chrome, press feedback, bigger tap targets */
+.is-native button, .is-native .conv-item, .is-native .bottom-nav { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.is-native .message-text, .is-native input, .is-native textarea { -webkit-user-select: text; user-select: text; }
+.is-native .icon-btn { min-width: 44px; min-height: 44px; }
+.is-native .conv-item:active { background: var(--surface-active); }
+:focus-visible { outline: 2px solid var(--wisp-strong); outline-offset: 2px; }

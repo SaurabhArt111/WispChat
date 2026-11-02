@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { logError } from "../../utils/logger";
+import Logo from "./Logo";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -27,7 +28,7 @@ export default class ErrorBoundary extends Component {
     if (!this.state.hasError) return this.props.children;
     return (
       <div className="app-boot" style={{ gap: 16, flexDirection: "column" }}>
-        <div className="app-boot-mark">wisp</div>
+        <div className="app-boot-mark"><Logo size={72} /></div>
         <p style={{ color: "var(--text-secondary, #9aa0ac)", fontSize: 14, textAlign: "center", maxWidth: 320 }}>
           Something went wrong. Your chats are safe — refreshing usually fixes this.
         </p>

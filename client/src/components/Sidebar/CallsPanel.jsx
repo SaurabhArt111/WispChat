@@ -108,7 +108,7 @@ function SkeletonRows() {
   );
 }
 
-// "New call": search your contacts (by name or @username — Wisp has no phone
+// "New call": search your contacts (by name or @username — Pingo has no phone
 // numbers, so this doubles as the dial pad) and place a voice or video call
 // straight from here. Star people to pin them to Favourites.
 function NewCallSheet({ onClose, favs, toggleFav, placeCall }) {

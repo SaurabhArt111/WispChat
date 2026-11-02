@@ -76,7 +76,7 @@ export function useDecryptedMediaUrl(message, attachment) {
 
     if (!attachment?.encrypted) {
       setState({ url: plainUrl, loading: false, error: false, errorCode: null });
-      // Android: keep a copy in the WispChat folder (Android downloads it itself).
+      // Android: keep a copy in the Pingo folder (Android downloads it itself).
       if (isNative && attachment?.url) saveAttachment(attachment, { sent: sentByMe, auto: true });
       return undefined;
     }
@@ -103,7 +103,7 @@ export function useDecryptedMediaUrl(message, attachment) {
         const blob = new Blob([plainBuffer], { type: attachment.mimeType || "application/octet-stream" });
         const objectUrl = URL.createObjectURL(blob);
         objectUrlCache.set(cacheKey, objectUrl);
-        if (isNative) saveAttachment(attachment, { blob, sent: sentByMe, auto: true }); // decrypted copy → WispChat folder
+        if (isNative) saveAttachment(attachment, { blob, sent: sentByMe, auto: true }); // decrypted copy → Pingo folder
         if (!cancelled) setState({ url: objectUrl, loading: false, error: false, errorCode: null });
       } catch (err) {
         if (cancelled) return;

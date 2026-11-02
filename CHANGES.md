@@ -1,3 +1,15 @@
+# Pingo — update 3 (stability, notifications, calls, new identity)
+
+**Renamed to Pingo** (user-facing; the Android package id stays `com.wispchat.app` so updates/installs keep working). New icon-only logo, launcher/splash/status-bar/favicon assets regenerated, icon-led sign-in/welcome/bottom-nav, refreshed theme (`styles/theme.css`).
+
+**Server**: async route errors no longer crash the process (`utils/asyncErrors.js`); DB connect retries; 503 while DB is down; socket listeners registered before DB work; "Server busy" vs "Auth failed"; `.env` loaded before modules; placeholder TURN hosts ignored (set a REAL TURN for calls on mobile data).
+
+**App**: login is only dropped on 401/403 (not on network errors); 35 s timeout + auto-retry for reads; chat list error/retry card; socket auto-retry after a server-side rejection; notification permission requested on every start until granted, with a "Turn on" prompt.
+
+**Android native**: foreground-service start crash fixes (socket + call services), no fullscreen theme flag, message notifications shown unless that exact chat is open, mic-permission guard for the call service.
+
+**Not verified on a device**: native Java was only syntax-checked (no Android SDK here). Rebuild with `npm run android:build`, then test: fresh install, message with app swiped away, call with screen locked.
+
 # WispChat — update 2 (Android polish, no-Firebase notifications, routes, local-first)
 
 See the "Update 2" section of **ANDROID-SETUP.md**.

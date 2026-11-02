@@ -10,6 +10,8 @@ import {
   AlertIcon,
   LockIcon,
 } from "../components/common/Icons";
+import Logo from "../components/common/Logo";
+import { SendIcon, ImageIcon, PhoneIcon, UsersIcon } from "../components/common/Icons";
 import "../styles/auth.css";
 
 export default function AuthPage() {
@@ -143,31 +145,16 @@ export default function AuthPage() {
     <div className="auth-shell">
       <div className="auth-brand">
         <div className="auth-brand-glow" />
-        <div className="auth-brand-badge">
-          <SparklesIcon size={20} />
-          <span>Real-time Messenger</span>
+        <div className="auth-brand-mark" aria-label="Pingo">
+          <Logo size={112} pulse />
         </div>
-        <div className="auth-brand-mark">wisp</div>
-        <p className="auth-brand-tag">
-          A quieter, faster place to communicate. Real-time delivery, instant media composition, and rich canvas drawing tools.
-        </p>
-        <ul className="auth-brand-points">
-          <li>
-            <CheckIcon size={14} className="point-icon" />
-            <span>Instant Socket.io delivery &amp; glowing read receipts</span>
-          </li>
-          <li>
-            <CheckIcon size={14} className="point-icon" />
-            <span>Drag, drop or paste screenshots straight into any chat</span>
-          </li>
-          <li>
-            <CheckIcon size={14} className="point-icon" />
-            <span>Pre-send canvas drawing, crop &amp; rotation image studio</span>
-          </li>
-          <li>
-            <CheckIcon size={14} className="point-icon" />
-            <span>Group chats, emoji reactions, edit history &amp; custom menus</span>
-          </li>
+        {/* Infographic row: one glyph per promise, no sentences to read. */}
+        <ul className="auth-glyphs" aria-label="What you get">
+          <li title="Instant delivery"><span className="auth-glyph g-mint"><SendIcon size={22} /></span></li>
+          <li title="Photos, video and files"><span className="auth-glyph g-cyan"><ImageIcon size={22} /></span></li>
+          <li title="Voice and video calls"><span className="auth-glyph g-violet"><PhoneIcon size={22} /></span></li>
+          <li title="Groups"><span className="auth-glyph g-ember"><UsersIcon size={22} /></span></li>
+          <li title="End-to-end encrypted"><span className="auth-glyph g-mint"><LockIcon size={22} /></span></li>
         </ul>
       </div>
 
@@ -321,7 +308,7 @@ export default function AuthPage() {
             )}
 
             <button type="submit" className="btn btn-primary auth-submit" disabled={busy}>
-              {busy ? "Please wait…" : mode === "login" ? "Sign In to Wisp" : "Create Account"}
+              {busy ? "Please wait…" : mode === "login" ? "Sign In to Pingo" : "Create Account"}
             </button>
           </form>
 
@@ -335,7 +322,7 @@ export default function AuthPage() {
           <p className="auth-switch">
             {mode === "login" ? (
               <>
-                New to Wisp?{" "}
+                New to Pingo?{" "}
                 <button
                   type="button"
                   onClick={() => {

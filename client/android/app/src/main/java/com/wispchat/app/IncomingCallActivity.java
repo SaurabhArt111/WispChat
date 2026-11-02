@@ -79,7 +79,7 @@ public class IncomingCallActivity extends Activity {
         int pad = dp(32);
         root.setPadding(pad, dp(96), pad, dp(72));
 
-        TextView label = text(video ? "WispChat video call" : "WispChat voice call", 15, 0xFF98A2B3, false);
+        TextView label = text(getString(R.string.app_name) + (video ? " video call" : " voice call"), 15, 0xFF98A2B3, false);
         root.addView(label);
 
         TextView avatar = new TextView(this);

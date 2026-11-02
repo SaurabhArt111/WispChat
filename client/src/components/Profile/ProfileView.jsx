@@ -91,7 +91,7 @@ export default function ProfileView({
           </div>
 
           <p className="ci-e2ee-note">
-            <LockIcon size={12} /> Chats on Wisp are end-to-end encrypted
+            <LockIcon size={12} /> Chats on Pingo are end-to-end encrypted
           </p>
         </div>
       </div>

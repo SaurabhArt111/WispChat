@@ -9,7 +9,7 @@ const fmtBytes = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n > 10
 
 /**
  * Settings → General, Android app only: what makes notifications / ringing
- * reliable, and where WispChat keeps its files on the phone.
+ * reliable, and where Pingo keeps its files on the phone.
  */
 export default function NativeSettingsSection() {
   const { showToast } = useToast();
@@ -50,7 +50,7 @@ export default function NativeSettingsSection() {
     setBusy("backup");
     try {
       const r = await backupChats();
-      showToast(`Backed up ${r.chats} chats (${r.messages} messages) to WispChat/Backups`);
+      showToast(`Backed up ${r.chats} chats (${r.messages} messages) to Pingo/Backups`);
       refresh();
     } catch (e) {
       showToast(e?.message || "Backup failed", "danger");
@@ -92,7 +92,7 @@ export default function NativeSettingsSection() {
       </div>
       <p className="settings-hint">
         For calls to ring reliably when the app is closed, allow notifications and the full-screen call screen. On some
-        phones (Xiaomi, Oppo, Vivo, Samsung…) also set battery usage for WispChat to “Unrestricted”.
+        phones (Xiaomi, Oppo, Vivo, Samsung…) also set battery usage for Pingo to “Unrestricted”.
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
         {status && !status.granted && (
@@ -142,7 +142,7 @@ export default function NativeSettingsSection() {
 
       <div className="settings-section-title" style={{ marginTop: 20 }}>Back up chats</div>
       <p className="settings-hint">
-        Saves your chats and call history as a file in WispChat/Backups. Encrypted messages stay encrypted in the backup.
+        Saves your chats and call history as a file in Pingo/Backups. Encrypted messages stay encrypted in the backup.
       </p>
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button className="btn btn-primary btn-sm" onClick={runBackup} disabled={!!busy}>

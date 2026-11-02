@@ -5,6 +5,7 @@ import ChatApp from "./pages/ChatApp";
 import PwaManager from "./components/common/PwaManager";
 import CallOverlay from "./components/Call/CallOverlay";
 import CallBar from "./components/Call/CallBar";
+import Logo from "./components/common/Logo";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -12,7 +13,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="app-boot">
-        <div className="app-boot-mark">wisp</div>
+        <div className="app-boot-mark"><Logo size={88} pulse /></div>
       </div>
     );
   }

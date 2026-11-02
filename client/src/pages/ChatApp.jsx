@@ -29,7 +29,8 @@ import useSwipeGestures from "../hooks/useSwipeGestures";
 import useSwipeBack from "../hooks/useSwipeBack";
 import useTabSwipe from "../hooks/useTabSwipe";
 import ContactInfoPanel from "../components/Chat/ContactInfoPanel";
-import { SparklesIcon, PlusIcon, UsersIcon } from "../components/common/Icons";
+import { PlusIcon, UsersIcon, ChatIcon, ImageIcon, PhoneIcon } from "../components/common/Icons";
+import Logo from "../components/common/Logo";
 import "../styles/layout.css";
 
 // Views that get their own URL. "chats" (the default sidebar + chat window)
@@ -316,12 +317,14 @@ export default function ChatApp() {
         ) : (
           <div className="welcome-screen">
             <div className="welcome-logo-badge">
-              <SparklesIcon size={38} />
+              <Logo size={96} pulse />
             </div>
-            <h2 className="welcome-title">Welcome to Wisp Chat</h2>
-            <p className="welcome-tagline">
-              Fast, quiet, real-time messaging with instant file sharing, pre-send drawing tools, and rich reactions.
-            </p>
+            <ul className="auth-glyphs welcome-glyphs" aria-hidden="true">
+              <li><span className="auth-glyph g-mint"><ChatIcon size={20} /></span></li>
+              <li><span className="auth-glyph g-cyan"><ImageIcon size={20} /></span></li>
+              <li><span className="auth-glyph g-violet"><PhoneIcon size={20} /></span></li>
+              <li><span className="auth-glyph g-ember"><UsersIcon size={20} /></span></li>
+            </ul>
             <div className="welcome-actions">
               <button className="btn btn-primary" onClick={() => openNewChat("chat")}>
                 <PlusIcon size={16} /> Start a conversation

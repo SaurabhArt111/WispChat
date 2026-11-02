@@ -120,16 +120,25 @@ async function logCallMessage(io, { conversationId, callerId, kind, status, dura
 
 export function initSockets(io) {
   io.use(async (socket, next) => {
+    // Distinguish "your login is bad" (the app must stop retrying / sign out) from
+    // "the server had a hiccup" (the app must just try again). Treating a database
+    // blip as "Auth failed" permanently disabled live updates and calls until a restart.
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error("No token"));
+    let payload;
     try {
-      const token = socket.handshake.auth?.token;
-      if (!token) return next(new Error("No token"));
-      const payload = verifyToken(token);
+      payload = verifyToken(token);
+    } catch {
+      return next(new Error("Auth failed"));
+    }
+    try {
       const user = await User.findById(payload.id);
       if (!user) return next(new Error("User not found"));
       socket.user = user;
       next();
     } catch (err) {
-      next(new Error("Auth failed"));
+      console.error("[socket] auth lookup failed:", err?.message);
+      next(new Error("Server busy"));
     }
   });
 
@@ -174,16 +183,18 @@ export function initSockets(io) {
     if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
     onlineUsers.get(userId).add(socket.id);
 
-    await User.findByIdAndUpdate(userId, { isOnline: true });
-    deliverPendingCall(io, userId); // app opened from the "incoming call" notification
-
-    const conversations = await Conversation.find({ participants: userId }).select("_id participants");
-    conversations.forEach((c) => socket.join(`conversation:${c._id}`));
-
-    // Notify contacts this user is online
+    // IMPORTANT: every socket.on(...) below is registered synchronously. The database
+    // work happens afterwards (see "finish connecting" at the bottom). Awaiting it first
+    // meant events the app sent right after connecting (conversation:join, an instant
+    // call:invite after a reconnect…) arrived before any listener existed and were lost.
     const contactIds = new Set();
-    conversations.forEach((c) => c.participants.forEach((p) => contactIds.add(String(p))));
-    contactIds.forEach((cid) => io.to(`user:${cid}`).emit("presence:update", { userId, isOnline: true }));
+    const safe = (label, fn) => async (...args) => {
+      try {
+        await fn(...args);
+      } catch (err) {
+        console.error(`[socket] ${label} failed:`, err?.message);
+      }
+    };
 
     socket.on("typing:start", ({ conversationId }) => {
       socket.to(`conversation:${conversationId}`).emit("typing:update", {
@@ -236,7 +247,7 @@ export function initSockets(io) {
       };
     }
 
-    socket.on("call:invite", async ({ callId, calleeId, conversationId, kind, offer, device }) => {
+    socket.on("call:invite", safe("call:invite", async ({ callId, calleeId, conversationId, kind, offer, device }) => {
       if (!callId || !calleeId || !conversationId || !offer) return;
 
       // Already on a call (either side) — auto-busy instead of ringing.
@@ -289,7 +300,7 @@ export function initSockets(io) {
           }
         }, 45000)
       );
-    });
+    }));
 
     socket.on("call:answer", ({ callId, answer, device }) => {
       const call = activeCalls.get(callId);
@@ -350,11 +361,11 @@ export function initSockets(io) {
       io.to(`user:${targetId}`).emit("call:device", { callId, device: cleanDevice(device) });
     });
 
-    socket.on("call:decline", async ({ callId }) => {
+    socket.on("call:decline", safe("call:decline", async ({ callId }) => {
       await declineCallById(io, userId, callId);
-    });
+    }));
 
-    socket.on("call:end", async ({ callId }) => {
+    socket.on("call:end", safe("call:end", async ({ callId }) => {
       const call = activeCalls.get(callId);
       if (!call) return;
       if (call.callerId !== userId && call.calleeId !== userId) return;
@@ -363,9 +374,9 @@ export function initSockets(io) {
       if (call.status === "ringing") pushCallEnded(call.calleeId, callId, "cancelled").catch(() => {});
       socket.to(`user:${userId}`).emit("call:handled-elsewhere", { callId });
       await finishCall(callId);
-    });
+    }));
 
-    socket.on("disconnect", async () => {
+    socket.on("disconnect", safe("disconnect", async () => {
       const set = onlineUsers.get(userId);
       if (set) {
         set.delete(socket.id);
@@ -399,6 +410,22 @@ export function initSockets(io) {
           }
         }
       }
-    });
+    }));
+
+    // ---- finish connecting (slow work, after all listeners exist) ----
+    try {
+      await User.findByIdAndUpdate(userId, { isOnline: true });
+      deliverPendingCall(io, userId); // app opened from the "incoming call" notification
+      const conversations = await Conversation.find({ participants: userId }).select("_id participants");
+      conversations.forEach((c) => {
+        socket.join(`conversation:${c._id}`);
+        c.participants.forEach((p) => contactIds.add(String(p)));
+      });
+      // Notify contacts this user is online
+      contactIds.forEach((cid) => io.to(`user:${cid}`).emit("presence:update", { userId, isOnline: true }));
+      socket.emit("session:ready"); // lets the app know rooms are joined
+    } catch (err) {
+      console.error("[socket] connect setup failed:", err?.message);
+    }
   });
 }

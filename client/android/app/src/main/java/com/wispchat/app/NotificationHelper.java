@@ -74,7 +74,7 @@ public final class NotificationHelper {
 
         // The small permanent entry Android requires for an app that stays connected (no sound, no badge).
         NotificationChannel bg = new NotificationChannel(CH_BACKGROUND, "Background connection", NotificationManager.IMPORTANCE_MIN);
-        bg.setDescription("Keeps WispChat connected so messages and calls arrive without Google services. You can hide this in system settings.");
+        bg.setDescription("Keeps Pingo connected so messages and calls arrive without Google services. You can hide this in system settings.");
         bg.setShowBadge(false);
         bg.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
         nm.createNotificationChannel(bg);
@@ -98,9 +98,13 @@ public final class NotificationHelper {
     }
 
     public static void showMessage(Context ctx, Map<String, String> d) {
-        if (WispApplication.isForeground()) return; // the open app already shows it live
-        if (!firstTime("m:" + d.get("messageId"))) return;
         String conversationId = d.get("conversationId");
+        // Only suppress it for the chat the person is looking at right now. (It used to be
+        // dropped whenever the app was open at all, so with the app on the chat list or in
+        // another chat a new message produced no notification and no sound.)
+        if (WispApplication.isForeground() && conversationId != null
+                && conversationId.equals(WispPrefs.activeConversation(ctx))) return;
+        if (!firstTime("m:" + d.get("messageId"))) return;
         String sender = nonEmpty(d.get("senderName"), "New message");
         String preview = nonEmpty(d.get("preview"), "New message");
         boolean isGroup = "true".equals(d.get("isGroup"));
@@ -165,7 +169,7 @@ public final class NotificationHelper {
             // Summary lets Android bundle 4+ chats under one heading.
             Notification summary = new NotificationCompat.Builder(ctx, CH_MESSAGES)
                     .setSmallIcon(R.drawable.ic_stat_wisp)
-                    .setContentTitle("WispChat")
+                    .setContentTitle(ctx.getString(R.string.app_name))
                     .setGroup("wisp_messages")
                     .setGroupSummary(true)
                     .setAutoCancel(true)

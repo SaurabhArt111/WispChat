@@ -1,4 +1,4 @@
-# WispChat for Android — setup guide
+# Pingo for Android — setup guide
 
 The Android app is your existing web app wrapped with **Capacitor**, plus a native layer
 (`client/android/app/src/main/java/com/wispchat/app/`) for the things a browser can't do:
@@ -65,24 +65,24 @@ The Android app's origin (`https://localhost`) is allowed by CORS automatically.
 
 ## What the app does on the phone
 
-### The WispChat folder (like WhatsApp)
+### The Pingo folder (like WhatsApp)
 ```
-Internal storage/Android/media/com.wispchat.app/WispChat/
-  Media/  WispChat Images · WispChat Video · WispChat Audio · WispChat Voice Notes
-          WispChat Documents · WispChat Animated Gifs · WispChat Stickers
-          WispChat Profile Photos · WispChat Status        (Images/Video/Audio/Documents have a Sent/ folder)
+Internal storage/Android/media/com.wispchat.app/Pingo/
+  Media/  Pingo Images · Pingo Video · Pingo Audio · Pingo Voice Notes
+          Pingo Documents · Pingo Animated Gifs · Pingo Stickers
+          Pingo Profile Photos · Pingo Status        (Images/Video/Audio/Documents have a Sent/ folder)
   Databases/  call-log.json
-  Backups/    WispChat-backup-YYYYMMDD-HHMM.json
+  Backups/    Pingo-backup-YYYYMMDD-HHMM.json
 ```
 - Created on first launch. Files are named like `IMG-20260131-WC0007.jpg`; documents keep their name.
 - Photos, videos and audio you open or receive are saved automatically (switch off in **Settings → General**);
   documents are saved when you tap Save/Download. Encrypted (E2EE) media is saved **decrypted**, so it opens in
   any gallery/player. Anyone with access to the phone's storage can read that folder — same as WhatsApp.
-- **Why `Android/media/…` and not `/sdcard/WispChat`?** Since Android 10 apps can't create their own top-level
+- **Why `Android/media/…` and not `/sdcard/Pingo`?** Since Android 10 apps can't create their own top-level
   folders; `Android/media/<package>/` is the sanctioned place (WhatsApp uses it too). It needs **no storage
   permission**, shows up in file managers, and the gallery indexes images/videos in it. On Android 9 and older the
-  folder is created at the top level (`/WispChat`).
-- **Call logs**: your WispChat call history (not the phone's SIM call log — reading that needs a permission Google
+  folder is created at the top level (`/Pingo`).
+- **Call logs**: your Pingo call history (not the phone's SIM call log — reading that needs a permission Google
   Play restricts) is written to `Databases/call-log.json` and included in backups.
 - **Chats**: your chats live on the server (so they follow you across devices). **Settings → General → Back up now**
   writes a copy to `Backups/`. E2EE messages stay encrypted inside the backup.
@@ -104,7 +104,7 @@ Internal storage/Android/media/com.wispchat.app/WispChat/
 ## Limits you should know about
 - **Force stop**: if the user force-stops the app in Android settings, Android blocks all background delivery for
   every app until it is opened again. Swiping from Recents is fine.
-- **Aggressive battery managers** (Xiaomi, Oppo, Vivo, Huawei, some Samsung): ask users to set WispChat battery to
+- **Aggressive battery managers** (Xiaomi, Oppo, Vivo, Huawei, some Samsung): ask users to set Pingo battery to
   "Unrestricted" (Settings → General has a shortcut). Without it those phones may delay pushes.
 - **Android 14+** may require the user to allow "full-screen notifications" for the call screen (Settings → General
   has a shortcut). Otherwise a call shows as a heads-up notification with Accept/Decline.
@@ -152,14 +152,14 @@ time on first build: a missing import or a Gradle version nit is possible. Pleas
   background**. Restarts after reboot/update. Firebase still works too (if `google-services.json` is present) and
   duplicates are suppressed.
 - For reliable delivery in Doze, tap **Allow unrestricted battery** in the same settings section. Android shows one
-  small silent "WispChat" notification while this is on — Android requires that for any app that stays connected.
+  small silent "Pingo" notification while this is on — Android requires that for any app that stays connected.
 
 **Routes, sheets, calls**
 - `/chat/:id/selected` — selecting messages is a route: Back (or Esc on a PC) deselects instead of leaving the chat.
 - `/chat/:id/info` — contact / group info is a route: Back closes it.
 - **Friend Requests → TopSheet**; every dialog that used `Modal` is a **BottomSheet** on phones (drag, Back, rides
   above the keyboard).
-- **Call log lives on the device** (IndexedDB + `WispChat/Databases/call-log.json`); the Calls tab renders from it
+- **Call log lives on the device** (IndexedDB + `Pingo/Databases/call-log.json`); the Calls tab renders from it
   instantly, works offline, pages locally and only uses the server to catch up.
 - **Emoji**: WhatsApp-style panel docked where the keyboard was (same height, no jump), pre-warmed while idle,
   inserts at the cursor, Back closes just the panel.
