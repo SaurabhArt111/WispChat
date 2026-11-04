@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing from the app (tokens, keys) is ever copied to cloud backups. -->
+<full-backup-content><exclude domain="sharedpref" path="." /><exclude domain="file" path="." /></full-backup-content>

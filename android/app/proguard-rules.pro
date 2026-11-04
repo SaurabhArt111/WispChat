@@ -1,0 +1,5 @@
+-keep class org.webrtc.** { *; }
+-keep class io.socket.** { *; }
+-dontwarn org.webrtc.**
+-dontwarn okhttp3.**
+-dontwarn javax.annotation.**

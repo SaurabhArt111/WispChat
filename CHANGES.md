@@ -39,3 +39,9 @@ Notes
 - `npm run test:sheets` runs the physics unit tests (no new dependencies).
 - Not yet tried on physical iOS / Android hardware.
 
+
+---
+# Native Android app (new): `android/`
+Kotlin + Jetpack Compose client for the same Node backend (see `android/README.md` for scope and verification status).
+Layout is now: `server/` (Node API, standalone) · `client/` (React web) · `android/` (native). `client/android` is the old
+WebView shell, kept only until the native app has been validated — delete it afterwards.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome Pingo mark for the status bar: a speech bubble with a "ping" signal cut out. Android tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M256 78C156 78 76 146 76 230c0 50 27 94 70 120l-18 66c-2 9 8 15 15 10l68-49c14 3 29 4 45 4 100 0 180-68 180-151S356 78 256 78z M309.5 177.8A72 72 0 0 1 309.5 274.2L293.2 259.5A50 50 0 0 0 293.2 192.5Z M202.5 274.2A72 72 0 0 1 202.5 177.8L218.8 192.5A50 50 0 0 0 218.8 259.5Z M340.7 149.7A114 114 0 0 1 340.7 302.3L324.4 287.6A92 92 0 0 0 324.4 164.4Z M171.3 302.3A114 114 0 0 1 171.3 149.7L187.6 164.4A92 92 0 0 0 187.6 287.6Z M230 226a26 26 0 1 0 52 0a26 26 0 1 0 -52 0Z" />
+</vector>
