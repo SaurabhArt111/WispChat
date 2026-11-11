@@ -68,6 +68,7 @@ class RealtimeService : Service() {
         val repo = applicationContext.repo
         when (d.optString("type")) {
             "message" -> {
+                if (!repo.settings.messageNotifications.value) return
                 val conv = d.optString("conversationId"); val msgId = d.optString("messageId")
                 if (repo.appVisible && repo.store.activeConversation == conv) return // the chat is open on screen
                 val decrypted = repo.fetchForNotification(conv, msgId)

@@ -9,6 +9,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,8 +46,32 @@ private val scheme = darkColorScheme(
     error = Color(0xFFFF6B6B),
 )
 
+private val lightScheme = androidx.compose.material3.lightColorScheme(
+    primary = Color(0xFF0B8F72), onPrimary = Color.White,
+    secondary = Color(0xFF0B7FB8), tertiary = Color(0xFF6A5BE0),
+    background = Color(0xFFF6F8FB), onBackground = Color(0xFF0E1522),
+    surface = Color.White, onSurface = Color(0xFF0E1522),
+    surfaceVariant = Color(0xFFE9EEF5), onSurfaceVariant = Color(0xFF55627A),
+    error = Color(0xFFD92D3A),
+)
+
+/** [forceDark] is for the call screens, which always sit on a dark gradient. */
 @Composable
-fun PingoTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = scheme, content = content)
+fun PingoTheme(forceDark: Boolean = false, content: @Composable () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val settings = ctx.applicationContext.let { (it as com.pingo.app.App).repo.settings }
+    val mode by settings.theme.collectAsState()
+    val scale by settings.fontScale.collectAsState()
+    val dark = forceDark || when (mode) {
+        com.pingo.app.data.ThemeMode.DARK -> true
+        com.pingo.app.data.ThemeMode.LIGHT -> false
+        com.pingo.app.data.ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * scale),
+    ) { MaterialTheme(colorScheme = if (dark) scheme else lightScheme, content = content) }
+}
 
 private const val BUBBLE = "M256 78C156 78 76 146 76 230c0 50 27 94 70 120l-18 66c-2 9 8 15 15 10l68-49c14 3 29 4 45 4 100 0 180-68 180-151S356 78 256 78z"
 

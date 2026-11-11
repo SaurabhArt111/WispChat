@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,7 +60,7 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun ChatListScreen(onOpen: (String) -> Unit) {
+fun ChatListScreen(onOpen: (String) -> Unit, onSettings: () -> Unit) {
     val ctx = LocalContext.current
     val repo = ctx.repo
     val scope = rememberCoroutineScope()
@@ -82,7 +83,12 @@ fun ChatListScreen(onOpen: (String) -> Unit) {
                 Spacer(Modifier.weight(1f))
                 if (!connected) Icon(Icons.Filled.CloudOff, "Offline", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 8.dp))
                 IconButton(onClick = { newChat = true }) { Icon(Icons.Filled.Search, "Find people") }
-                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.Notifications, "Settings") }
+                IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") }
+            }
+            val netKind by repo.net.kind.collectAsState()
+            if (netKind == com.pingo.app.data.Net.Kind.NONE) Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.CloudOff, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("  Offline — showing saved chats", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (loading && list.isEmpty()) Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
             else if (error && list.isEmpty()) Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
@@ -106,7 +112,6 @@ fun ChatListScreen(onOpen: (String) -> Unit) {
         newChat = false
         scope.launch { try { onOpen(repo.openDirect(u.id).id) } catch (_: Exception) {} }
     })
-    if (menu) SettingsDialog(onDismiss = { menu = false })
 }
 
 @Composable
@@ -156,25 +161,3 @@ private fun NewChatDialog(onDismiss: () -> Unit, onPick: (User) -> Unit) {
         })
 }
 
-@Composable
-private fun SettingsDialog(onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    val repo = ctx.repo
-    val scope = rememberCoroutineScope()
-    var bg by remember { mutableStateOf(repo.store.backgroundDelivery) }
-    AlertDialog(onDismissRequest = onDismiss, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-        title = { Icon(Icons.Filled.Notifications, null) },
-        text = {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Notifications, null, tint = MaterialTheme.colorScheme.primary)
-                    Text("  Alerts when closed", modifier = Modifier.weight(1f))
-                    Switch(bg, { bg = it; repo.store.backgroundDelivery = it; if (it) RealtimeService.startIfWanted(ctx) else RealtimeService.stop(ctx) })
-                }
-                Spacer(Modifier.height(18.dp))
-                TextButton(onClick = { onDismiss(); scope.launch { repo.logout() } }) {
-                    Icon(Icons.Filled.Logout, null, tint = MaterialTheme.colorScheme.error); Text("  Sign out", color = MaterialTheme.colorScheme.error)
-                }
-            }
-        })
-}

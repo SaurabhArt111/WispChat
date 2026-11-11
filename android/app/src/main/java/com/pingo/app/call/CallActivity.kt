@@ -61,7 +61,7 @@ class CallActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent { PingoTheme { CallUi(onClose = { finish() }) } }
+        setContent { PingoTheme(forceDark = true) { CallUi(onClose = { finish() }) } }
     }
 }
 

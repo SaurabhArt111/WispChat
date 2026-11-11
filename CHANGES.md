@@ -45,3 +45,7 @@ Notes
 Kotlin + Jetpack Compose client for the same Node backend (see `android/README.md` for scope and verification status).
 Layout is now: `server/` (Node API, standalone) · `client/` (React web) · `android/` (native). `client/android` is the old
 WebView shell, kept only until the native app has been validated — delete it afterwards.
+
+# Native app update: offline-first + new Settings
+On-device database and media store, offline outbox, auto-download rules, gallery saving, delete-for-me/everyone with
+"also delete from device", light/dark theme and a WhatsApp-style Settings page. See `android/README.md`.

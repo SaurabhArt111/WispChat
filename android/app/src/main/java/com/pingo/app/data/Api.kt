@@ -17,13 +17,14 @@ import java.util.concurrent.TimeUnit
 class ApiException(val status: Int, message: String, val transient: Boolean = false) : IOException(message)
 
 /** Thin REST client for the Pingo Node backend. Adds the bearer token, retries safe reads while a sleeping host wakes up. */
-class Api(private val store: Store) {
+class Api(private val store: Store, counter: okhttp3.Interceptor? = null) {
     val base: String = BuildConfig.BACKEND_URL
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(25, TimeUnit.SECONDS)
         .readTimeout(35, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .pingInterval(25, TimeUnit.SECONDS)
+        .apply { counter?.let { addInterceptor(it) } }
         .build()
 
     private val json = "application/json; charset=utf-8".toMediaType()

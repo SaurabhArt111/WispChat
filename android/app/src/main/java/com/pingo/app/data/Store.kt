@@ -51,6 +51,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean("bg", true)
         set(v) = prefs.edit().putBoolean("bg", v).apply()
 
+    /** Which account the on-device cache belongs to (so another account never sees it). */
+    var lastUserId: String?
+        get() = prefs.getString("lastUser", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("lastUser") else putString("lastUser", v) }.apply()
+
     fun clearSession() = prefs.edit().remove("token").remove("user").remove("privd").putString("active", "").apply()
 
     companion object { private const val FILE = "pingo_secure" }

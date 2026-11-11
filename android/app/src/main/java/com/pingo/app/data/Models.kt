@@ -67,6 +67,8 @@ data class Message(
     val text: String = if (encrypted) "" else rawText,
     val locked: Boolean = false,
     val mk: ByteArray? = null,
+    /** 0 = delivered, 1 = waiting to send (offline / sending), 2 = failed */
+    val sendState: Int = 0,
 ) {
     companion object {
         fun from(o: JSONObject, fallbackConv: String = ""): Message {

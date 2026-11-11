@@ -1,6 +1,5 @@
 package com.pingo.app.data
 
-import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -12,24 +11,32 @@ import com.pingo.app.net.Realtime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.security.PrivateKey
 import java.util.UUID
 
-/** Single source of truth for the signed-in session, chats and messages. UI observes the StateFlows. */
-class Repo(private val ctx: Context, val store: Store, val api: Api) {
+/**
+ * Single source of truth, OFFLINE-FIRST: every screen is fed from the on-device database
+ * ([LocalDb]) and media folder ([MediaCache]); the network only refreshes them in the background.
+ * With no internet the app opens instantly with all chats, messages and downloaded media, and
+ * anything typed meanwhile waits in the outbox and is sent automatically when the phone is back online.
+ */
+class Repo(
+    private val ctx: Context, val store: Store, val api: Api,
+    val db: LocalDb, val media: MediaCache, val net: Net, val settings: Settings,
+) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    /** The UI-process socket (live chat + call signalling). */
     val rt = Realtime(api.base, { store.token }, background = false)
 
     private val _me = MutableStateFlow<User?>(null)
@@ -46,14 +53,15 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
     val messages: StateFlow<Map<String, List<Message>>> = _messages
     private val _typing = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     val typing: StateFlow<Map<String, Set<String>>> = _typing
-    /** Decrypted one-line previews for the chat list. */
     private val _previews = MutableStateFlow<Map<String, String>>(emptyMap())
     val previews: StateFlow<Map<String, String>> = _previews
     private val _authNotice = MutableStateFlow<String?>(null)
     val authNotice: StateFlow<String?> = _authNotice
+    /** Bumped whenever a media file finishes downloading / is removed, so bubbles refresh. */
+    private val _mediaTick = MutableStateFlow(0)
+    val mediaTick: StateFlow<Int> = _mediaTick
 
     private val _calls = MutableSharedFlow<Realtime.Event>(extraBufferCapacity = 64)
-    /** Call signalling events, consumed by CallEngine. */
     val callEvents: SharedFlow<Realtime.Event> = _calls
 
     @Volatile private var priv: PrivateKey? = null
@@ -61,59 +69,66 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
     @Volatile var callActive = false
         set(v) { field = v; syncSocket() }
 
+    private val outboxLock = Mutex()
+    private val downloading = HashSet<String>()
+    private val outboxDir = File(ctx.filesDir, "outbox").apply { mkdirs() }
+
     val myId get() = _me.value?.id.orEmpty()
 
     init {
-        // Load the saved identity synchronously so the background service (which can start the
-        // process without any UI) can already decrypt messages for notifications.
         try {
             store.userJson?.let { _me.value = User.from(JSONObject(it)) }
             priv = store.privateD?.let { E2ee.privateKeyFromJwk(it) }
         } catch (_: Exception) {}
-        rt.onAuthInvalid = { scope.launch { signOutLocal("Your session expired. Please sign in again.") } }
-        scope.launch {
-            rt.events.collect { handle(it) }
-        }
-        // Keep the UI socket up only while the app is on screen (or a call is running); the
-        // foreground service's lightweight socket delivers notifications the rest of the time.
+        rt.onAuthInvalid = { scope.launch { signOutLocal("Your session expired. Please sign in again.", wipe = false) } }
+        scope.launch { rt.events.collect { handle(it) } }
+        net.onBackOnline = { scope.launch { syncNow() } }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) { appVisible = true; syncSocket() }
             override fun onStop(owner: LifecycleOwner) { appVisible = false; syncSocket() }
         })
+        // Show the cached chat list immediately — before (and regardless of) any network call.
+        if (_me.value != null) scope.launch { loadConversationsFromDb() }
     }
 
     private fun syncSocket() {
         if (_me.value != null && (appVisible || callActive)) rt.connect() else if (!callActive) rt.disconnect()
     }
 
+    /** Everything that should happen as soon as we're online again. */
+    suspend fun syncNow() {
+        if (_me.value == null) return
+        refreshConversations()
+        flushOutbox()
+        store.activeConversation.takeIf { it.isNotEmpty() }?.let { loadMessages(it) }
+    }
+
     // ------------------------------------------------------------------ session
     fun restore() {
         scope.launch {
-            val tok = store.token; val u = store.userJson; val d = store.privateD
-            if (tok != null && u != null) {
+            val tok = store.token
+            if (tok != null && _me.value == null) {
                 try {
-                    _me.value = User.from(JSONObject(u))
-                    priv = d?.let { E2ee.privateKeyFromJwk(it) }
+                    _me.value = store.userJson?.let { User.from(JSONObject(it)) }
+                    priv = store.privateD?.let { E2ee.privateKeyFromJwk(it) }
                 } catch (e: Exception) { store.clearSession(); _me.value = null }
             }
             _checking.value = false
             if (_me.value != null) {
                 afterSignIn()
-                // Validate quietly: only a real 401/403 ends the session, a network error never does.
-                try {
-                    val r = api.get("/auth/me")
-                    val fresh = r.getJSONObject("user")
+                try { // quiet validation: only a real 401/403 ends the session; being offline never does
+                    val fresh = api.get("/auth/me").getJSONObject("user")
                     fresh.optJSONObject("e2ee")?.apply { remove("wrappedPrivateKey"); remove("wrapIv"); remove("kdfSalt"); remove("kdfIterations") }
                     store.userJson = fresh.toString()
                     _me.value = User.from(fresh)
                 } catch (e: ApiException) {
-                    if (e.status == 401 || e.status == 403) signOutLocal("Your session expired. Please sign in again.")
+                    if (e.status == 401 || e.status == 403) signOutLocal("Your session expired. Please sign in again.", wipe = false)
                 }
             }
         }
     }
 
-    private fun wrapBody(pub: com.pingo.app.crypto.E2ee.PublicJwk, w: E2ee.WrappedPrivateKey) = JSONObject()
+    private fun wrapBody(pub: E2ee.PublicJwk, w: E2ee.WrappedPrivateKey) = JSONObject()
         .put("publicKeyJwk", JSONObject(pub.toMap()))
         .put("wrappedPrivateKey", w.wrappedPrivateKey).put("wrapIv", w.wrapIv)
         .put("kdfSalt", w.kdfSalt).put("kdfIterations", w.kdfIterations)
@@ -126,8 +141,7 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
             if (r.optBoolean("needsE2EESetup") || user.optJSONObject("e2ee")?.optString("wrappedPrivateKey").isNullOrEmpty()) {
                 val kp = withContext(Dispatchers.Default) { E2ee.generateIdentity() }
                 val w = withContext(Dispatchers.Default) { E2ee.wrapPrivateKeyWithPassword(kp.private, kp.public, password) }
-                val res = api.post("/auth/e2ee-setup", wrapBody(E2ee.publicJwk(kp.public), w))
-                user = res.getJSONObject("user")
+                user = api.post("/auth/e2ee-setup", wrapBody(E2ee.publicJwk(kp.public), w)).getJSONObject("user")
                 priv = kp.private
             } else {
                 val e = user.getJSONObject("e2ee")
@@ -151,9 +165,12 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
         finishSignIn(r.getJSONObject("user"))
     }
 
-    private fun finishSignIn(user: JSONObject) {
-        // The wrapped private key stays on the server; on this device only the unwrapped scalar is kept, in the Keystore-backed store.
+    private suspend fun finishSignIn(user: JSONObject) {
         user.optJSONObject("e2ee")?.apply { remove("wrappedPrivateKey"); remove("wrapIv"); remove("kdfSalt"); remove("kdfIterations") }
+        // A different person on this phone must never see the previous account's cached data.
+        val id = user.optString("_id")
+        if (store.lastUserId != null && store.lastUserId != id) wipeLocalData()
+        store.lastUserId = id
         store.userJson = user.toString()
         store.privateD = priv?.let { E2ee.privateD(it) }
         _authNotice.value = null
@@ -164,43 +181,56 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
     private fun afterSignIn() {
         com.pingo.app.service.RealtimeService.startIfWanted(ctx)
         syncSocket()
-        scope.launch { refreshConversations() }
+        scope.launch { if (_conversations.value.isEmpty()) loadConversationsFromDb(); refreshConversations(); flushOutbox() }
     }
 
+    /** Explicit sign-out: also removes this account's downloaded data from the phone. */
     suspend fun logout() {
         try { api.request("POST", "/auth/logout", JSONObject(), 0) } catch (_: Exception) {}
-        signOutLocal(null)
+        signOutLocal(null, wipe = true)
     }
 
-    private suspend fun signOutLocal(notice: String?) {
+    private suspend fun signOutLocal(notice: String?, wipe: Boolean) {
         rt.disconnect()
         com.pingo.app.service.RealtimeService.stop(ctx)
         store.clearSession()
         priv = null
+        if (wipe) { wipeLocalData(); store.lastUserId = null }
         _conversations.value = emptyList(); _messages.value = emptyMap(); _previews.value = emptyMap()
         _authNotice.value = notice
         _me.value = null
     }
 
+    private suspend fun wipeLocalData() {
+        media.clearAll(); db.wipe(); outboxDir.listFiles()?.forEach { it.delete() }
+    }
+
     // ------------------------------------------------------------------ conversations
+    private suspend fun loadConversationsFromDb() {
+        val rows = db.loadConversations()
+        if (rows.isEmpty() || _conversations.value.isNotEmpty()) return
+        _conversations.value = rows.map { Conversation.from(it, myId) }
+        _conversations.value.forEach { c -> c.lastMessage?.let { m -> setPreview(c.id, decrypt(m)) } }
+    }
+
     suspend fun refreshConversations() {
         _convLoading.value = _conversations.value.isEmpty()
         try {
-            val arr = api.get("/conversations").getJSONArray("conversations")
-            val list = (0 until arr.length()).map { Conversation.from(arr.getJSONObject(it), myId) }
+            val arr = api.request("GET", "/conversations", null, if (net.online) 4 else 0).getJSONArray("conversations")
+            val raws = (0 until arr.length()).map { arr.getJSONObject(it) }
+            val list = raws.map { Conversation.from(it, myId) }
             _conversations.value = list.sortedByDescending { it.lastMessageAt }
             _convError.value = false
-            list.forEach { c -> c.lastMessage?.let { m -> scope.launch { setPreview(c.id, decrypt(m)) } } }
+            db.saveConversations(list.zip(raws).map { (c, r) -> Triple(c.id, c.lastMessageAt, r) })
+            list.forEach { c -> c.lastMessage?.let { m -> setPreview(c.id, decrypt(m)) } }
         } catch (e: Exception) {
-            _convError.value = true
-        } finally {
-            _convLoading.value = false
-        }
+            _convError.value = _conversations.value.isEmpty() // cached chats are shown, so this is not an error screen
+        } finally { _convLoading.value = false }
     }
 
     suspend fun openDirect(userId: String): Conversation {
         val c = Conversation.from(api.post("/conversations/direct", JSONObject().put("userId", userId)).getJSONObject("conversation"), myId)
-        _conversations.update { (listOf(c) + it.filter { x -> x.id != c.id }) }
+        _conversations.update { listOf(c) + it.filter { x -> x.id != c.id } }
         return c
     }
 
@@ -217,16 +247,13 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
         m.attachments.isNotEmpty() -> when (m.attachments.first().kind) { "image" -> "📷 Photo"; "video" -> "🎬 Video"; "audio" -> "🎤 Audio"; else -> "📎 File" }
         else -> ""
     }
+    fun previewText(m: Message) = previewOf(m)
+    private fun setPreview(convId: String, m: Message) = _previews.update { it + (convId to previewOf(m)) }
 
-    /** For the notification service: newest message of a chat, decrypted, so the alert shows real text. */
     suspend fun fetchForNotification(convId: String, messageId: String): Message? = try {
         val arr = api.request("GET", "/messages/$convId?limit=8", null, 1).getJSONArray("messages")
         (0 until arr.length()).map { Message.from(arr.getJSONObject(it), convId) }.firstOrNull { it.id == messageId }?.let { decrypt(it) }
     } catch (_: Exception) { null }
-
-    fun previewText(m: Message) = previewOf(m)
-
-    private fun setPreview(convId: String, m: Message) = _previews.update { it + (convId to previewOf(m)) }
 
     // ------------------------------------------------------------------ decrypt
     fun decrypt(m: Message): Message {
@@ -239,34 +266,72 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
             val mk = E2ee.unwrapMessageKey(mine.wrappedKey, mine.keyIv, key, E2ee.publicKeyFromJwk(sender.pubX!!, sender.pubY!!))
             val txt = if (m.rawText.isNotEmpty() && m.iv != null) E2ee.decryptText(mk, m.rawText, m.iv) else ""
             m.copy(text = txt, locked = false, mk = mk)
-        } catch (e: Exception) {
-            m.copy(locked = true)
+        } catch (e: Exception) { m.copy(locked = true) }
+    }
+
+    // ------------------------------------------------------------------ messages (local first)
+    private suspend fun fromRows(conv: String, rows: List<JSONObject>): List<Message> =
+        withContext(Dispatchers.Default) { rows.map { decrypt(Message.from(it, conv)) } }
+
+    /** Pending/failed messages from the outbox, shaped like normal messages so they appear in the chat. */
+    private suspend fun pendingMessages(conv: String): List<Message> = withContext(Dispatchers.Default) {
+        val meJson = store.userJson?.let { JSONObject(it) } ?: return@withContext emptyList()
+        db.outbox(conv).map { row ->
+            val j = JSONObject(row.body.toString())
+            j.put("_id", "local-" + row.clientId).put("conversation", conv).put("sender", meJson)
+                .put("createdAt", java.time.Instant.ofEpochMilli(row.createdAt).toString())
+            if (row.kind == "media") {
+                val atts = JSONArray()
+                row.files.forEach { f ->
+                    val p = f.split("\t")
+                    atts.put(JSONObject().put("url", "outbox:" + p[0]).put("name", p.getOrElse(1) { "file" }).put("mimeType", p.getOrElse(2) { "" }).put("kind", p.getOrElse(3) { "file" }).put("encrypted", false))
+                }
+                j.put("attachments", atts)
+            }
+            decrypt(Message.from(j, conv)).copy(sendState = if (row.failed) 2 else 1)
         }
     }
 
-    // ------------------------------------------------------------------ messages
+    /** Opens a chat: shows what's on the phone immediately, then refreshes from the server if reachable. */
     suspend fun loadMessages(convId: String) {
+        val local = fromRows(convId, db.loadMessages(convId, 80))
+        publish(convId, local)
+        local.lastOrNull()?.let { setPreview(convId, it) }
+        autoDownload(local)
         try {
-            val arr = api.get("/messages/$convId?limit=60").getJSONArray("messages")
-            val list = withContext(Dispatchers.Default) { (0 until arr.length()).map { decrypt(Message.from(arr.getJSONObject(it), convId)) } }
-            _messages.update { cur ->
-                val pending = cur[convId].orEmpty().filter { it.id.startsWith("local-") && list.none { s -> s.clientId == it.clientId } }
-                cur + (convId to (list + pending))
-            }
-            list.lastOrNull()?.let { setPreview(convId, it) }
-        } catch (_: Exception) { /* the screen shows what it has; pull-to-refresh/reconnect retries */ }
+            val arr = api.request("GET", "/messages/$convId?limit=60", null, if (net.online) 3 else 0).getJSONArray("messages")
+            val raws = (0 until arr.length()).map { arr.getJSONObject(it) }.filterNot { db.isHidden(it.optString("_id")) }
+            db.saveMessages(convId, raws)
+            val merged = fromRows(convId, db.loadMessages(convId, maxOf(80, local.size)))
+            publish(convId, merged)
+            merged.lastOrNull()?.let { setPreview(convId, it) }
+            autoDownload(merged)
+        } catch (_: Exception) { /* offline: the on-device copy is already on screen */ }
+    }
+
+    private suspend fun publish(convId: String, serverMessages: List<Message>) {
+        val pending = pendingMessages(convId)
+        _messages.update { it + (convId to (serverMessages + pending).sortedBy { m -> m.createdAt }) }
     }
 
     suspend fun loadOlder(convId: String) {
         val first = _messages.value[convId]?.firstOrNull { !it.id.startsWith("local-") } ?: return
-        try {
-            val arr = api.get("/messages/$convId?limit=60&before=" + java.net.URLEncoder.encode(java.time.Instant.ofEpochMilli(first.createdAt).toString(), "UTF-8")).getJSONArray("messages")
-            val older = withContext(Dispatchers.Default) { (0 until arr.length()).map { decrypt(Message.from(arr.getJSONObject(it), convId)) } }
-            _messages.update { it + (convId to (older + it[convId].orEmpty())) }
-        } catch (_: Exception) {}
+        var rows = db.loadMessages(convId, 40, first.createdAt)
+        if (rows.size < 40 && net.online) {
+            try {
+                val arr = api.get("/messages/$convId?limit=60&before=" + java.net.URLEncoder.encode(java.time.Instant.ofEpochMilli(first.createdAt).toString(), "UTF-8")).getJSONArray("messages")
+                db.saveMessages(convId, (0 until arr.length()).map { arr.getJSONObject(it) }.filterNot { db.isHidden(it.optString("_id")) })
+                rows = db.loadMessages(convId, 40, first.createdAt)
+            } catch (_: Exception) {}
+        }
+        val older = fromRows(convId, rows)
+        _messages.update { it + (convId to (older + it[convId].orEmpty()).distinctBy { m -> m.id }) }
     }
 
+    // ---- sending: always through the outbox, so it works with or without internet ----
     private data class Envelope(val mk: ByteArray, val keys: List<E2ee.KeyEnvelope>)
+
+    private fun conversationOrNull(id: String) = _conversations.value.firstOrNull { it.id == id }
 
     private fun envelopeFor(conv: Conversation): Envelope? {
         val key = priv ?: return null
@@ -277,58 +342,106 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
         return Envelope(mk, recipients.values.map { E2ee.wrapMessageKey(mk, key, E2ee.publicKeyFromJwk(it.pubX!!, it.pubY!!), it.id) })
     }
 
+    private fun sealBody(clientId: String, env: Envelope?, text: String, replyTo: String?): JSONObject {
+        val body = JSONObject().put("clientId", clientId)
+        if (replyTo != null) body.put("replyTo", replyTo)
+        if (env != null) {
+            val sealed = E2ee.encryptText(env.mk, text)
+            body.put("text", sealed.ciphertextB64).put("iv", sealed.ivB64).put("encrypted", true)
+                .put("keys", JSONArray(env.keys.map { JSONObject().put("user", it.user).put("wrappedKey", it.wrappedKey).put("keyIv", it.keyIv) }))
+        } else body.put("text", text).put("encrypted", false)
+        return body
+    }
+
     suspend fun sendText(conv: Conversation, text: String, replyTo: String? = null) {
-        val clean = text.trim()
-        if (clean.isEmpty()) return
-        send(conv, clean, emptyList(), replyTo)
+        val clean = text.trim(); if (clean.isEmpty()) return
+        val clientId = UUID.randomUUID().toString()
+        val body = withContext(Dispatchers.Default) { sealBody(clientId, envelopeFor(conv), clean, replyTo) }
+        body.put("attachments", JSONArray())
+        db.putOutbox(LocalDb.OutboxRow(clientId, conv.id, System.currentTimeMillis(), "text", body, emptyList(), false))
+        publish(conv.id, _messages.value[conv.id].orEmpty().filterNot { it.sendState != 0 })
+        flushOutbox()
     }
 
     suspend fun sendAttachments(conv: Conversation, uris: List<Uri>, caption: String = "") {
-        val cr: ContentResolver = ctx.contentResolver
-        val env = withContext(Dispatchers.Default) { envelopeFor(conv) }
-        val files = ArrayList<Triple<String, String, ByteArray>>()
-        val metas = ArrayList<String?>()
+        val cr = ctx.contentResolver
+        val clientId = UUID.randomUUID().toString()
+        val files = ArrayList<String>()
         for (u in uris) {
-            val bytes = withContext(Dispatchers.IO) { cr.openInputStream(u)?.use { it.readBytes() } } ?: continue
             val mime = cr.getType(u) ?: "application/octet-stream"
             val name = cr.query(u, null, null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null } ?: "file"
-            if (env != null) {
-                val (ct, iv) = withContext(Dispatchers.Default) { E2ee.encryptBytes(env.mk, bytes) }
-                files += Triple(name, mime, ct); metas += iv
-            } else { files += Triple(name, mime, bytes); metas += null }
+            val kind = when { mime.startsWith("image/") -> "image"; mime.startsWith("video/") -> "video"; mime.startsWith("audio/") -> "audio"; else -> "file" }
+            // Copy into private storage right away: the picker's Uri may stop working before we're back online.
+            val dest = File(outboxDir, UUID.randomUUID().toString())
+            withContext(Dispatchers.IO) { cr.openInputStream(u)?.use { i -> dest.outputStream().use { o -> i.copyTo(o) } } }
+            if (dest.length() > 0) files += listOf(dest.absolutePath, name, mime, kind).joinToString("\t")
         }
         if (files.isEmpty()) return
-        val atts = api.upload(files, metas)
-        send(conv, caption.trim(), atts, null, env)
+        val body = withContext(Dispatchers.Default) { sealBody(clientId, envelopeFor(conv), caption.trim(), null) }
+        db.putOutbox(LocalDb.OutboxRow(clientId, conv.id, System.currentTimeMillis(), "media", body, files, false))
+        publish(conv.id, _messages.value[conv.id].orEmpty().filter { it.sendState == 0 })
+        flushOutbox()
     }
 
-    private suspend fun send(conv: Conversation, text: String, atts: List<Attachment>, replyTo: String?, given: Envelope? = null) {
-        val clientId = UUID.randomUUID().toString()
-        val localId = "local-$clientId"
-        val optimistic = Message(localId, conv.id, _me.value?.let { User(it.id, it.username, it.displayName, it.avatar, it.avatarColor, it.pubX, it.pubY) },
-            text, false, null, emptyList(), atts, System.currentTimeMillis(), clientId, false, null, null, 0, setOf(myId), text = text)
-        _messages.update { it + (conv.id to (it[conv.id].orEmpty() + optimistic)) }
-        try {
-            val env = given ?: withContext(Dispatchers.Default) { envelopeFor(conv) }
-            val body = JSONObject().put("clientId", clientId).put("attachments", JSONArray(atts.map { it.toJson() }))
-            if (replyTo != null) body.put("replyTo", replyTo)
-            if (env != null) {
-                val sealed = withContext(Dispatchers.Default) { E2ee.encryptText(env.mk, text) }
-                body.put("text", sealed.ciphertextB64).put("iv", sealed.ivB64).put("encrypted", true)
-                    .put("keys", JSONArray(env.keys.map { JSONObject().put("user", it.user).put("wrappedKey", it.wrappedKey).put("keyIv", it.keyIv) }))
-            } else body.put("text", text).put("encrypted", false)
-            val saved = decrypt(Message.from(api.post("/messages/${conv.id}", body).getJSONObject("message"), conv.id))
-            putMessage(saved)
-        } catch (e: Exception) {
-            _messages.update { cur -> cur + (conv.id to cur[conv.id].orEmpty().filterNot { it.id == localId }) }
-            throw e
+    /** Sends everything waiting in the outbox, oldest first. Safe to call any time; stops quietly while offline. */
+    suspend fun flushOutbox() {
+        if (!net.online || _me.value == null) return
+        outboxLock.withLock {
+            for (row in db.outbox()) {
+                if (row.failed) continue
+                try {
+                    val conv = conversationOrNull(row.conv) ?: run { refreshConversations(); conversationOrNull(row.conv) } ?: continue
+                    val body = JSONObject(row.body.toString())
+                    if (row.kind == "media") {
+                        val env = withContext(Dispatchers.Default) { envelopeFor(conv) }
+                        val up = ArrayList<Triple<String, String, ByteArray>>(); val metas = ArrayList<String?>(); val kinds = ArrayList<String>()
+                        for (f in row.files) {
+                            val p = f.split("\t")
+                            val bytes = withContext(Dispatchers.IO) { File(p[0]).readBytes() }
+                            if (env != null) { val (ct, iv) = withContext(Dispatchers.Default) { E2ee.encryptBytes(env.mk, bytes) }; up += Triple(p[1], p[2], ct); metas += iv }
+                            else { up += Triple(p[1], p[2], bytes); metas += null }
+                        }
+                        val atts = api.upload(up, metas)
+                        body.put("attachments", JSONArray(atts.map { it.toJson() }))
+                        // the caption must be sealed with the SAME key that encrypted the files
+                        if (env != null) {
+                            val caption = decrypt(Message.from(JSONObject(row.body.toString()).put("sender", JSONObject(store.userJson!!)), row.conv)).text
+                            val sealed = E2ee.encryptText(env.mk, caption)
+                            body.put("text", sealed.ciphertextB64).put("iv", sealed.ivB64).put("encrypted", true)
+                                .put("keys", JSONArray(env.keys.map { JSONObject().put("user", it.user).put("wrappedKey", it.wrappedKey).put("keyIv", it.keyIv) }))
+                        }
+                    }
+                    val saved = api.request("POST", "/messages/${row.conv}", body, 0).getJSONObject("message")
+                    db.saveMessages(row.conv, listOf(saved))
+                    db.removeOutbox(row.clientId)
+                    row.files.forEach { File(it.split("\t")[0]).delete() }
+                    val m = decrypt(Message.from(saved, row.conv))
+                    putMessage(m, saved)
+                } catch (e: ApiException) {
+                    if (e.transient || e.status == 0) return // still no usable connection: keep waiting
+                    db.putOutbox(row.copy(failed = true)) // the server rejected it: let the person retry or delete
+                    publish(row.conv, _messages.value[row.conv].orEmpty().filter { it.sendState == 0 })
+                } catch (e: Exception) { return }
+            }
         }
     }
 
-    private fun putMessage(m: Message) {
+    suspend fun retryFailed(clientId: String) {
+        db.outbox().firstOrNull { it.clientId == clientId }?.let { db.putOutbox(it.copy(failed = false)); publish(it.conv, _messages.value[it.conv].orEmpty().filter { m -> m.sendState == 0 }) }
+        flushOutbox()
+    }
+
+    /** Cancels a message that hasn't been sent yet. */
+    suspend fun cancelPending(m: Message) {
+        val row = db.outbox().firstOrNull { "local-" + it.clientId == m.id } ?: return
+        db.removeOutbox(row.clientId); row.files.forEach { File(it.split("\t")[0]).delete() }
+        _messages.update { cur -> cur + (m.conversationId to cur[m.conversationId].orEmpty().filterNot { it.id == m.id }) }
+    }
+
+    private suspend fun putMessage(m: Message, raw: JSONObject?) {
+        if (db.isHidden(m.id)) return
         _messages.update { cur ->
             val list = cur[m.conversationId].orEmpty()
-            // Replace the optimistic copy (same clientId) or an earlier delivery of the same message.
             val without = list.filterNot { it.id == m.id || (m.clientId.isNotEmpty() && it.clientId == m.clientId && it.id.startsWith("local-")) }
             cur + (m.conversationId to (without + m).sortedBy { it.createdAt })
         }
@@ -341,6 +454,7 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
                 }
             }.sortedByDescending { it.lastMessageAt }
         }
+        autoDownload(listOf(m))
     }
 
     fun setActive(convId: String) { store.activeConversation = convId }
@@ -348,17 +462,104 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
     suspend fun markRead(convId: String) {
         _conversations.update { l -> l.map { if (it.id == convId) it.copy(unread = 0) else it } }
         com.pingo.app.notify.Notifier.clearConversation(ctx, convId)
-        try { api.request("POST", "/messages/$convId/read", JSONObject(), 0) } catch (_: Exception) {}
+        if (net.online) try { api.request("POST", "/messages/$convId/read", JSONObject(), 0) } catch (_: Exception) {}
     }
 
     fun typing(convId: String, on: Boolean) = rt.emit(if (on) "typing:start" else "typing:stop", JSONObject().put("conversationId", convId))
 
-    /** Fetches and (if encrypted) decrypts one attachment. */
+    // ------------------------------------------------------------------ media
+    /** Readable bytes of an attachment: from the phone if present, otherwise downloaded once and kept. */
     suspend fun attachmentBytes(m: Message, a: Attachment): ByteArray {
-        val raw = api.download(a.url)
-        val mk = m.mk
-        return if (a.encrypted && a.iv != null && mk != null) withContext(Dispatchers.Default) { E2ee.decryptBytes(mk, raw, a.iv) } else raw
+        if (a.url.startsWith("outbox:")) return withContext(Dispatchers.IO) { File(a.url.removePrefix("outbox:")).readBytes() }
+        val raw = media.bytes(m.conversationId, m.id, a)
+        _mediaTick.update { it + 1 }
+        maybeSaveToGallery(a, media.plain(raw, a, m.mk))
+        return media.plain(raw, a, m.mk)
     }
+
+    fun isDownloaded(a: Attachment) = a.url.startsWith("outbox:") || media.isCached(a.url)
+
+    private suspend fun maybeSaveToGallery(a: Attachment, plain: ByteArray) {
+        if (!settings.saveToGallery.value || !(a.kind == "image" || a.kind == "video")) return
+        if (db.mediaRow(a.url)?.galleryUri != null) return
+        media.saveToDevice(a.url, a.name, a.mimeType, plain)
+    }
+
+    /** Honours Settings → Storage and data → "Media auto-download" for the current kind of network. */
+    private fun autoDownload(list: List<Message>) {
+        val kind = net.kind.value
+        if (kind == Net.Kind.NONE) return
+        for (m in list) for (a in m.attachments) {
+            if (a.url.startsWith("outbox:") || media.isCached(a.url) || m.deleted) continue
+            if (!media.autoAllowed(a, kind)) continue
+            if (!synchronized(downloading) { downloading.add(a.url) }) continue
+            scope.launch {
+                try { attachmentBytes(m, a) } catch (_: Exception) {} finally { synchronized(downloading) { downloading.remove(a.url) } }
+            }
+        }
+    }
+
+    /** Person tapped "download" on an attachment that wasn't auto-downloaded. */
+    suspend fun downloadNow(m: Message, a: Attachment) { attachmentBytes(m, a) }
+
+    /** Save a readable copy to Gallery / Downloads. */
+    suspend fun saveAttachmentToDevice(m: Message, a: Attachment): Boolean {
+        val plain = attachmentBytes(m, a)
+        return media.saveToDevice(a.url, a.name, a.mimeType, plain) != null
+    }
+
+    // ------------------------------------------------------------------ deleting (message and/or device copy)
+    /** "Delete for me": the message disappears here and stays gone; others keep it. [alsoMedia] also frees the files on this phone. */
+    suspend fun deleteForMe(m: Message, alsoMedia: Boolean) {
+        if (m.sendState != 0) { cancelPending(m); return }
+        if (alsoMedia) media.deleteFiles(m.attachments.map { it.url }, alsoGallery = true)
+        db.hideMessage(m.id)
+        _messages.update { cur -> cur + (m.conversationId to cur[m.conversationId].orEmpty().filterNot { it.id == m.id }) }
+        _mediaTick.update { it + 1 }
+        if (net.online) try { api.request("DELETE", "/messages/msg/${m.id}", JSONObject().put("forEveryone", false), 0) } catch (_: Exception) {}
+    }
+
+    /** "Delete for everyone" (own messages, needs internet). */
+    suspend fun deleteForEveryone(m: Message, alsoMedia: Boolean) {
+        api.request("DELETE", "/messages/msg/${m.id}", JSONObject().put("forEveryone", true), 0)
+        if (alsoMedia) media.deleteFiles(m.attachments.map { it.url }, alsoGallery = true)
+        markDeletedLocally(m.id, m.conversationId)
+    }
+
+    /** Keeps the message but removes its files from this phone (they can be downloaded again while still on the server). */
+    suspend fun removeMediaOnly(m: Message, alsoGallery: Boolean) {
+        media.deleteFiles(m.attachments.map { it.url }, alsoGallery)
+        _mediaTick.update { it + 1 }
+    }
+
+    private suspend fun markDeletedLocally(id: String, conv: String) {
+        db.messageJson(id)?.let { j -> j.put("deletedForEveryone", true).put("text", "").put("attachments", JSONArray()); db.saveMessages(conv, listOf(j)) }
+        _messages.update { cur -> cur + (conv to cur[conv].orEmpty().map { if (it.id == id) it.copy(deleted = true, text = "", attachments = emptyList()) else it }) }
+    }
+
+    suspend fun clearChat(convId: String, alsoMedia: Boolean) {
+        if (alsoMedia) media.clearConversation(convId, alsoGallery = false)
+        db.clearConversationMessages(convId)
+        _messages.update { it + (convId to emptyList()) }
+        _previews.update { it + (convId to "") }
+        _mediaTick.update { it + 1 }
+    }
+
+    // ------------------------------------------------------------------ storage + blocked (settings)
+    data class ChatStorage(val convId: String, val title: String, val bytes: Long, val files: Int)
+
+    suspend fun storageByChat(): List<ChatStorage> {
+        val all = db.allMedia().groupBy { it.conv }
+        return all.map { (conv, rows) ->
+            ChatStorage(conv, conversationOrNull(conv)?.title(myId) ?: "Chat", rows.sumOf { media.file(it.url).length() }, rows.size)
+        }.filter { it.bytes > 0 }.sortedByDescending { it.bytes }
+    }
+
+    suspend fun blocked(): List<User> {
+        val arr = api.get("/users/blocked").optJSONArray("blocked") ?: JSONArray()
+        return (0 until arr.length()).map { User.from(arr.getJSONObject(it)) }
+    }
+    suspend fun toggleBlock(userId: String) { api.post("/users/block/$userId") }
 
     // ------------------------------------------------------------------ realtime
     private suspend fun handle(e: Realtime.Event) {
@@ -367,13 +568,19 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
             "message:new" -> {
                 val m = withContext(Dispatchers.Default) { decrypt(Message.from(d)) }
                 if (_conversations.value.none { it.id == m.conversationId }) refreshConversations()
-                putMessage(m)
+                if (db.isHidden(m.id)) return
+                db.saveMessages(m.conversationId, listOf(d))
+                putMessage(m, d)
                 if (store.activeConversation == m.conversationId && appVisible && m.sender?.id != myId) markRead(m.conversationId)
             }
-            "message:deleted", "message:edited" -> {
-                val id = d.optString("_id", d.optString("messageId"))
-                val conv = d.optString("conversation", d.optString("conversationId"))
-                if (conv.isNotEmpty()) loadMessages(conv) else if (id.isNotEmpty()) _messages.value.keys.forEach { loadMessages(it) }
+            "message:edited" -> d.optString("conversation").takeIf { it.isNotEmpty() }?.let { loadMessages(it) }
+            "message:deleted" -> {
+                val id = d.optString("id", d.optString("_id")); val everyone = d.optBoolean("forEveryone")
+                val conv = _messages.value.entries.firstOrNull { en -> en.value.any { it.id == id } }?.key
+                if (conv != null) {
+                    if (everyone) markDeletedLocally(id, conv)
+                    else { db.hideMessage(id); _messages.update { cur -> cur + (conv to cur[conv].orEmpty().filterNot { it.id == id }) } }
+                }
             }
             "message:read" -> {
                 val conv = d.optString("conversationId"); val uid = d.optString("userId")
@@ -384,15 +591,10 @@ class Repo(private val ctx: Context, val store: Store, val api: Api) {
                 _typing.update { cur -> cur + (conv to if (d.optBoolean("typing")) cur[conv].orEmpty() + uid else cur[conv].orEmpty() - uid) }
             }
             "conversation:new", "conversation:updated", "conversation:removed", "conversation:member-left" -> refreshConversations()
-            "session:ready" -> {
-                refreshConversations()
-                store.activeConversation.takeIf { it.isNotEmpty() }?.let { loadMessages(it) }
-            }
+            "session:ready" -> syncNow()
             else -> if (e.name.startsWith("call:")) _calls.tryEmit(e)
         }
     }
 
-    // ------------------------------------------------------------------ small helpers for UI
     fun conversation(id: String) = _conversations.value.firstOrNull { it.id == id }
-    suspend fun retryDelay(ms: Long) = delay(ms)
 }

@@ -7,7 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -62,6 +62,7 @@ private fun Root(initialConv: String?, onConsumed: () -> Unit) {
     val checking by repo.checking.collectAsState()
     val call by ctx.calls.state.collectAsState()
     var convId by remember { mutableStateOf<String?>(null) }
+    var settingsOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialConv) { if (initialConv != null) { convId = initialConv; onConsumed() } }
     // Bring the call screen up whenever a call is live and the person is in the app.
@@ -70,12 +71,13 @@ private fun Root(initialConv: String?, onConsumed: () -> Unit) {
             ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
     }
 
-    Box(Modifier.fillMaxSize().background(Surface0)) {
+    Box(Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background)) {
         when {
             checking -> Box(Modifier.fillMaxSize(), Alignment.Center) { Logo(96.dp) }
             me == null -> AuthScreen()
+            settingsOpen -> SettingsScreen(onBack = { settingsOpen = false })
             convId != null -> ChatScreen(convId!!, onBack = { convId = null })
-            else -> ChatListScreen(onOpen = { convId = it })
+            else -> ChatListScreen(onOpen = { convId = it }, onSettings = { settingsOpen = true })
         }
     }
 }

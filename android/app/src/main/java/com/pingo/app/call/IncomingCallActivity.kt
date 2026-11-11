@@ -10,7 +10,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -61,7 +61,7 @@ class IncomingCallActivity : ComponentActivity() {
         showOverLockScreen()
         handle(intent)
         setContent {
-            PingoTheme {
+            PingoTheme(forceDark = true) {
                 val st by calls.state.collectAsState()
                 val needVideo = st.kind == "video"
                 val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
