@@ -38,7 +38,7 @@ export default function UnlockE2EEModal() {
         <h2>{e2ee.needsSetup ? "Set up secure chats" : "Unlock your secure chats"}</h2>
         <p>
           {e2ee.needsSetup
-            ? "Pingo encrypts your messages end-to-end. Enter your password once to turn it on for this account — it's tied to your account, so it'll work on any device you log into."
+            ? "WispChat encrypts your messages end-to-end. Enter your password once to turn it on for this account — it's tied to your account, so it'll work on any device you log into."
             : "This browser hasn't unlocked your encrypted chats yet. Enter your password once — it'll be remembered on this browser from now on, so you won't see this again unless you log out."}
         </p>
         <form onSubmit={handleSubmit}>

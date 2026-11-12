@@ -1,6 +1,6 @@
-# Pingo
+# WispChat
 
-Pingo is a real-time, end-to-end-encrypted messenger with voice/video calls, WhatsApp-style Status, an Instagram-style Explore feed, groups, broadcast lists and a PWA you can install on desktop or phone.
+WispChat is a real-time, end-to-end-encrypted messenger with voice/video calls, WhatsApp-style Status, an Instagram-style Explore feed, groups, broadcast lists and a PWA you can install on desktop or phone.
 
 - **Client:** React 18 + Vite, React Router, Socket.IO client, `vite-plugin-pwa` (Workbox)
 - **Server:** Node.js (ESM) + Express, Socket.IO, MongoDB (Mongoose), Multer for uploads

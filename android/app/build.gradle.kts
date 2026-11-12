@@ -4,17 +4,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Firebase push is optional: drop your google-services.json into android/app/ and rebuild to turn it on.
+// Without that file the app still builds and runs (it then uses a quiet background connection instead).
+if (file("google-services.json").exists()) apply(plugin = "com.google.gms.google-services")
+
 android {
-    namespace = "com.pingo.app"
+    namespace = "com.wispchat.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.pingo.app"
+        applicationId = "com.wispchat.app"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
-        val backend = (project.findProperty("PINGO_BACKEND") as String? ?: "https://wispchat-bkjl.onrender.com").trimEnd('/')
+        val backend = (project.findProperty("WISP_BACKEND") as String? ?: "https://wispchat-bkjl.onrender.com").trimEnd('/')
         buildConfigField("String", "BACKEND_URL", "\"$backend\"")
     }
 
@@ -51,5 +55,7 @@ dependencies {
     implementation("io.socket:socket.io-client:2.1.1") { exclude(group = "org.json", module = "json") }
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.getstream:stream-webrtc-android:1.3.7")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -1,4 +1,4 @@
-import com.pingo.app.crypto.E2ee
+import com.wispchat.app.crypto.E2ee
 import java.io.File
 
 fun main() {

@@ -33,7 +33,7 @@
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Pingo">
+        android:theme="@style/Theme.WispChat">
 
         <activity
             android:name=".ui.MainActivity"
@@ -65,7 +65,7 @@
            
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
-        <!-- Keeps a background socket so messages and calls arrive with the app closed -->
+        <!-- Fallback only (phones without Firebase push): a quiet background connection -->
         <service
             android:name=".service.RealtimeService"
             android:exported="false"
@@ -80,6 +80,24 @@
             android:name=".call.CallService"
             android:exported="false"
             android:foregroundServiceType="microphone|camera" />
+
+        <!-- Firebase push (data-only): messages and calls arrive with the app closed, no always-on notification -->
+        <service
+            android:name=".notify.PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Lets other apps open / share the decrypted copy of a file or photo from a chat -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
 
         <receiver android:name=".notify.NotificationActionReceiver" android:exported="false" />
         <receiver android:name=".service.BootReceiver" android:exported="true">

@@ -162,7 +162,7 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (identifier, password) => {
     if (!window.crypto?.subtle) {
       throw new Error(
-        "Secure chats need a secure connection (HTTPS or localhost). Open Pingo over https:// and try again."
+        "Secure chats need a secure connection (HTTPS or localhost). Open WispChat over https:// and try again."
       );
     }
     const res = await client.post("/auth/login", { identifier, password });
@@ -233,7 +233,7 @@ export function AuthProvider({ children }) {
   // ---------------- Google sign-in ----------------
   // Step 1: verify the Google credential with our server. It does NOT sign the
   // person in yet — end-to-end encryption still needs a secret only they know.
-  // Google accounts have no Pingo password, so they choose an "encryption
+  // Google accounts have no WispChat password, so they choose an "encryption
   // passcode" once (stage "setup") and re-enter it on each new device
   // (stage "unlock"). Step 2 is finishGoogleEncryption().
   const googleLogin = useCallback(async (credential) => {

@@ -401,7 +401,7 @@ export default function PostFeedPage({ items, setItems, loadMore, hasMore, loadi
   async function share(post) {
     const url = `${window.location.origin}/post/${post._id}`;
     try {
-      if (navigator.share) await navigator.share({ url, title: `${post.user?.displayName} on Pingo` });
+      if (navigator.share) await navigator.share({ url, title: `${post.user?.displayName} on WispChat` });
       else {
         await navigator.clipboard.writeText(url);
         showToast("Link copied");

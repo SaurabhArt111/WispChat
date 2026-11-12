@@ -1,6 +1,6 @@
-# Pingo — update 3 (stability, notifications, calls, new identity)
+# WispChat — update 3 (stability, notifications, calls, new identity)
 
-**Renamed to Pingo** (user-facing; the Android package id stays `com.wispchat.app` so updates/installs keep working). New icon-only logo, launcher/splash/status-bar/favicon assets regenerated, icon-led sign-in/welcome/bottom-nav, refreshed theme (`styles/theme.css`).
+**Renamed to WispChat** (user-facing; the Android package id stays `com.wispchat.app` so updates/installs keep working). New icon-only logo, launcher/splash/status-bar/favicon assets regenerated, icon-led sign-in/welcome/bottom-nav, refreshed theme (`styles/theme.css`).
 
 **Server**: async route errors no longer crash the process (`utils/asyncErrors.js`); DB connect retries; 503 while DB is down; socket listeners registered before DB work; "Server busy" vs "Auth failed"; `.env` loaded before modules; placeholder TURN hosts ignored (set a REAL TURN for calls on mobile data).
 
@@ -49,3 +49,13 @@ WebView shell, kept only until the native app has been validated — delete it a
 # Native app update: offline-first + new Settings
 On-device database and media store, offline outbox, auto-download rules, gallery saving, delete-for-me/everyone with
 "also delete from device", light/dark theme and a WhatsApp-style Settings page. See `android/README.md`.
+
+
+---
+# Native Android app: feature parity with the web app
+Rewrote the native UI around five swipeable tabs (Chats · Status · Explore · Calls · Profile) in the web app's dark theme, renamed
+everything back to **WispChat**, and added Status, Explore / posts, Calls, Profile, Groups, Archived, Friend requests, Media & Storage,
+Broadcast, Contact / Group info, edit-profile with avatar cropper, a complete chat screen (swipe-to-reply, long-press menu, reactions,
+forward, edit, delete, media swipe viewer, voice notes, camera, wallpapers, search, drafts) and skeleton loading everywhere.
+Notifications: Firebase push receiver (`notify/PushService`), token registration, the always-on "Connected" notification is now only a
+silent fallback, and calls get a CallStyle ongoing-call notification. See `android/README.md` (also: add `google-services.json`).

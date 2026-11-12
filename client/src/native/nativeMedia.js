@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
-// Keeps a copy of chat media in the Pingo folder on the phone
-// (Android/media/com.wispchat.app/Pingo/Media/…), like WhatsApp does.
+// Keeps a copy of chat media in the WispChat folder on the phone
+// (Android/media/com.wispchat.app/WispChat/Media/…), like WhatsApp does.
 // ---------------------------------------------------------------------------
 import { native, isNative } from "./wispNative";
 import { mediaUrl } from "../api/config";
@@ -96,7 +96,7 @@ export async function nativeDownload({ url, blobUrl, name, mimeType, kind }, toa
     } else {
       path = (await native.saveFromUrl({ url: mediaUrl(url), key: url, kind: folderKind(attachment), sent: false, name: name || "", mime: mimeType || "" }))?.path;
     }
-    if (path) toast?.(`Saved to ${path.split("/Pingo/")[1] ? `Pingo/${path.split("/Pingo/")[1]}` : path}`);
+    if (path) toast?.(`Saved to ${path.split("/WispChat/")[1] ? `WispChat/${path.split("/WispChat/")[1]}` : path}`);
     else toast?.("Couldn't save the file", "danger");
     return true;
   } catch {

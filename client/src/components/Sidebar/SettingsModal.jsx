@@ -152,7 +152,7 @@ export default function SettingsModal({ onClose, onOpenProfile }) {
 
       {showLogoutConfirm && (
         <ConfirmModal
-          title="Log out of Pingo?"
+          title="Log out of WispChat?"
           message="You'll need to sign back in to see your messages again on this device."
           confirmLabel="Log out"
           danger
@@ -180,7 +180,7 @@ function GeneralPanel() {
       <div className="settings-app-badge">
         <div className="settings-app-badge-mark">W</div>
         <div>
-          <div className="settings-app-badge-name">Pingo</div>
+          <div className="settings-app-badge-name">WispChat</div>
           <div className="settings-app-badge-version">Version {APP_VERSION} · Installable PWA</div>
         </div>
       </div>
@@ -357,7 +357,7 @@ function ChatsPanel() {
         <div>
           <div className="preference-title">Link previews</div>
           <div className="preference-desc">
-            Show a title, description and picture under links. To build the card, Pingo's server fetches the page
+            Show a title, description and picture under links. To build the card, WispChat's server fetches the page
             (it sees the link, but never the rest of your message). Turn off to keep links fully private.
           </div>
         </div>
@@ -416,7 +416,7 @@ function NotificationsPanel() {
         </p>
       ) : (
         <>
-          <p className="settings-hint">Get notified about new messages even when Pingo is in the background.</p>
+          <p className="settings-hint">Get notified about new messages even when WispChat is in the background.</p>
           <button className="btn btn-primary btn-sm" onClick={requestPermission}>
             Enable notifications
           </button>
@@ -489,7 +489,7 @@ function HelpPanel() {
   return (
     <div className="settings-section">
       <p className="settings-hint">
-        Pingo is an independent project. There's no dedicated help centre yet — if something
+        WispChat is an independent project. There's no dedicated help centre yet — if something
         looks broken, the fastest way to flag it is directly to whoever's hosting this instance
         for you.
       </p>

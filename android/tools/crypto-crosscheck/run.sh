@@ -3,6 +3,6 @@
 # Needs: node 18+, kotlinc. Run from this folder.
 set -e
 node gen.mjs                                   # web writes vectors with the REAL crypto.js
-kotlinc ../../app/src/main/java/com/pingo/app/crypto/E2ee.kt CrossTest.kt -include-runtime -d cross.jar
+kotlinc ../../app/src/main/java/com/wispchat/app/crypto/E2ee.kt CrossTest.kt -include-runtime -d cross.jar
 java -jar cross.jar                            # Kotlin reads web output, then writes its own
 node verify.mjs                                # web reads Kotlin output

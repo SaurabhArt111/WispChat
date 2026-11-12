@@ -128,7 +128,7 @@ export default function NewChatPage({ onClose, onOpenNewGroup, mode = "chat" }) 
         (c) => c.displayName.toLowerCase().includes(q) || c.username?.toLowerCase().includes(q)
       );
       if (local.length) {
-        out.push({ type: "title", key: "t-contacts", title: "Contacts on Pingo" });
+        out.push({ type: "title", key: "t-contacts", title: "Contacts on WispChat" });
         local.forEach((c) => out.push(personRow(c, `@${c.username}`, { section: "c", isContact: true })));
       }
       const others = (remote || []).filter((u) => !contactIds.has(String(u._id)));
@@ -152,7 +152,7 @@ export default function NewChatPage({ onClose, onOpenNewGroup, mode = "chat" }) 
     }
 
     if (sortedContacts.length) {
-      out.push({ type: "title", key: "t-contacts", title: "Contacts on Pingo" });
+      out.push({ type: "title", key: "t-contacts", title: "Contacts on WispChat" });
       sortedContacts.forEach((c) => out.push(personRow(c, c.about || `@${c.username}`, { section: "c", isContact: true })));
     } else {
       out.push({ type: "note", key: "n-nocontacts", text: "No contacts yet — search for someone or pick from the suggestions below." });

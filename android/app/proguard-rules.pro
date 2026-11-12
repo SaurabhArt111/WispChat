@@ -3,3 +3,4 @@
 -dontwarn org.webrtc.**
 -dontwarn okhttp3.**
 -dontwarn javax.annotation.**
+-dontwarn com.google.firebase.**

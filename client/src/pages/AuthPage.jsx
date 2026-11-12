@@ -145,7 +145,7 @@ export default function AuthPage() {
     <div className="auth-shell">
       <div className="auth-brand">
         <div className="auth-brand-glow" />
-        <div className="auth-brand-mark" aria-label="Pingo">
+        <div className="auth-brand-mark" aria-label="WispChat">
           <Logo size={112} pulse />
         </div>
         {/* Infographic row: one glyph per promise, no sentences to read. */}
@@ -308,7 +308,7 @@ export default function AuthPage() {
             )}
 
             <button type="submit" className="btn btn-primary auth-submit" disabled={busy}>
-              {busy ? "Please wait…" : mode === "login" ? "Sign In to Pingo" : "Create Account"}
+              {busy ? "Please wait…" : mode === "login" ? "Sign In to WispChat" : "Create Account"}
             </button>
           </form>
 
@@ -322,7 +322,7 @@ export default function AuthPage() {
           <p className="auth-switch">
             {mode === "login" ? (
               <>
-                New to Pingo?{" "}
+                New to WispChat?{" "}
                 <button
                   type="button"
                   onClick={() => {

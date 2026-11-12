@@ -380,7 +380,7 @@ export default function Sidebar({ onOpenNewChat, onOpenNewGroup, onOpenArchived,
           <Avatar user={user} size={38} showStatus online />
         </button>
         <div className="sidebar-brand">
-          <Logo size={30} title="Pingo" />
+          <Logo size={30} title="WispChat" />
         </div>
         <div className="sidebar-actions">
           <button

@@ -36,7 +36,7 @@ async function ensureNotificationsAllowed(showToast) {
 /**
  * Wires the Android shell to the web app. A no-op in a browser.
  *  • hands the login to the native side (notification buttons need it)
- *  • creates the Pingo folder, asks for notification permission
+ *  • creates the WispChat folder, asks for notification permission
  *  • registers the push token; reacts to taps on notifications / "Accept" on a call
  *  • Back button: close sheets / go back, and minimise instead of quitting
  */
