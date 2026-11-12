@@ -78,6 +78,14 @@ fun ChatsTab(nav: Nav) {
     val folders = remember(all) { all.mapNotNull { it.folder }.distinct().sorted() }
     val selectedConvs = all.filter { it.id in selected }
 
+    // The "Archived" row sits above the first chat but starts scrolled out of view; pull down to reveal it.
+    val listState = rememberLazyListState()
+    var archiveHidden by remember { mutableStateOf(false) }
+    val archiveRowShown = archivedCount > 0 && filter == ChatFilter.ALL && folder == null && query.isBlank() && !selecting
+    LaunchedEffect(archiveRowShown, visible.isNotEmpty()) {
+        if (archiveRowShown && !archiveHidden && visible.isNotEmpty()) { listState.scrollToItem(1); archiveHidden = true }
+    }
+
     fun run(block: suspend () -> Unit) = scope.launch { try { block() } catch (e: Exception) { ctx.toast(e.message ?: "That didn't work") } }
 
     Box(Modifier.fillMaxSize()) {
@@ -151,7 +159,7 @@ fun ChatsTab(nav: Nav) {
                 all.isEmpty() -> EmptyState(Icons.Filled.ChatBubble, "No chats yet", "Start a conversation with someone you know.") {
                     Button(onClick = { nav.push(Route.NewChat) }) { Icon(Icons.Filled.Add, null); Text("  New chat") }
                 }
-                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+                else -> LazyColumn(Modifier.fillMaxSize(), listState, contentPadding = PaddingValues(bottom = 96.dp)) {
                     if (archivedCount > 0 && filter == ChatFilter.ALL && folder == null && query.isBlank() && !selecting) item(key = "archived") {
                         Row(Modifier.fillMaxWidth().clickable { nav.push(Route.Archived) }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.Archive, null, Modifier.size(22.dp), tint = wc.wisp)
@@ -210,7 +218,7 @@ fun ConversationRow(
     val other = c.other(myId)
     val unread = c.unread > 0
     Row(
-        modifier.fillMaxWidth().background(if (selected) wc.wispDim else Color.Transparent).padding(horizontal = 16.dp, vertical = 11.dp),
+        modifier.fillMaxWidth().background(if (selected) wc.wisp.copy(alpha = 0.22f) else Color.Transparent).padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {

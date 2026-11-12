@@ -134,6 +134,14 @@ fun DayPill(label: String) {
     }
 }
 
+/** Date chip that floats at the top of the message list while scrolling. */
+@Composable
+fun BoxScope.StickyDay(label: String?, visible: Boolean) {
+    AnimatedVisibility(visible && label != null, Modifier.align(Alignment.TopCenter).padding(top = 8.dp), enter = fadeIn(), exit = fadeOut()) {
+        Text(label.orEmpty(), fontSize = 12.sp, color = wc.dim, modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(wc.surface3).padding(horizontal = 12.dp, vertical = 4.dp))
+    }
+}
+
 @Composable
 fun CallPill(m: Message, mine: Boolean) {
     val kind = if (m.callKind == "video") "video" else "voice"
@@ -179,7 +187,12 @@ fun MessageBubble(
 
     Box(
         modifier.fillMaxWidth()
-            .background(if (selected) wc.wispDim else if (highlighted) wc.wispDim.copy(alpha = 0.7f) else Color.Transparent)
+            .background(if (selected) wc.wisp.copy(alpha = 0.26f) else if (highlighted) wc.wisp.copy(alpha = 0.16f) else Color.Transparent)
+            // the whole row (not just the bubble) selects / toggles selection
+            .combinedClickable(
+                indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                onClick = { if (selecting) onTap() }, onLongClick = onLong,
+            )
             .then(if (canReply) Modifier.pointerInput(m.id) {
                 detectHorizontalDragGestures(
                     onDragStart = { fired = false },

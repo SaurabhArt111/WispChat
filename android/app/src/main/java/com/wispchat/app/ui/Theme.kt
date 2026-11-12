@@ -150,7 +150,13 @@ fun WispTheme(forceDark: Boolean = false, content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalDensity provides Density(d.density, d.fontScale * scale),
         LocalWisp provides (if (dark) darkWisp else lightWisp),
-    ) { MaterialTheme(colorScheme = if (dark) darkScheme else lightScheme, typography = wispTypography, content = content) }
+    ) {
+        val scheme = if (dark) darkScheme else lightScheme
+        MaterialTheme(colorScheme = scheme, typography = wispTypography) {
+            // Without a Surface/Scaffold at the root, text defaults to black — unreadable on the dark canvas.
+            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onBackground, content = content)
+        }
+    }
 }
 
 private const val BUBBLE = "M256 78C156 78 76 146 76 230c0 50 27 94 70 120l-18 66c-2 9 8 15 15 10l68-49c14 3 29 4 45 4 100 0 180-68 180-151S356 78 256 78z"

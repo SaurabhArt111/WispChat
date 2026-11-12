@@ -328,6 +328,10 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                     }
                 }
             }
+            val stickyLabel by remember { derivedStateOf { rows.take(listState.firstVisibleItemIndex + 1).lastOrNull { it is ChatRow.Day }?.let { (it as ChatRow.Day).label } } }
+            var showSticky by remember { mutableStateOf(false) }
+            LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) showSticky = true else { delay(1200); showSticky = false } }
+            StickyDay(stickyLabel, showSticky)
             JumpToLatestButton(!atBottom && rows.isNotEmpty(), newBelow, wc.surface3) { scope.launch { listState.animateScrollToItem(rows.lastIndex) } }
         }
 
