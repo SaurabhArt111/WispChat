@@ -10,7 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,11 +78,27 @@ private fun Root(initialConv: String?, onConsumed: () -> Unit) {
         when {
             checking -> Box(Modifier.fillMaxSize(), Alignment.Center) { Logo(96.dp) }
             me == null -> AuthScreen()
-            else -> {
-                AppShell(nav)
-                nav.stack.forEachIndexed { i, route ->
-                    key(i) {
-                        RouteHost(isTop = i == nav.stack.lastIndex, onBack = { nav.pop() }) { RouteContent(route, nav) }
+            else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                val w = maxWidth
+                val wide = w >= 720.dp
+                nav.twoPane = wide
+                val pages: @Composable () -> Unit = {
+                    nav.stack.forEachIndexed { i, route ->
+                        key(i) {
+                            RouteHost(isTop = i == nav.stack.lastIndex, onBack = { nav.pop() }) { RouteContent(route, nav) }
+                        }
+                    }
+                }
+                if (!wide) { AppShell(nav); pages() }
+                else Row(Modifier.fillMaxSize()) {
+                    AppShell(nav, wide = true, modifier = Modifier.width(if (w >= 1100.dp) 540.dp else 460.dp))
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(wc.border))
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        if (nav.stack.isEmpty()) Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
+                            Logo(88.dp)
+                            androidx.compose.material3.Text("Select a chat to start messaging", color = wc.dim, modifier = Modifier.padding(top = 16.dp))
+                        }
+                        pages()
                     }
                 }
             }

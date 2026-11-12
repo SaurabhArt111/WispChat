@@ -42,10 +42,14 @@ class Nav {
     fun pop() { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
     fun popAll() { stack.clear() }
 
+    /** True on tablets / unfolded foldables: pages open in the right-hand pane next to the tab list. */
+    var twoPane = false
+
     fun openChat(id: String, jumpTo: String? = null) {
         val top = stack.lastOrNull()
         if (top is Route.Chat && top.id == id) return
-        stack.add(Route.Chat(id, jumpTo))
+        // In two-pane mode picking another chat swaps the detail pane instead of piling chats on a stack.
+        if (twoPane && top is Route.Chat) stack[stack.lastIndex] = Route.Chat(id, jumpTo) else stack.add(Route.Chat(id, jumpTo))
     }
 
     /** Replaces the page on top (e.g. New chat → the chat itself, so Back doesn't return to the picker). */
