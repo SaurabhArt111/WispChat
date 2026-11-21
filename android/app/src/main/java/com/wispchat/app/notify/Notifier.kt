@@ -22,13 +22,16 @@ import com.wispchat.app.ui.MainActivity
 
 object Notifier {
     const val CH_MESSAGES = "wisp_messages"
-    const val CH_CALLS = "wisp_calls_v1"
+    /** v2: silent channel — WispChat plays the ringtone + vibration itself, so it can stop the moment the call is answered anywhere. */
+    const val CH_CALLS = "wisp_calls_v2"
+    const val CH_MISSED = "wisp_missed_calls"
     const val CH_ONGOING = "wisp_ongoing"
     const val CH_SERVICE = "wisp_service"
     const val KEY_REPLY = "reply_text"
     const val CALL_NOTIFICATION_ID = 4001
     const val SERVICE_NOTIFICATION_ID = 4002
     const val ONGOING_CALL_ID = 4003
+    const val MISSED_CALL_ID = 4004
     private const val GROUP = "wisp_messages_group"
 
     // Lines already shown per chat so the notification keeps its recent history.
@@ -39,14 +42,16 @@ object Notifier {
         nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "New messages"; enableVibration(true); lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         })
-        val ring = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        runCatching { nm.deleteNotificationChannel("wisp_calls_v1") } // old channel that played its own (unstoppable) sound
         nm.createNotificationChannel(NotificationChannel(CH_CALLS, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Rings for incoming voice and video calls"
-            setSound(ring, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            enableVibration(true); vibrationPattern = longArrayOf(0, 700, 500, 700, 500, 700)
+            description = "Incoming voice and video calls (the phone's ringtone is played by WispChat)"
+            setSound(null, null); enableVibration(false); setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         })
-        nm.createNotificationChannel(NotificationChannel(CH_ONGOING, "Ongoing call", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+        nm.createNotificationChannel(NotificationChannel(CH_MISSED, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Calls you didn't answer"; lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        })
+        nm.createNotificationChannel(NotificationChannel(CH_ONGOING, "Ongoing call", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false); setSound(null, null) })
         nm.createNotificationChannel(NotificationChannel(CH_SERVICE, "Background connection (only without push)", NotificationManager.IMPORTANCE_MIN).apply { setShowBadge(false); description = "Only used on phones without push notifications. You can turn this channel off in Android settings to hide it."; lockscreenVisibility = Notification.VISIBILITY_SECRET })
     }
 
@@ -125,4 +130,22 @@ object Notifier {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
     fun cancelIncomingCall(ctx: Context) = NotificationManagerCompat.from(ctx).cancel(CALL_NOTIFICATION_ID)
+
+    /** "Missed voice call from …" — tap opens the chat, with a Call back button. */
+    @Suppress("MissingPermission")
+    fun showMissedCall(ctx: Context, convId: String, name: String, kind: String) {
+        if (!canNotify(ctx)) return
+        val open = PendingIntent.getActivity(ctx, MISSED_CALL_ID, Intent(ctx, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_CONVERSATION, convId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), immutable())
+        val callBack = PendingIntent.getActivity(ctx, MISSED_CALL_ID + 1, Intent(ctx, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_CONVERSATION, convId).putExtra(MainActivity.EXTRA_CALL_BACK, kind)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), immutable())
+        val n = NotificationCompat.Builder(ctx, CH_MISSED)
+            .setSmallIcon(R.drawable.ic_stat_call).setContentTitle(name.ifEmpty { "Missed call" })
+            .setContentText(if (kind == "video") "Missed video call" else "Missed voice call")
+            .setCategory(NotificationCompat.CATEGORY_MISSED_CALL).setAutoCancel(true).setContentIntent(open).setColor(0xFFF87171.toInt())
+            .addAction(R.drawable.ic_stat_call, "Call back", callBack)
+            .build()
+        NotificationManagerCompat.from(ctx).notify(MISSED_CALL_ID + convId.hashCode(), n)
+    }
 }

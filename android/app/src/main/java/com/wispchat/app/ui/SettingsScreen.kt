@@ -7,6 +7,9 @@ import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,24 +25,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.DataUsage
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Logout
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -103,7 +90,7 @@ fun SettingsScreen(onBack: () -> Unit, nav: Nav) {
 private fun PageScaffold(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "Back") }
+            IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back") }
             Text(title, fontSize = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
@@ -152,20 +139,20 @@ private fun MainPage(onBack: () -> Unit, nav: Nav, go: (Page) -> Unit) {
             }
         }
         HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.surfaceVariant)
-        Item(Icons.Filled.AccountCircle, "Account", "Security, sign out") { go(Page.ACCOUNT) }
-        Item(Icons.Filled.Visibility, "Status privacy", "Who can see your status updates") { nav.push(Route.StatusPrivacy) }
-        Item(Icons.Filled.PersonAdd, "Friend requests", "Accept or review requests") { nav.push(Route.FriendRequests) }
-        Item(Icons.Filled.Lock, "Privacy", "Blocked accounts, encryption") { go(Page.PRIVACY) }
-        Item(Icons.Filled.Chat, "Chats", "Enter key, media visibility, chat history") { go(Page.CHATS) }
-        Item(Icons.Filled.Palette, "Appearance", "App theme, font size") { go(Page.APPEARANCE) }
-        Item(Icons.Filled.Notifications, "Notifications", "Message and call tones, alerts when closed") { go(Page.NOTIFICATIONS) }
-        Item(Icons.Filled.DataUsage, "Storage and data", "Manage storage, network usage, auto-download") { go(Page.STORAGE) }
-        Item(Icons.Filled.Language, "App language", "Device language") {
+        Item(Icons.Outlined.AccountCircle, "Account", "Security, sign out") { go(Page.ACCOUNT) }
+        Item(Icons.Outlined.Visibility, "Status privacy", "Who can see your status updates") { nav.push(Route.StatusPrivacy) }
+        Item(Icons.Outlined.PersonAdd, "Friend requests", "Accept or review requests") { nav.push(Route.FriendRequests) }
+        Item(Icons.Outlined.Lock, "Privacy", "Blocked accounts, encryption") { go(Page.PRIVACY) }
+        Item(Icons.Outlined.Chat, "Chats", "Wallpaper, enter key, media visibility, chat history") { go(Page.CHATS) }
+        Item(Icons.Outlined.Palette, "Appearance", "App theme, font size") { go(Page.APPEARANCE) }
+        Item(Icons.Outlined.Notifications, "Notifications", "Message and call tones, alerts when closed") { go(Page.NOTIFICATIONS) }
+        Item(Icons.Outlined.DataUsage, "Storage and data", "Manage storage, network usage, auto-download") { go(Page.STORAGE) }
+        Item(Icons.Outlined.Language, "App language", "Device language") {
             ctx.startActivity(Intent(if (Build.VERSION.SDK_INT >= 33) AndroidSettings.ACTION_APP_LOCALE_SETTINGS else AndroidSettings.ACTION_LOCALE_SETTINGS)
                 .apply { if (Build.VERSION.SDK_INT >= 33) data = Uri.parse("package:" + ctx.packageName) })
         }
-        Item(Icons.Filled.HelpOutline, "Help and feedback", "App info") { go(Page.HELP) }
-        Item(Icons.Filled.PersonAdd, "Invite a contact") {
+        Item(Icons.Outlined.HelpOutline, "Help and feedback", "App info") { go(Page.HELP) }
+        Item(Icons.Outlined.PersonAdd, "Invite a contact") {
             ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "Chat with me on WispChat — private, end-to-end encrypted."), "Invite"))
         }
         Text("WispChat ${BuildConfig.VERSION_NAME}", Modifier.fillMaxWidth().padding(32.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -178,8 +165,8 @@ private fun AccountPage(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
     PageScaffold("Account", onBack) {
-        Item(Icons.Filled.Lock, "Security", "Messages and calls are end-to-end encrypted. Your key never leaves this phone unencrypted.")
-        Item(Icons.Filled.Logout, "Sign out", "Also removes downloaded chats and media from this phone", tint = MaterialTheme.colorScheme.error) { confirm = true }
+        Item(Icons.Outlined.Lock, "Security", "Messages and calls are end-to-end encrypted. Your key never leaves this phone unencrypted.")
+        Item(Icons.Outlined.Logout, "Sign out", "Also removes downloaded chats and media from this phone", tint = MaterialTheme.colorScheme.error) { confirm = true }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Sign out?") },
         text = { Text("Chats and downloaded media stored on this phone will be removed. They stay on the server and come back when you sign in again.") },
@@ -190,9 +177,9 @@ private fun AccountPage(onBack: () -> Unit) {
 @Composable
 private fun PrivacyPage(onBack: () -> Unit, openBlocked: () -> Unit) = PageScaffold("Privacy", onBack) {
     SectionLabel("Who can reach me")
-    Item(Icons.Filled.Block, "Blocked accounts", "People you've blocked", onClick = openBlocked)
+    Item(Icons.Outlined.Block, "Blocked accounts", "People you've blocked", onClick = openBlocked)
     SectionLabel("Protection")
-    Item(Icons.Filled.Lock, "End-to-end encryption", "Always on for chats where everyone has a key. Downloaded media is stored encrypted on this phone.")
+    Item(Icons.Outlined.Lock, "End-to-end encryption", "Always on for chats where everyone has a key. Downloaded media is stored encrypted on this phone.")
 }
 
 @Composable
@@ -208,7 +195,7 @@ private fun BlockedPage(onBack: () -> Unit) {
             list == null -> Item(null, "Loading…")
             list!!.isEmpty() -> Item(null, "No blocked accounts")
             else -> list!!.forEach { u ->
-                Item(Icons.Filled.Block, u.displayName, "@${u.username}  ·  tap to unblock") {
+                Item(Icons.Outlined.Block, u.displayName, "@${u.username}  ·  tap to unblock") {
                     scope.launch { try { repo.toggleBlock(u.id); list = list!!.filterNot { it.id == u.id } } catch (_: Exception) {} }
                 }
             }
@@ -225,13 +212,20 @@ private fun ChatsPage(onBack: () -> Unit) {
     val gallery by st.saveToGallery.collectAsState()
     var clear by remember { mutableStateOf(false) }
     var alsoMedia by remember { mutableStateOf(true) }
+    var wallpaper by remember { mutableStateOf(false) }
+    val wpTick by st.wallpaperTick.collectAsState()
+    val current = remember(wpTick) { st.globalWallpaper() }
     PageScaffold("Chats", onBack) {
+        SectionLabel("Display")
+        Item(Icons.Outlined.Wallpaper, "Default wallpaper", if (isPhotoWallpaper(current)) "Your photo" else wallpaperById(current).label,
+            trailing = { ChatWallpaper(current, Modifier.size(40.dp, 56.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))) }) { wallpaper = true }
         SectionLabel("Chat settings")
         SwitchItem(null, "Enter is send", "Enter key will send your message", enter, st::setEnterIsSend)
         SwitchItem(null, "Media visibility", "Show newly downloaded media in your device's gallery", gallery, st::setSaveToGallery)
         SectionLabel("History")
-        Item(Icons.Filled.Delete, "Clear all chats", "Remove all messages from this phone (they stay on the server)", tint = MaterialTheme.colorScheme.error) { clear = true }
+        Item(Icons.Outlined.Delete, "Clear all chats", "Remove all messages from this phone (they stay on the server)", tint = MaterialTheme.colorScheme.error) { clear = true }
     }
+    if (wallpaper) WallpaperPickerSheet(null) { wallpaper = false }
     if (clear) AlertDialog(onDismissRequest = { clear = false }, title = { Text("Clear all chats on this phone?") },
         text = {
             Row(Modifier.clickable { alsoMedia = !alsoMedia }, verticalAlignment = Alignment.CenterVertically) { Checkbox(alsoMedia, { alsoMedia = it }); Text("Also delete downloaded media") }
@@ -248,8 +242,8 @@ private fun AppearancePage(onBack: () -> Unit) {
     var themeDlg by remember { mutableStateOf(false) }
     var fontDlg by remember { mutableStateOf(false) }
     PageScaffold("Appearance", onBack) {
-        Item(Icons.Filled.Palette, "Theme", when (theme) { ThemeMode.SYSTEM -> "System default"; ThemeMode.DARK -> "Dark"; ThemeMode.LIGHT -> "Light" }) { themeDlg = true }
-        Item(Icons.Filled.TextFields, "Font size", when { font < 0.95f -> "Small"; font > 1.05f -> "Large"; else -> "Medium" }) { fontDlg = true }
+        Item(Icons.Outlined.Palette, "Theme", when (theme) { ThemeMode.SYSTEM -> "System default"; ThemeMode.DARK -> "Dark"; ThemeMode.LIGHT -> "Light" }) { themeDlg = true }
+        Item(Icons.Outlined.TextFields, "Font size", when { font < 0.95f -> "Small"; font > 1.05f -> "Large"; else -> "Medium" }) { fontDlg = true }
     }
     if (themeDlg) ChoiceDialog("Theme", listOf(ThemeMode.SYSTEM to "System default", ThemeMode.LIGHT to "Light", ThemeMode.DARK to "Dark"), theme, st::setTheme) { themeDlg = false }
     if (fontDlg) ChoiceDialog("Font size", listOf(0.88f to "Small", 1f to "Medium", 1.15f to "Large"), font, st::setFontScale) { fontDlg = false }
@@ -264,7 +258,7 @@ private fun NotificationsPage(onBack: () -> Unit) {
     fun channel(id: String) = ctx.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
         .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, id))
     PageScaffold("Notifications", onBack) {
-        SwitchItem(Icons.Filled.Notifications, "Message notifications", "Show new messages", msg, repo.settings::setMessageNotifications)
+        SwitchItem(Icons.Outlined.Notifications, "Message notifications", "Show new messages", msg, repo.settings::setMessageNotifications)
         SwitchItem(null, "Alerts when the app is closed", if (com.wispchat.app.notify.PushRegistrar.active(ctx, repo)) "Delivered by push — no always-on notification" else "Keeps a quiet background connection (add Firebase push to remove its notification)", bg) {
             bg = it; repo.store.backgroundDelivery = it; if (it) RealtimeService.startIfWanted(ctx) else RealtimeService.stop(ctx)
         }
@@ -272,7 +266,15 @@ private fun NotificationsPage(onBack: () -> Unit) {
         SectionLabel("Messages")
         Item(null, "Notification tone, vibration, pop-up", "Set in Android's notification settings") { channel(Notifier.CH_MESSAGES) }
         SectionLabel("Calls")
-        Item(null, "Ringtone and vibration", "Set in Android's notification settings") { channel(Notifier.CH_CALLS) }
+        if (Build.VERSION.SDK_INT >= 34 && !ctx.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent())
+            Item(null, "Allow full-screen incoming calls", "Needed so calls ring full screen over the lock screen, like phone calls", tint = MaterialTheme.colorScheme.error) {
+                runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, android.net.Uri.parse("package:" + ctx.packageName))) }
+            }
+        Item(null, "Ringtone", "Calls ring with your phone's ringtone and follow silent / vibrate mode") {
+            runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_SOUND_SETTINGS)) }
+        }
+        Item(null, "Incoming call pop-up", "Heads-up and lock-screen settings for calls") { channel(Notifier.CH_CALLS) }
+        Item(null, "Missed calls", "Notification for calls you didn't answer") { channel(Notifier.CH_MISSED) }
         SectionLabel("System")
         Item(null, "All notification settings", "Open Android settings for WispChat") {
             ctx.startActivity(Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName))
@@ -291,9 +293,9 @@ private fun StoragePage(onBack: () -> Unit, manage: () -> Unit) {
     fun label(a: AutoDownload) = when (a) { AutoDownload.NONE -> "No media"; AutoDownload.PHOTOS -> "Photos"; AutoDownload.ALL -> "All media" }
     val opts = listOf(AutoDownload.NONE to "No media", AutoDownload.PHOTOS to "Photos", AutoDownload.ALL to "All media")
     PageScaffold("Storage and data", onBack) {
-        Item(Icons.Filled.Folder, "Manage storage", bytesText(total), onClick = manage)
+        Item(Icons.Outlined.Folder, "Manage storage", bytesText(total), onClick = manage)
         HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.surfaceVariant)
-        Item(Icons.Filled.DataUsage, "Network usage", "${bytesText(st.bytesSent)} sent • ${bytesText(st.bytesReceived)} received  ·  tap to reset") { st.bytesSent = 0; st.bytesReceived = 0 }
+        Item(Icons.Outlined.DataUsage, "Network usage", "${bytesText(st.bytesSent)} sent • ${bytesText(st.bytesReceived)} received  ·  tap to reset") { st.bytesSent = 0; st.bytesReceived = 0 }
         SectionLabel("Media auto-download")
         Item(null, "When using mobile data", label(mobile)) { dlg = "m" }
         Item(null, "When connected on Wi-Fi", label(wifi)) { dlg = "w" }
@@ -319,14 +321,14 @@ private fun ManageStoragePage(onBack: () -> Unit) {
     LaunchedEffect(Unit) { rows = repo.storageByChat() }
     PageScaffold("Manage storage", onBack) {
         val total = rows?.sumOf { it.bytes } ?: 0L
-        Item(Icons.Filled.Folder, "Downloaded media", bytesText(total))
-        Item(Icons.Filled.Delete, "Delete all downloaded media", "Messages stay; files can be downloaded again while they are on the server", tint = MaterialTheme.colorScheme.error) { confirmAll = true }
+        Item(Icons.Outlined.Folder, "Downloaded media", bytesText(total))
+        Item(Icons.Outlined.Delete, "Delete all downloaded media", "Messages stay; files can be downloaded again while they are on the server", tint = MaterialTheme.colorScheme.error) { confirmAll = true }
         SectionLabel("By chat")
         when {
             rows == null -> Item(null, "Loading…")
             rows!!.isEmpty() -> Item(null, "Nothing downloaded yet")
             else -> rows!!.forEach { r ->
-                Item(Icons.Filled.Photo, r.title, "${bytesText(r.bytes)} · ${r.files} file${if (r.files == 1) "" else "s"}  ·  tap to delete") {
+                Item(Icons.Outlined.Photo, r.title, "${bytesText(r.bytes)} · ${r.files} file${if (r.files == 1) "" else "s"}  ·  tap to delete") {
                     scope.launch { repo.media.clearConversation(r.convId, alsoGallery = false); reload() }
                 }
             }
@@ -340,5 +342,5 @@ private fun ManageStoragePage(onBack: () -> Unit) {
 
 @Composable
 private fun HelpPage(onBack: () -> Unit) = PageScaffold("Help and feedback", onBack) {
-    Item(Icons.Filled.Info, "App info", "WispChat ${BuildConfig.VERSION_NAME}\nServer: ${BuildConfig.BACKEND_URL}")
+    Item(Icons.Outlined.Info, "App info", "WispChat ${BuildConfig.VERSION_NAME}\nServer: ${BuildConfig.BACKEND_URL}")
 }

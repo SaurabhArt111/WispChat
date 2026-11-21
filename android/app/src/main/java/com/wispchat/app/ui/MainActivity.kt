@@ -30,11 +30,13 @@ import com.wispchat.app.repo
 
 class MainActivity : ComponentActivity() {
     private var openConv by mutableStateOf<String?>(null)
+    private var callBack by mutableStateOf<Pair<String, String>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         openConv = intent.getStringExtra(EXTRA_CONVERSATION)
+        readCallBack(intent)
         repo.restore()
         setContent {
             WispTheme {
@@ -42,7 +44,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     if (Build.VERSION.SDK_INT >= 33) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-                Root(openConv, onConsumed = { openConv = null })
+                Root(openConv, onConsumed = { openConv = null }, callBack = callBack, onCallBackDone = { callBack = null })
             }
         }
     }
@@ -50,13 +52,26 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(EXTRA_CONVERSATION)?.let { openConv = it }
+        readCallBack(intent)
     }
 
-    companion object { const val EXTRA_CONVERSATION = "conversationId" }
+    /** "Call back" on a missed-call notification. */
+    private fun readCallBack(i: Intent) {
+        val conv = i.getStringExtra(EXTRA_CONVERSATION) ?: return
+        val kind = i.getStringExtra(EXTRA_CALL_BACK) ?: return
+        callBack = conv to kind
+        i.removeExtra(EXTRA_CALL_BACK)
+        com.wispchat.app.notify.Notifier.clearConversation(this, conv)
+    }
+
+    companion object {
+        const val EXTRA_CONVERSATION = "conversationId"
+        const val EXTRA_CALL_BACK = "callBack"
+    }
 }
 
 @Composable
-private fun Root(initialConv: String?, onConsumed: () -> Unit) {
+private fun Root(initialConv: String?, onConsumed: () -> Unit, callBack: Pair<String, String>?, onCallBackDone: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val repo = ctx.repo
     val me by repo.me.collectAsState()
@@ -66,10 +81,13 @@ private fun Root(initialConv: String?, onConsumed: () -> Unit) {
 
     // Tapping a message notification: drop whatever was open and go straight to that chat.
     LaunchedEffect(initialConv) { if (initialConv != null) { nav.popAll(); nav.openChat(initialConv); onConsumed() } }
-    // Bring the call screen up whenever a call is live and the person is in the app.
-    LaunchedEffect(call.phase) {
-        if (call.phase == Phase.OUTGOING || call.phase == Phase.CONNECTING || call.phase == Phase.CONNECTED)
-            ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    // (The call screen is opened by whoever starts / answers a call, so minimising it to chat during a call sticks.)
+    val startCall = rememberCallStarter()
+    LaunchedEffect(callBack, me) {
+        val cb = callBack ?: return@LaunchedEffect
+        if (me == null) return@LaunchedEffect
+        onCallBackDone()
+        if (call.phase == Phase.IDLE || call.phase == Phase.ENDED) startCall({ repo.conversation(cb.first) ?: run { repo.refreshConversations(); repo.conversation(cb.first) } }, cb.second)
     }
     // Signing out clears every open page.
     LaunchedEffect(me == null) { if (me == null) nav.popAll() }
@@ -84,7 +102,8 @@ private fun Root(initialConv: String?, onConsumed: () -> Unit) {
                 nav.twoPane = wide
                 val pages: @Composable () -> Unit = {
                     nav.stack.forEachIndexed { i, route ->
-                        key(i) {
+                        // keyed by the route too: replacing a page (New chat → the chat) gives it a fresh host instead of reusing the old one
+                        key(i, route) {
                             RouteHost(isTop = i == nav.stack.lastIndex, onBack = { nav.pop() }) { RouteContent(route, nav) }
                         }
                     }
@@ -130,5 +149,6 @@ private fun RouteContent(route: Route, nav: Nav) {
         Route.EditProfile -> EditProfileScreen(nav)
         is Route.NewPost -> NewPostScreen(route.uri, route.editing, nav)
         Route.NewCall -> NewCallScreen(nav)
+        is Route.MediaDocs -> MediaDocsScreen(route.convId, nav)
     }
 }

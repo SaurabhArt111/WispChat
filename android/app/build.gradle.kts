@@ -16,8 +16,8 @@ android {
         applicationId = "com.wispchat.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.2.0"
         val backend = (project.findProperty("WISP_BACKEND") as String? ?: "https://wispchat-bkjl.onrender.com").trimEnd('/')
         buildConfigField("String", "BACKEND_URL", "\"$backend\"")
     }
@@ -54,7 +54,18 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.socket:socket.io-client:2.1.1") { exclude(group = "org.json", module = "json") }
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-gif:2.7.0")    // animated GIFs / stickers
+    implementation("io.coil-kt:coil-video:2.7.0")  // video thumbnails in the camera's gallery strip
+    // in-app camera (WhatsApp-style: photo / video, recents strip, swipe up for the gallery)
+    val camerax = "1.4.1"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-video:$camerax")
+    implementation("androidx.camera:camera-view:$camerax")
     implementation("io.getstream:stream-webrtc-android:1.3.7")
+    // replays the offline action queue in the background once the phone is online again
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
     debugImplementation("androidx.compose.ui:ui-tooling")

@@ -30,10 +30,13 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Explore as OutlinedExplore
+import androidx.compose.material.icons.outlined.Call as OutlinedCall
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -108,35 +111,51 @@ fun AppShell(nav: Nav, wide: Boolean = false, modifier: Modifier = Modifier) {
     } else tabs(modifier.fillMaxSize())
 }
 
-/** One tab icon with its badges — shared by the bottom bar (phones) and the side rail (tablets / unfolded foldables). */
+private val TabLabels = listOf("Chats", "Status", "Explore", "Calls", "You")
+
+/**
+ * One tab icon with its badges — shared by the bottom bar (phones) and the side rail (tablets / unfolded foldables).
+ * Like WhatsApp: an OUTLINED icon normally, the FILLED icon on a soft pill when the tab is active.
+ */
 @Composable
-private fun BoxScope.TabIcon(i: Int, active: Boolean, unread: Int, unseenStatus: Boolean, me: com.wispchat.app.data.User?) {
-    Box(Modifier.width(58.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(if (active) wc.wispDim else Color.Transparent), Alignment.Center) {
-        val tint = if (active) wc.wisp else wc.dim
+private fun TabIcon(i: Int, active: Boolean, unread: Int, unseenStatus: Boolean, me: com.wispchat.app.data.User?) {
+    val pill by androidx.compose.animation.animateColorAsState(if (active) wc.wispDim else Color.Transparent, tween(220), label = "pill")
+    val tint by androidx.compose.animation.animateColorAsState(if (active) wc.wisp else wc.dim, tween(220), label = "tint")
+    Box(Modifier.width(64.dp).height(32.dp), Alignment.Center) {
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(pill))
         when (i) {
-            TAB_CHATS -> Icon(Icons.Filled.ChatBubble, "Chats", Modifier.size(25.dp), tint = tint)
-            TAB_STATUS -> StatusRingIcon(tint)
-            TAB_EXPLORE -> Icon(Icons.Filled.Explore, "Explore", Modifier.size(26.dp), tint = tint)
-            TAB_CALLS -> Icon(Icons.Filled.Call, "Calls", Modifier.size(25.dp), tint = tint)
-            else -> Box(Modifier.size(30.dp).clip(CircleShape).background(if (active) wc.wisp else Color.Transparent), Alignment.Center) {
-                UserAvatar(me, if (active) 25.dp else 29.dp)
+            TAB_CHATS -> Icon(if (active) Icons.Rounded.ChatBubble else Icons.Outlined.ChatBubbleOutline, TabLabels[i], Modifier.size(24.dp), tint = tint)
+            TAB_STATUS -> StatusRingIcon(tint, 24.dp, filled = active)
+            TAB_EXPLORE -> Icon(if (active) Icons.Rounded.Explore else Icons.Outlined.OutlinedExplore, TabLabels[i], Modifier.size(25.dp), tint = tint)
+            TAB_CALLS -> Icon(if (active) Icons.Rounded.Call else Icons.Outlined.OutlinedCall, TabLabels[i], Modifier.size(24.dp), tint = tint)
+            else -> Box(Modifier.size(28.dp).clip(CircleShape).background(if (active) wc.wisp else wc.dim.copy(alpha = 0.5f)).padding(if (active) 2.dp else 1.dp), Alignment.Center) {
+                UserAvatar(me, if (active) 24.dp else 26.dp)
             }
         }
+        if (i == TAB_CHATS && unread > 0) Box(Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = (-5).dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary).height(18.dp).width(if (unread > 9) 26.dp else 18.dp), Alignment.Center) {
+            Text(if (unread > 99) "99+" else unread.toString(), color = WispInk, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+        if (i == TAB_STATUS && unseenStatus) Box(Modifier.align(Alignment.TopEnd).offset(x = (-12).dp, y = (-1).dp).size(9.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
     }
-    if (i == TAB_CHATS && unread > 0) Box(Modifier.align(Alignment.TopCenter).offset(x = 18.dp, y = 0.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary).height(18.dp).width(if (unread > 9) 24.dp else 18.dp), Alignment.Center) {
-        Text(if (unread > 99) "99+" else unread.toString(), color = WispInk, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+}
+
+@Composable
+private fun TabItem(i: Int, active: Boolean, unread: Int, unseenStatus: Boolean, me: com.wispchat.app.data.User?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        TabIcon(i, active, unread, unseenStatus, me)
+        Text(TabLabels[i], fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+            color = if (active) MaterialTheme.colorScheme.onSurface else wc.dim, modifier = Modifier.padding(top = 3.dp), maxLines = 1)
     }
-    if (i == TAB_STATUS && unseenStatus) Box(Modifier.align(Alignment.TopCenter).offset(x = 16.dp, y = 2.dp).size(9.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
 }
 
 @Composable
 private fun SideRail(current: Int, unread: Int, unseenStatus: Boolean, me: com.wispchat.app.data.User?, onPick: (Int) -> Unit) {
-    Column(Modifier.width(76.dp).fillMaxHeight().background(wc.surface2).statusBarsPadding().navigationBarsPadding().padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.width(80.dp).fillMaxHeight().background(wc.surface2).statusBarsPadding().navigationBarsPadding().padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Logo(34.dp, Modifier.padding(bottom = 10.dp))
         for (i in 0 until 5) {
-            Box(Modifier.fillMaxWidth().height(52.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onPick(i) }, Alignment.Center) {
-                TabIcon(i, i == current, unread, unseenStatus, me)
+            Box(Modifier.fillMaxWidth().height(62.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onPick(i) }, Alignment.Center) {
+                TabItem(i, i == current, unread, unseenStatus, me)
             }
         }
     }
@@ -144,26 +163,30 @@ private fun SideRail(current: Int, unread: Int, unseenStatus: Boolean, me: com.w
 
 @Composable
 private fun BottomNav(current: Int, unread: Int, unseenStatus: Boolean, me: com.wispchat.app.data.User?, onPick: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(wc.surface2.copy(alpha = 0.97f)).navigationBarsPadding().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-        for (i in 0 until 5) {
-            val active = i == current
-            Box(Modifier.weight(1f).fillMaxHeight().clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onPick(i) }, Alignment.Center) {
-                TabIcon(i, active, unread, unseenStatus, me)
+    Column(Modifier.fillMaxWidth().background(wc.surface2.copy(alpha = 0.98f))) {
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(wc.border))
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(70.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (i in 0 until 5) {
+                val active = i == current
+                Box(Modifier.weight(1f).fillMaxHeight().clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onPick(i) }, Alignment.Center) {
+                    TabItem(i, active, unread, unseenStatus, me)
+                }
             }
         }
     }
 }
 
-/** Dashed ring — the Status tab icon. */
+/** The Status tab icon: a dashed ring with a dot (outlined) or a solid ring with a full centre (filled, when active). */
 @Composable
-fun StatusRingIcon(tint: Color, size: androidx.compose.ui.unit.Dp = 25.dp) {
+fun StatusRingIcon(tint: Color, size: androidx.compose.ui.unit.Dp = 25.dp, filled: Boolean = false) {
     Canvas(Modifier.size(size)) {
-        val w = 2.2.dp.toPx()
+        val w = (if (filled) 2.4.dp else 1.9.dp).toPx()
         val r = this.size.minDimension / 2 - w
-        val dashes = 10
+        val dashes = if (filled) 1 else 10
         val sweep = 360f / dashes
-        for (k in 0 until dashes) drawArc(tint, k * sweep + 4f, sweep - 12f, false, Offset(w, w), Size(r * 2, r * 2), style = Stroke(w, cap = StrokeCap.Round))
-        drawCircle(tint, r * 0.32f, center)
+        if (filled) drawCircle(tint, r, center, style = Stroke(w))
+        else for (k in 0 until dashes) drawArc(tint, k * sweep + 4f, sweep - 12f, false, Offset(w, w), Size(r * 2, r * 2), style = Stroke(w, cap = StrokeCap.Round))
+        drawCircle(tint, r * (if (filled) 0.58f else 0.3f), center)
     }
 }
 
@@ -179,16 +202,16 @@ fun CallBar() {
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
     val label = when (st.phase) {
         Phase.CONNECTED -> "%02d:%02d".format(((now - st.connectedAt) / 1000) / 60, ((now - st.connectedAt) / 1000) % 60)
-        Phase.OUTGOING -> "Calling…"
+        Phase.OUTGOING -> if (st.ringing) "Ringing…" else "Calling…"
         else -> "Connecting…"
     }
     Row(Modifier.fillMaxWidth().background(Color(0xFF16A34A)).statusBarsPadding().clickable {
         ctx.startActivity(android.content.Intent(ctx, CallActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP))
     }.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Filled.Call, null, Modifier.size(18.dp), tint = Color.White)
+        Icon(Icons.Rounded.Call, null, Modifier.size(18.dp), tint = Color.White)
         Text("  ${st.peerName} · $label", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
         Text("Tap to return", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
-        IconButton(onClick = { engine.hangUp() }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.CallEnd, "Hang up", tint = Color.White, modifier = Modifier.size(18.dp)) }
+        IconButton(onClick = { engine.hangUp() }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.CallEnd, "Hang up", tint = Color.White, modifier = Modifier.size(18.dp)) }
     }
 }
 

@@ -151,6 +151,53 @@ function AttachmentImage({ message, a, onClick, onContextMenu, overlay }) {
   );
 }
 
+function fmtDur(sec) {
+  if (!Number.isFinite(sec) || sec <= 0) return "";
+  const s = Math.round(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// WhatsApp-style video tile: a real still from the clip (first frame), a play button and the length.
+// Tapping opens the full-screen viewer, which plays it with proper controls — instead of a tiny
+// letter-boxed <video> player squeezed into the bubble.
+function AttachmentVideoTile({ message, a, overlay, onClick, onContextMenu }) {
+  const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
+  const [duration, setDuration] = useState(a.duration || 0);
+  const [ready, setReady] = useState(false);
+  if (loading)
+    return (
+      <div className="image-grid-item video-tile">
+        <div className="attachment-decrypting"><LockIcon size={18} /> Decrypting…</div>
+      </div>
+    );
+  if (error || !url)
+    return (
+      <div className="image-grid-item image-grid-problem video-tile">
+        <AttachmentProblem code={errorCode} onRetry={retry} compact label="video" />
+      </div>
+    );
+  return (
+    <div className="image-grid-item video-tile" onClick={() => onClick(url)} onContextMenu={(e) => onContextMenu(e, url)}>
+      {/* "#t=0.1" makes browsers paint a real frame instead of a black box */}
+      <video
+        data-no-fallback
+        src={`${url}#t=0.1`}
+        preload="metadata"
+        muted
+        playsInline
+        className={`video-tile-still ${ready ? "ready" : ""}`}
+        onLoadedMetadata={(e) => { if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration); }}
+        onLoadedData={() => setReady(true)}
+      />
+      <span className="video-tile-play" aria-hidden>
+        <svg viewBox="0 0 24 24" width="26" height="26"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg>
+      </span>
+      {fmtDur(duration) && <span className="video-tile-duration">▶ {fmtDur(duration)}</span>}
+      {overlay}
+    </div>
+  );
+}
+
 function AttachmentVideo({ message, a, onContextMenu }) {
   const { url, loading, error, errorCode, retry } = useDecryptedMediaUrl(message, a);
   return (
@@ -243,8 +290,9 @@ export default function AttachmentView({
   const gallery = useGallery();
   const { openMenu } = useContextMenu();
   const { showToast } = useToast();
-  const images = attachments.filter((a) => a.kind === "image");
-  const others = attachments.filter((a) => a.kind !== "image");
+  // photos AND (sent) videos share the media grid, like WhatsApp
+  const images = attachments.filter((a) => a.kind === "image" || (a.kind === "video" && !a._local));
+  const others = attachments.filter((a) => !(a.kind === "image" || (a.kind === "video" && !a._local)));
 
   // Open on this photo, but let the viewer swipe through the whole chat's media.
   function openViewer(a, i, resolvedUrl) {
@@ -268,6 +316,17 @@ export default function AttachmentView({
             const moreOverlay = isLastVisible ? (
               <div className="image-grid-more">+{images.length - 4}</div>
             ) : null;
+            if (a.kind === "video")
+              return (
+                <AttachmentVideoTile
+                  key={a.url || i}
+                  message={message}
+                  a={a}
+                  overlay={moreOverlay}
+                  onClick={(resolvedUrl) => openViewer(a, i, resolvedUrl)}
+                  onContextMenu={(e, resolvedUrl) => imageContextMenu(e, a, resolvedUrl)}
+                />
+              );
             return a._local ? (
               <PendingImage key={a.localId || i} a={a} overlay={moreOverlay} />
             ) : (

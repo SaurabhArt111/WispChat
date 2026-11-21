@@ -25,11 +25,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.outlined.Call as OutlinedCall
+import androidx.compose.material.icons.outlined.Videocam as OutlinedVideocam
+import androidx.compose.material.icons.outlined.Keyboard as OutlinedKeyboard
+import androidx.compose.material.icons.outlined.EmojiEmotions as OutlinedEmoji
+import androidx.compose.material.icons.outlined.CameraAlt as OutlinedCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -84,7 +90,11 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
     val myId = me?.id.orEmpty()
     val other = conv?.other(myId)
     val title = conv?.title(myId).orEmpty()
-    val wallpaper = remember(wpTick, convId) { wallpaperById(repo.settings.wallpaper(convId)) }
+    val wallpaperId = remember(wpTick, convId) { repo.settings.wallpaper(convId) }
+    val reachable by repo.reachable.collectAsState()
+    val pendingCount by repo.pending.count.collectAsState()
+    val syncingChats by repo.syncingChats.collectAsState()
+    val syncing = convId in syncingChats
     val startCall = rememberCallStarter()
 
     // ---- UI state
@@ -143,7 +153,10 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
     DisposableEffect(convId) { repo.setActive(convId); onDispose { repo.setActive("") } }
     LaunchedEffect(convId) {
         repo.joinConversationRoom(convId)
-        repo.loadMessages(convId); loaded = true; repo.markRead(convId)
+        // Local first: what's on the phone shows instantly (no endless skeleton while the server wakes up)…
+        repo.loadLocalMessages(convId); loaded = true; repo.markRead(convId)
+        // …then the newest history is fetched in the background.
+        repo.refreshMessages(convId)
     }
     // draft persistence (debounced)
     LaunchedEffect(text, editing) { if (editing == null) { delay(350); repo.settings.setDraft(convId, text) } }
@@ -171,7 +184,24 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
         if (idx < 0) { ctx.toast("That message isn't loaded yet"); return }
         scope.launch { listState.animateScrollToItem((idx - 2).coerceAtLeast(0)); highlightId = id; delay(1600); highlightId = null }
     }
-    LaunchedEffect(jumpTo, loaded, rows.size) { if (jumpTo != null && loaded && rows.isNotEmpty()) { delay(150); jumpToMessage(jumpTo) } }
+    // Opened at a specific message (reply quote, "Media, links and docs", search…): load older history until it's there.
+    val latestRows by rememberUpdatedState(rows)
+    LaunchedEffect(jumpTo, loaded) {
+        if (jumpTo == null || !loaded) return@LaunchedEffect
+        delay(150)
+        repeat(40) {
+            val idx = latestRows.indexOfFirst { it is ChatRow.Msg && it.m.id == jumpTo }
+            if (idx >= 0) {
+                listState.scrollToItem((idx - 2).coerceAtLeast(0))
+                highlightId = jumpTo; delay(1800); highlightId = null
+                return@LaunchedEffect
+            }
+            val before = repo.messages.value[convId]?.size ?: 0
+            repo.loadOlder(convId)
+            delay(120) // let the list recompose with the older messages
+            if ((repo.messages.value[convId]?.size ?: 0) == before) { ctx.toast("That message isn't on this phone anymore"); return@LaunchedEffect }
+        }
+    }
     LaunchedEffect(matchPos, matches) {
         val i = matches.getOrNull(matchPos) ?: return@LaunchedEffect
         listState.animateScrollToItem((i - 2).coerceAtLeast(0))
@@ -187,11 +217,11 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
         repo.settings.setDraft(convId, "")
         scope.launch {
             try { if (ed != null) repo.edit(ed, t) else repo.sendText(c, t, rp?.id) }
-            catch (e: Exception) { ctx.toast(e.message ?: "Couldn't send"); tfv = TextFieldValue(t, TextRange(t.length)); if (ed != null) editing = ed }
+            catch (e: Exception) { ctx.toastErr(e, "Couldn't send"); tfv = TextFieldValue(t, TextRange(t.length)); if (ed != null) editing = ed }
             if (ed == null && rows.isNotEmpty()) listState.animateScrollToItem(rows.lastIndex)
         }
     }
-    fun react(m: Message, emoji: String) { scope.launch { try { repo.react(m, emoji) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't react") } } }
+    fun react(m: Message, emoji: String) { scope.launch { try { repo.react(m, emoji) } catch (e: Exception) { ctx.toastErr(e, "Couldn't react") } } }
     fun startReply(m: Message) { editing = null; replyTo = m; scope.launch { delay(60); runCatching { focus.requestFocus() } } }
     fun startEdit(m: Message) { replyTo = null; editing = m; tfv = TextFieldValue(m.text, TextRange(m.text.length)); scope.launch { delay(60); runCatching { focus.requestFocus() } } }
     fun copyText(list: List<Message>) {
@@ -208,15 +238,16 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris: List<Uri> -> if (uris.isNotEmpty()) pendingMedia = uris }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         val c = conv
-        if (uris.isNotEmpty() && c != null) scope.launch { try { repo.sendAttachments(c, uris, "", replyTo?.id); replyTo = null } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't attach") } }
+        if (uris.isNotEmpty() && c != null) scope.launch { try { repo.sendAttachments(c, uris, "", replyTo?.id); replyTo = null } catch (e: Exception) { ctx.toastErr(e, "Couldn't attach") } }
     }
     var camFile by remember { mutableStateOf<File?>(null) }
+    var cameraOpen by remember { mutableStateOf(false) }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val f = camFile; camFile = null
         if (ok && f != null && f.length() > 0) pendingMedia = listOf(fileUri(f))
     }
     val camPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) { val f = File(ctx.cacheDir, "cam_${System.currentTimeMillis()}.jpg"); camFile = f; takePhoto.launch(fileUri(f)) } else ctx.toast("Camera permission is needed")
+        if (granted) cameraOpen = true else ctx.toast("Camera permission is needed")
     }
 
     // voice notes
@@ -236,7 +267,7 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
         val c = conv
         if (send && f != null && c != null && recSecs >= 1) {
             val rp = replyTo?.id; replyTo = null
-            scope.launch { try { repo.sendFile(c, f, "voice-note.m4a", "audio/mp4", "", rp) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't send the voice note") } }
+            scope.launch { try { repo.sendFile(c, f, "voice-note.m4a", "audio/mp4", "", rp) } catch (e: Exception) { ctx.toastErr(e, "Couldn't send the voice note") } }
         } else f?.delete()
     }
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) startRec() else ctx.toast("Microphone permission is needed") }
@@ -250,21 +281,21 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
             selecting -> {
                 val picked = msgs.filter { it.id in selected }
                 WispTopBar("${selected.size} selected", onBack = { selected = emptySet() }) {
-                    if (selected.size == 1 && picked.firstOrNull()?.let { !it.deleted && it.sendState == 0 } == true) IconButton(onClick = { startReply(picked[0]); selected = emptySet() }) { Icon(Icons.Filled.Reply, "Reply") }
-                    if (picked.any { it.text.isNotEmpty() }) IconButton(onClick = { copyText(picked); selected = emptySet() }) { Icon(Icons.Filled.ContentCopy, "Copy") }
-                    if (picked.all { it.sendState == 0 && !it.deleted }) IconButton(onClick = { forwardMsgs = picked; selected = emptySet() }) { Icon(Icons.Filled.Shortcut, "Forward") }
-                    IconButton(onClick = { deleteFor = picked; selected = emptySet() }) { Icon(Icons.Filled.Delete, "Delete") }
+                    if (selected.size == 1 && picked.firstOrNull()?.let { !it.deleted && it.sendState == 0 } == true) IconButton(onClick = { startReply(picked[0]); selected = emptySet() }) { Icon(Icons.Rounded.Reply, "Reply") }
+                    if (picked.any { it.text.isNotEmpty() }) IconButton(onClick = { copyText(picked); selected = emptySet() }) { Icon(Icons.Rounded.ContentCopy, "Copy") }
+                    if (picked.all { it.sendState == 0 && !it.deleted }) IconButton(onClick = { forwardMsgs = picked; selected = emptySet() }) { Icon(Icons.Rounded.Shortcut, "Forward") }
+                    IconButton(onClick = { deleteFor = picked; selected = emptySet() }) { Icon(Icons.Rounded.Delete, "Delete") }
                 }
             }
             searching -> Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { searching = false; query = ""; highlightId = null }) { Icon(Icons.Filled.ArrowBack, "Close search") }
+                IconButton(onClick = { searching = false; query = ""; highlightId = null }) { Icon(Icons.Rounded.ArrowBack, "Close search") }
                 OutlinedTextField(query, { query = it }, Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(24.dp), placeholder = { Text("Search in chat") })
                 Text(if (matches.isEmpty()) (if (query.isBlank()) "" else "0") else "${matchPos + 1}/${matches.size}", color = wc.dim, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp))
-                IconButton(enabled = matches.isNotEmpty(), onClick = { matchPos = (matchPos + 1) % matches.size }) { Icon(Icons.Filled.KeyboardArrowUp, "Older match") }
-                IconButton(enabled = matches.isNotEmpty(), onClick = { matchPos = (matchPos - 1 + matches.size) % matches.size }) { Icon(Icons.Filled.KeyboardArrowDown, "Newer match") }
+                IconButton(enabled = matches.isNotEmpty(), onClick = { matchPos = (matchPos + 1) % matches.size }) { Icon(Icons.Rounded.KeyboardArrowUp, "Older match") }
+                IconButton(enabled = matches.isNotEmpty(), onClick = { matchPos = (matchPos - 1 + matches.size) % matches.size }) { Icon(Icons.Rounded.KeyboardArrowDown, "Newer match") }
             }
             else -> Row(Modifier.fillMaxWidth().background(wc.surface2).statusBarsPadding().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { nav.pop() }) { Icon(Icons.Filled.ArrowBack, "Back") }
+                IconButton(onClick = { nav.pop() }) { Icon(Icons.Rounded.ArrowBack, "Back") }
                 val openInfo = { conv?.let { nav.push(if (it.isGroup) Route.GroupInfo(it.id) else Route.ContactInfo(it.id)) }; Unit }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = openInfo).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (conv?.isGroup == true) Avatar(title, "#64748b", 40.dp, url = conv.avatar) else UserAvatar(other, 40.dp)
@@ -274,6 +305,7 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                         val sub = when {
                             typers.isNotEmpty() -> if (conv?.isGroup == true) (conv.participants.firstOrNull { it.id == typers.first() }?.displayName?.substringBefore(' ').orEmpty() + " is typing…") else "typing…"
                             conv?.isGroup == true -> conv.participants.joinToString(", ") { if (it.id == myId) "You" else it.displayName.substringBefore(' ') }
+                            !reachable -> if (netKind == Net.Kind.NONE) "waiting for network…" else "connecting…"
                             other != null -> { val p = presence[other.id]; val on = p?.online ?: other.isOnline; if (on) "online" else formatLastSeen(p?.lastSeen ?: other.lastSeen) }
                             else -> ""
                         }
@@ -281,33 +313,34 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                     }
                 }
                 if (conv?.isGroup == false) {
-                    IconButton(onClick = { conv.let { c -> startCall({ c }, "video") } }) { Icon(Icons.Filled.Videocam, "Video call") }
-                    IconButton(onClick = { conv.let { c -> startCall({ c }, "audio") } }) { Icon(Icons.Filled.Call, "Voice call") }
+                    IconButton(onClick = { conv.let { c -> startCall({ c }, "video") } }) { Icon(Icons.Outlined.OutlinedVideocam, "Video call") }
+                    IconButton(onClick = { conv.let { c -> startCall({ c }, "audio") } }) { Icon(Icons.Outlined.OutlinedCall, "Voice call") }
                 }
                 Box {
-                    IconButton(onClick = { headerMenu = true }) { Icon(Icons.Filled.MoreVert, "More") }
+                    IconButton(onClick = { headerMenu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
                     DropdownMenu(headerMenu, { headerMenu = false }) {
                         DropdownMenuItem({ Text(if (conv?.isGroup == true) "Group info" else "View contact") }, onClick = { headerMenu = false; openInfo() })
                         DropdownMenuItem({ Text("Search") }, onClick = { headerMenu = false; searching = true })
-                        DropdownMenuItem({ Text(if (conv?.muted == true) "Unmute notifications" else "Mute notifications") }, onClick = { headerMenu = false; conv?.let { c -> scope.launch { try { repo.setFlag(c.id, "mute", !c.muted) } catch (e: Exception) { ctx.toast(e.message ?: "Failed") } } } })
+                        DropdownMenuItem({ Text(if (conv?.muted == true) "Unmute notifications" else "Mute notifications") }, onClick = { headerMenu = false; conv?.let { c -> scope.launch { try { repo.setFlag(c.id, "mute", !c.muted) } catch (e: Exception) { ctx.toastErr(e, "Failed") } } } })
                         DropdownMenuItem({ Text("Wallpaper") }, onClick = { headerMenu = false; wallpaperSheet = true })
                         DropdownMenuItem({ Text("Clear chat") }, onClick = { headerMenu = false; confirmClear = true })
                     }
                 }
             }
         }
-        if (netKind == Net.Kind.NONE) Row(Modifier.fillMaxWidth().background(wc.surface3).padding(horizontal = 16.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.CloudOff, null, Modifier.size(14.dp), tint = wc.dim)
-            Text("  Offline — messages will send when you're back online", fontSize = 12.sp, color = wc.dim)
+        if (!reachable) Row(Modifier.fillMaxWidth().background(wc.surface3).padding(horizontal = 16.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.CloudOff, null, Modifier.size(14.dp), tint = wc.dim)
+            val what = if (netKind == Net.Kind.NONE) "You're offline" else "Can't reach WispChat — retrying"
+            Text("  $what" + if (pendingCount > 0) " · $pendingCount pending, sent automatically when back" else " · changes are saved and sent later", fontSize = 12.sp, color = wc.dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
         // messages
-        Box(Modifier.weight(1f).fillMaxWidth().then(if (wallpaper.brush != null) Modifier.background(wallpaper.brush) else Modifier)) {
+        ChatWallpaper(wallpaperId, Modifier.weight(1f).fillMaxWidth()) {
             when {
-                !loaded && msgs.isEmpty() -> Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.Bottom) {
+                msgs.isEmpty() && (!loaded || syncing) -> Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.Bottom) {
                     repeat(6) { i -> Box(Modifier.fillMaxWidth().padding(vertical = 5.dp), contentAlignment = if (i % 2 == 0) Alignment.CenterStart else Alignment.CenterEnd) { SkeletonBox(width = (140 + (i * 37) % 120).dp, height = 38.dp, radius = 16.dp) } }
                 }
-                loaded && msgs.isEmpty() -> EmptyState(Icons.Filled.Lock, "No messages yet", "Messages in this chat are end-to-end encrypted. Say hi 👋")
+                msgs.isEmpty() -> EmptyState(Icons.Rounded.Lock, "No messages yet", if (reachable) "Messages in this chat are end-to-end encrypted. Say hi 👋" else "Nothing saved on this phone yet. Messages you write now are sent when you're back online.")
                 else -> LazyColumn(Modifier.fillMaxSize(), listState, contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(rows, key = { when (it) { is ChatRow.Day -> "d${it.key}"; is ChatRow.Msg -> it.m.id } }) { row ->
                         when (row) {
@@ -340,10 +373,10 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
         when {
             blockedByAdmin -> Text("Only admins can send messages in this group", color = wc.dim, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().background(wc.surface2).navigationBarsPadding().padding(16.dp))
             recording -> Row(Modifier.fillMaxWidth().background(wc.surface2).navigationBarsPadding().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { stopRec(false) }) { Icon(Icons.Filled.Delete, "Cancel", tint = MaterialTheme.colorScheme.error) }
+                IconButton(onClick = { stopRec(false) }) { Icon(Icons.Rounded.Delete, "Cancel", tint = MaterialTheme.colorScheme.error) }
                 Box(Modifier.size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
                 Text("  ${recSecs / 60}:${"%02d".format(recSecs % 60)}", fontSize = 16.sp, modifier = Modifier.weight(1f))
-                FilledIconButton(onClick = { stopRec(true) }, Modifier.size(48.dp)) { Icon(Icons.Filled.Send, "Send voice note") }
+                FilledIconButton(onClick = { stopRec(true) }, Modifier.size(48.dp)) { Icon(Icons.Rounded.Send, "Send voice note") }
             }
             else -> Column(Modifier.fillMaxWidth().background(wc.surface2)) {
                 (replyTo ?: editing)?.let { q ->
@@ -354,7 +387,7 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                             Text(if (isEdit) "Editing message" else if (q.sender?.id == myId) "You" else q.sender?.displayName.orEmpty(), color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             Text(repo.previewText(q), color = wc.dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        IconButton(onClick = { if (isEdit) { editing = null; tfv = TextFieldValue(repo.settings.draft(convId)) } else replyTo = null }) { Icon(Icons.Filled.Close, "Cancel") }
+                        IconButton(onClick = { if (isEdit) { editing = null; tfv = TextFieldValue(repo.settings.draft(convId)) } else replyTo = null }) { Icon(Icons.Rounded.Close, "Cancel") }
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
@@ -363,11 +396,11 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                         Modifier.weight(1f).focusRequester(focus).onFocusChanged { if (it.isFocused) emojiOpen = false },
                         placeholder = { Text("Message") }, maxLines = 6, shape = RoundedCornerShape(24.dp),
                         colors = TextFieldDefaults.colors(focusedContainerColor = wc.surface3, unfocusedContainerColor = wc.surface3, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
-                        leadingIcon = { IconButton(onClick = { if (emojiOpen) { emojiOpen = false; focus.requestFocus(); keyboard?.show() } else { keyboard?.hide(); emojiOpen = true } }) { Icon(if (emojiOpen) Icons.Filled.Keyboard else Icons.Filled.EmojiEmotions, "Emoji", tint = wc.dim) } },
+                        leadingIcon = { IconButton(onClick = { if (emojiOpen) { emojiOpen = false; focus.requestFocus(); keyboard?.show() } else { keyboard?.hide(); emojiOpen = true } }) { Icon(if (emojiOpen) Icons.Outlined.OutlinedKeyboard else Icons.Outlined.OutlinedEmoji, "Emoji", tint = wc.dim) } },
                         trailingIcon = if (text.isEmpty()) ({
                             Row {
-                                IconButton(onClick = { attachSheet = true }) { Icon(Icons.Filled.AttachFile, "Attach", tint = wc.dim) }
-                                IconButton(onClick = { camPerm.launch(Manifest.permission.CAMERA) }) { Icon(Icons.Filled.CameraAlt, "Camera", tint = wc.dim) }
+                                IconButton(onClick = { attachSheet = true }) { Icon(Icons.Rounded.AttachFile, "Attach", tint = wc.dim, modifier = Modifier.rotate(-35f)) }
+                                IconButton(onClick = { camPerm.launch(Manifest.permission.CAMERA) }) { Icon(Icons.Outlined.OutlinedCamera, "Camera", tint = wc.dim) }
                             }
                         }) else null,
                         keyboardOptions = KeyboardOptions(imeAction = if (enterSend) ImeAction.Send else ImeAction.Default),
@@ -378,10 +411,14 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                         onClick = { if (text.isNotBlank()) send() else micPerm.launch(Manifest.permission.RECORD_AUDIO) },
                         Modifier.size(50.dp).padding(bottom = 2.dp),
                         enabled = conv != null,
-                    ) { Icon(if (text.isNotBlank()) (if (editing != null) Icons.Filled.Check else Icons.Filled.Send) else Icons.Filled.Mic, if (text.isNotBlank()) "Send" else "Record voice note") }
+                    ) { Icon(if (text.isNotBlank()) (if (editing != null) Icons.Rounded.Check else Icons.Rounded.Send) else Icons.Rounded.Mic, if (text.isNotBlank()) "Send" else "Record voice note") }
                 }
-                if (emojiOpen) EmojiPanel(
-                    onPick = { e -> val s = tfv.selection; tfv = TextFieldValue(tfv.text.replaceRange(s.min, s.max, e), TextRange(s.min + e.length)) },
+                if (emojiOpen) ExpressionPanel(
+                    onGif = { url, sticker ->
+                        val c = conv; val rp = replyTo?.id; replyTo = null
+                        if (c != null) repo.scope.launch { try { repo.sendRemoteGif(c, url, sticker, rp) } catch (e: Exception) { if (e !is kotlinx.coroutines.CancellationException) android.os.Handler(android.os.Looper.getMainLooper()).post { ctx.toast(e.message ?: "Couldn't send") } } }
+                    },
+                    onEmoji = { e -> val s = tfv.selection; tfv = TextFieldValue(tfv.text.replaceRange(s.min, s.max, e), TextRange(s.min + e.length)) },
                     onBackspace = {
                         val s = tfv.selection
                         if (s.min != s.max) tfv = TextFieldValue(tfv.text.removeRange(s.min, s.max), TextRange(s.min))
@@ -392,7 +429,7 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                         }
                     },
                 )
-                if (!emojiOpen) Spacer(Modifier.navigationBarsPadding())
+                Spacer(Modifier.navigationBarsPadding())
             }
         }
     }
@@ -406,20 +443,20 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                 QuickReactions.forEach { e ->
                     Box(Modifier.size(46.dp).clip(CircleShape).background(if (e == mineEmoji) wc.wispDim else Color.Transparent).clickable { menuFor = null; react(m, e) }, Alignment.Center) { Text(e, fontSize = 27.sp) }
                 }
-                Box(Modifier.size(40.dp).clip(CircleShape).background(wc.surface4).clickable { menuFor = null; reactPickerFor = m }, Alignment.Center) { Icon(Icons.Filled.Add, "More reactions") }
+                Box(Modifier.size(40.dp).clip(CircleShape).background(wc.surface4).clickable { menuFor = null; reactPickerFor = m }, Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions") }
             }
-            if (!m.deleted && m.sendState == 0) SheetItem(Icons.Filled.Reply, "Reply", { menuFor = null; startReply(m) })
-            if (m.text.isNotEmpty() && !m.deleted) SheetItem(Icons.Filled.ContentCopy, "Copy", { menuFor = null; copyText(listOf(m)) })
-            if (!m.deleted && m.sendState == 0) SheetItem(Icons.Filled.Shortcut, "Forward", { menuFor = null; forwardMsgs = listOf(m) })
-            if (mine && !m.deleted && m.sendState == 0 && m.text.isNotEmpty() && !m.isCall) SheetItem(Icons.Filled.Edit, "Edit", { menuFor = null; startEdit(m) })
+            if (!m.deleted && m.sendState == 0) SheetItem(Icons.Rounded.Reply, "Reply", { menuFor = null; startReply(m) })
+            if (m.text.isNotEmpty() && !m.deleted) SheetItem(Icons.Rounded.ContentCopy, "Copy", { menuFor = null; copyText(listOf(m)) })
+            if (!m.deleted && m.sendState == 0) SheetItem(Icons.Rounded.Shortcut, "Forward", { menuFor = null; forwardMsgs = listOf(m) })
+            if (mine && !m.deleted && m.sendState == 0 && m.text.isNotEmpty() && !m.isCall) SheetItem(Icons.Rounded.Edit, "Edit", { menuFor = null; startEdit(m) })
             val saveable = m.attachments.filter { !it.url.startsWith("outbox:") }
-            if (saveable.isNotEmpty() && !m.deleted) SheetItem(Icons.Filled.Download, "Save to device", {
+            if (saveable.isNotEmpty() && !m.deleted) SheetItem(Icons.Rounded.Download, "Save to device", {
                 menuFor = null
                 scope.launch { val ok = saveable.map { try { repo.saveAttachmentToDevice(m, it) } catch (_: Exception) { false } }.all { it }; ctx.toast(if (ok) "Saved to your device" else "Couldn't save") }
             })
-            if (saveable.any { repo.isDownloaded(it) }) SheetItem(Icons.Filled.FolderOff, "Remove downloaded files from this phone", { menuFor = null; scope.launch { repo.removeMediaOnly(m, alsoGallery = false); ctx.toast("Removed from this phone") } })
-            SheetItem(Icons.Filled.CheckCircle, "Select", { menuFor = null; selected = selected + m.id })
-            SheetItem(Icons.Filled.Delete, "Delete", { menuFor = null; deleteFor = listOf(m) }, tint = MaterialTheme.colorScheme.error)
+            if (saveable.any { repo.isDownloaded(it) }) SheetItem(Icons.Rounded.FolderOff, "Remove downloaded files from this phone", { menuFor = null; scope.launch { repo.removeMediaOnly(m, alsoGallery = false); ctx.toast("Removed from this phone") } })
+            SheetItem(Icons.Rounded.CheckCircle, "Select", { menuFor = null; selected = selected + m.id })
+            SheetItem(Icons.Rounded.Delete, "Delete", { menuFor = null; deleteFor = listOf(m) }, tint = MaterialTheme.colorScheme.error)
         }
     }
     reactPickerFor?.let { m -> Sheet({ reactPickerFor = null }) { EmojiPanel(onPick = { e -> reactPickerFor = null; react(m, e) }, onBackspace = { reactPickerFor = null }) } }
@@ -441,40 +478,29 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                     TextButton(onClick = { deleteFor = null; scope.launch { list.forEach { repo.deleteForMe(it, hasFiles && alsoFiles) } } }) { Text("Delete for me") }
                     if (allMine) TextButton(onClick = {
                         deleteFor = null
-                        scope.launch { try { list.forEach { repo.deleteForEveryone(it, hasFiles && alsoFiles) } } catch (e: Exception) { ctx.toast("Needs internet: ${e.message}") } }
+                        scope.launch { try { list.forEach { repo.deleteForEveryone(it, hasFiles && alsoFiles) } } catch (e: Exception) { ctx.toastErr(e, "Couldn't delete") } }
                     }) { Text("Delete for everyone", color = MaterialTheme.colorScheme.error) }
                     TextButton(onClick = { deleteFor = null }) { Text("Cancel") }
                 }
             })
     }
     if (confirmClear) ConfirmDialog("Clear this chat?", "All messages are removed for you. Media saved on this phone is deleted too.", "Clear", true,
-        { scope.launch { try { repo.clearChatEverywhere(convId, true); ctx.toast("Chat cleared") } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't clear") } } }, { confirmClear = false })
+        { scope.launch { try { repo.clearChatEverywhere(convId, true); ctx.toast("Chat cleared") } catch (e: Exception) { ctx.toastErr(e, "Couldn't clear") } } }, { confirmClear = false })
 
     forwardMsgs?.let { list -> ForwardSheet(list, convId, onDismiss = { forwardMsgs = null }) }
     viewer?.let { (items, i) -> MediaViewer(items, i, onDismiss = { viewer = null }) }
 
     // ---- attach menu
     if (attachSheet) Sheet({ attachSheet = false }) {
-        SheetItem(Icons.Filled.PhotoLibrary, "Photos & videos", { attachSheet = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) })
-        SheetItem(Icons.Filled.CameraAlt, "Camera", { attachSheet = false; camPerm.launch(Manifest.permission.CAMERA) })
-        SheetItem(Icons.Filled.InsertDriveFile, "Document or audio", { attachSheet = false; pickFiles.launch("*/*") })
+        SheetItem(Icons.Rounded.PhotoLibrary, "Photos & videos", { attachSheet = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) })
+        SheetItem(Icons.Rounded.CameraAlt, "Camera", { attachSheet = false; camPerm.launch(Manifest.permission.CAMERA) })
+        SheetItem(Icons.Rounded.InsertDriveFile, "Document or audio", { attachSheet = false; pickFiles.launch("*/*") })
     }
-    if (wallpaperSheet) Sheet({ wallpaperSheet = false }) {
-        Text("Chat wallpaper", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(Wallpapers, key = { it.id }) { w ->
-                Column(Modifier.width(76.dp).clickable { repo.settings.setWallpaper(convId, w.id); wallpaperSheet = false }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(76.dp).clip(RoundedCornerShape(16.dp)).then(if (w.brush != null) Modifier.background(w.brush) else Modifier.background(MaterialTheme.colorScheme.background))
-                        .border(if (w.id == wallpaper.id) 3.dp else 1.dp, if (w.id == wallpaper.id) MaterialTheme.colorScheme.primary else wc.border, RoundedCornerShape(16.dp)))
-                    Text(w.label, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-        SheetItem(Icons.Filled.Restore, "Reset to default", { repo.settings.setWallpaper(convId, null); wallpaperSheet = false })
-    }
+    if (wallpaperSheet) WallpaperPickerSheet(convId) { wallpaperSheet = false }
+    if (cameraOpen) WispCamera(onDismiss = { cameraOpen = false }, onDone = { uris -> cameraOpen = false; pendingMedia = uris })
     if (pendingMedia.isNotEmpty()) SendMediaDialog(pendingMedia, onCancel = { pendingMedia = emptyList() }, onSend = { caption ->
         val uris = pendingMedia; pendingMedia = emptyList(); val c = conv; val rp = replyTo?.id; replyTo = null
-        if (c != null) scope.launch { try { repo.sendAttachments(c, uris, caption, rp) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't send") } }
+        if (c != null) scope.launch { try { repo.sendAttachments(c, uris, caption, rp) } catch (e: Exception) { ctx.toastErr(e, "Couldn't send") } }
     })
 }
 
@@ -484,7 +510,7 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
 private fun BoxScope.JumpToLatestButton(visible: Boolean, newBelow: Int, container: Color, onClick: () -> Unit) {
     AnimatedVisibility(visible, Modifier.align(Alignment.BottomEnd).padding(14.dp)) {
         Box {
-            SmallFloatingActionButton(onClick = onClick, containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface) { Icon(Icons.Filled.KeyboardArrowDown, "Latest") }
+            SmallFloatingActionButton(onClick = onClick, containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface) { Icon(Icons.Rounded.KeyboardArrowDown, "Latest") }
             if (newBelow > 0) Text(if (newBelow > 99) "99+" else "$newBelow", color = WispInk, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape).background(MaterialTheme.colorScheme.primary).padding(horizontal = 6.dp, vertical = 1.dp))
         }
@@ -498,7 +524,7 @@ private fun SendMediaDialog(uris: List<Uri>, onCancel: () -> Unit, onSend: (Stri
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(Color.Black).systemBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, "Cancel", tint = Color.White) }
+                IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, "Cancel", tint = Color.White) }
                 Text("${uris.size} selected", color = Color.White, modifier = Modifier.weight(1f))
             }
             Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
@@ -511,7 +537,7 @@ private fun SendMediaDialog(uris: List<Uri>, onCancel: () -> Unit, onSend: (Stri
             }
             Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
                 OutlinedTextField(caption, { caption = it }, Modifier.weight(1f), placeholder = { Text("Add a caption…", color = Color(0x99FFFFFF)) }, maxLines = 4, shape = RoundedCornerShape(24.dp))
-                FilledIconButton(onClick = { onSend(caption.trim()) }, Modifier.padding(start = 8.dp, bottom = 4.dp).size(50.dp)) { Icon(Icons.Filled.Send, "Send") }
+                FilledIconButton(onClick = { onSend(caption.trim()) }, Modifier.padding(start = 8.dp, bottom = 4.dp).size(50.dp)) { Icon(Icons.Rounded.Send, "Send") }
             }
         }
     }
@@ -531,7 +557,7 @@ private fun ForwardSheet(list: List<Message>, fromConv: String, onDismiss: () ->
     val shown = convs.filter { query.isBlank() || it.title(myId).contains(query.trim(), true) }.sortedByDescending { it.lastMessageAt }
     Sheet(onDismiss) {
         Text("Forward to…", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp), singleLine = true, shape = RoundedCornerShape(24.dp), placeholder = { Text("Search chats") }, leadingIcon = { Icon(Icons.Filled.Search, null) })
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp), singleLine = true, shape = RoundedCornerShape(24.dp), placeholder = { Text("Search chats") }, leadingIcon = { Icon(Icons.Rounded.Search, null) })
         Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
             shown.forEach { c ->
                 val on = c.id in picked
@@ -546,7 +572,7 @@ private fun ForwardSheet(list: List<Message>, fromConv: String, onDismiss: () ->
             busy = true
             scope.launch {
                 try { list.sortedBy { it.createdAt }.forEach { repo.forward(it, picked.toList()) }; ctx.toast("Forwarded"); onDismiss() }
-                catch (e: Exception) { ctx.toast(e.message ?: "Couldn't forward"); busy = false }
+                catch (e: Exception) { ctx.toastErr(e, "Couldn't forward"); busy = false }
             }
         }, modifier = Modifier.fillMaxWidth().padding(16.dp)) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Send to ${picked.size} chat${if (picked.size == 1) "" else "s"}") }
     }

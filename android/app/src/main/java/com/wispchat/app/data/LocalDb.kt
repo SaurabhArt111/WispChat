@@ -17,7 +17,7 @@ import org.json.JSONObject
  *
  * Plain SQLiteOpenHelper on purpose: no annotation processing, nothing extra to configure in the build.
  */
-class LocalDb(context: Context) : SQLiteOpenHelper(context, "wispchat.db", null, 1) {
+class LocalDb(context: Context) : SQLiteOpenHelper(context, "wispchat.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE conversations(id TEXT PRIMARY KEY, lastAt INTEGER, json TEXT NOT NULL)")
@@ -33,9 +33,18 @@ class LocalDb(context: Context) : SQLiteOpenHelper(context, "wispchat.db", null,
         // Small caches (status feed, contacts, call log, drafts…) keyed by name.
         db.execSQL("CREATE TABLE kv(k TEXT PRIMARY KEY, v TEXT NOT NULL)")
         db.execSQL("CREATE TABLE outbox(clientId TEXT PRIMARY KEY, conv TEXT NOT NULL, createdAt INTEGER NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, files TEXT, failed INTEGER NOT NULL DEFAULT 0)")
+        createActions(db)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    /** Everything else done while the server was unreachable (react, edit, delete, mute, pin, status views…), replayed in order. */
+    private fun createActions(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS actions(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, dedupe TEXT, method TEXT NOT NULL, path TEXT NOT NULL, body TEXT, extra TEXT, createdAt INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_actions_dedupe ON actions(dedupe)")
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) createActions(db)
+    }
 
     // ------------------------------------------------------------ key/value caches
     suspend fun kvGet(k: String): String? = withContext(Dispatchers.IO) {
@@ -182,8 +191,51 @@ class LocalDb(context: Context) : SQLiteOpenHelper(context, "wispchat.db", null,
 
     suspend fun removeOutbox(clientId: String) = withContext(Dispatchers.IO) { writableDatabase.delete("outbox", "clientId=?", arrayOf(clientId)) }
 
+    // ------------------------------------------------------------ pending actions (offline queue)
+    data class ActionRow(val id: Long, val kind: String, val dedupe: String?, val method: String, val path: String, val body: String?, val extra: String?, val createdAt: Long, val attempts: Int)
+
+    /** Adds an action. With a [ActionRow.dedupe] key, an older queued action with the same key is replaced (latest wins). */
+    suspend fun addAction(kind: String, method: String, path: String, body: String?, extra: String?, dedupe: String?): Long = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            if (dedupe != null) db.delete("actions", "dedupe=?", arrayOf(dedupe))
+            val id = db.insert("actions", null, ContentValues().apply {
+                put("kind", kind); put("dedupe", dedupe); put("method", method); put("path", path)
+                put("body", body); put("extra", extra); put("createdAt", System.currentTimeMillis())
+            })
+            db.setTransactionSuccessful(); id
+        } finally { db.endTransaction() }
+    }
+
+    suspend fun actions(): List<ActionRow> = withContext(Dispatchers.IO) {
+        val out = ArrayList<ActionRow>()
+        readableDatabase.rawQuery("SELECT id,kind,dedupe,method,path,body,extra,createdAt,attempts FROM actions ORDER BY id", null).use { c ->
+            while (c.moveToNext()) out += ActionRow(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6), c.getLong(7), c.getInt(8))
+        }
+        out
+    }
+
+    suspend fun removeAction(id: Long) = withContext(Dispatchers.IO) { writableDatabase.delete("actions", "id=?", arrayOf(id.toString())) }
+    suspend fun removeActionsByDedupe(dedupe: String) = withContext(Dispatchers.IO) { writableDatabase.delete("actions", "dedupe=?", arrayOf(dedupe)) }
+    suspend fun bumpAction(id: Long) = withContext(Dispatchers.IO) { writableDatabase.execSQL("UPDATE actions SET attempts=attempts+1 WHERE id=?", arrayOf<Any>(id)) }
+    suspend fun countPending(): Int = withContext(Dispatchers.IO) {
+        readableDatabase.rawQuery("SELECT (SELECT COUNT(*) FROM actions) + (SELECT COUNT(*) FROM outbox WHERE failed=0)", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
+    /** Rewrites a stored message in place (offline reaction / edit / delete), so it still shows after a restart. */
+    suspend fun patchMessage(id: String, f: (JSONObject) -> Unit) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.rawQuery("SELECT json FROM messages WHERE id=?", arrayOf(id)).use { c ->
+            if (c.moveToFirst()) {
+                val j = JSONObject(c.getString(0)); f(j)
+                db.update("messages", ContentValues().apply { put("json", j.toString()) }, "id=?", arrayOf(id))
+            }
+        }
+    }
+
     suspend fun wipe() = withContext(Dispatchers.IO) {
         val db = writableDatabase
-        listOf("conversations", "messages", "hidden", "media", "outbox", "kv").forEach { db.delete(it, null, null) }
+        listOf("conversations", "messages", "hidden", "media", "outbox", "kv", "actions").forEach { db.delete(it, null, null) }
     }
 }

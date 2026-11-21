@@ -33,7 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -74,6 +74,15 @@ import java.util.Date
 import java.util.Locale
 
 fun Context.toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+/**
+ * Shows an error unless it is just Compose cancelling work because the screen closed — that used to pop up as
+ * "The coroutine scope left the composition".
+ */
+fun Context.toastErr(e: Throwable, fallback: String) {
+    if (e is kotlinx.coroutines.CancellationException) return
+    toast(e.message?.takeIf { it.isNotBlank() } ?: fallback)
+}
 
 // ------------------------------------------------------------------------------------------------ loading
 
@@ -166,7 +175,7 @@ fun OnlineDot(modifier: Modifier = Modifier) =
 @Composable
 fun WispTopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "Back") } else Spacer(Modifier.width(12.dp))
+        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back") } else Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = wc.dim, maxLines = 1)
@@ -182,6 +191,18 @@ fun EmptyState(icon: ImageVector, title: String, body: String = "", action: (@Co
         Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.padding(top = 16.dp))
         if (body.isNotEmpty()) Text(body, color = wc.dim, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         if (action != null) Box(Modifier.padding(top = 14.dp)) { action() }
+    }
+}
+
+/** Square-ish tile with an icon above a short label (Contact info: Message · Audio · Video). Takes whatever width it's given. */
+@Composable
+fun ActionTile(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, wc.border, RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
@@ -266,18 +287,3 @@ fun formatBytes(b: Long): String = when {
     b < 1024L * 1024 * 1024 -> "%.1f MB".format(b / 1048576.0)
     else -> "%.2f GB".format(b / 1073741824.0)
 }
-
-// ------------------------------------------------------------------------------------------------ wallpapers (same presets as the web app)
-
-data class Wallpaper(val id: String, val label: String, val brush: Brush?)
-
-val Wallpapers: List<Wallpaper> = listOf(
-    Wallpaper("none", "Default", null),
-    Wallpaper("midnight", "Midnight", Brush.radialGradient(listOf(Color(0xFF163A33), Color(0xFF0B1614)), center = androidx.compose.ui.geometry.Offset(250f, 300f), radius = 1400f)),
-    Wallpaper("emerald", "Emerald Haze", Brush.radialGradient(listOf(Color(0xFF114B3C), Color(0xFF071312)), center = androidx.compose.ui.geometry.Offset(900f, 0f), radius = 1500f)),
-    Wallpaper("violet", "Violet Dusk", Brush.radialGradient(listOf(Color(0xFF2A1F4D), Color(0xFF100B22)), center = androidx.compose.ui.geometry.Offset(200f, 1800f), radius = 1600f)),
-    Wallpaper("ember", "Ember", Brush.radialGradient(listOf(Color(0xFF4A2410), Color(0xFF170E08)), center = androidx.compose.ui.geometry.Offset(900f, 1800f), radius = 1600f)),
-    Wallpaper("slate", "Slate", Brush.linearGradient(listOf(Color(0xFF1B2430), Color(0xFF0D1218)))),
-)
-
-fun wallpaperById(id: String): Wallpaper = Wallpapers.firstOrNull { it.id == id } ?: Wallpapers[0]

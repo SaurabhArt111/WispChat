@@ -11,7 +11,16 @@ import com.wispchat.app.data.Repo
 import com.wispchat.app.data.Store
 import com.wispchat.app.notify.Notifier
 
-class App : Application() {
+class App : Application(), coil.ImageLoaderFactory {
+    /** One Coil loader for the whole app: animated GIFs / stickers and video thumbnails. */
+    override fun newImageLoader(): coil.ImageLoader = coil.ImageLoader.Builder(this)
+        .components {
+            if (android.os.Build.VERSION.SDK_INT >= 28) add(coil.decode.ImageDecoderDecoder.Factory()) else add(coil.decode.GifDecoder.Factory())
+            add(coil.decode.VideoFrameDecoder.Factory())
+        }
+        .crossfade(true)
+        .build()
+
     companion object {
         lateinit var instance: App
             private set

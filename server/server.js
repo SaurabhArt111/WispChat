@@ -23,6 +23,7 @@ import statusRoutes from "./src/routes/status.routes.js";
 import postRoutes from "./src/routes/post.routes.js";
 import callRoutes from "./src/routes/call.routes.js";
 import linkRoutes from "./src/routes/link.routes.js";
+import gifRoutes from "./src/routes/gif.routes.js";
 
 dotenv.config();
 installAsyncErrorHandling();
@@ -149,6 +150,7 @@ app.use("/api/status", statusRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/calls", callRoutes);
 app.use("/api/link-preview", linkRoutes);
+app.use("/api/gifs", gifRoutes);
 
 // Error handling middleware (e.g. Multer file size errors, validation errors)
 app.use((err, req, res, next) => {

@@ -15,7 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -54,7 +55,7 @@ fun ArchivedScreen(nav: Nav) {
 
     Column(Modifier.fillMaxSize()) {
         WispTopBar("Archived", onBack = { nav.pop() }, subtitle = if (list.isEmpty()) null else "${list.size} chat${if (list.size > 1) "s" else ""}")
-        if (list.isEmpty()) EmptyState(Icons.Filled.Archive, "No archived chats", "Archive a chat from the Chats tab to tuck it away here.")
+        if (list.isEmpty()) EmptyState(Icons.Rounded.Archive, "No archived chats", "Archive a chat from the Chats tab to tuck it away here.")
         else LazyColumn(Modifier.fillMaxSize()) {
             items(list, key = { it.id }) { c ->
                 ConversationRow(c, myId, previews[c.id].orEmpty(), false, "", false,
@@ -65,13 +66,13 @@ fun ArchivedScreen(nav: Nav) {
     sheet?.let { c ->
         Sheet({ sheet = null }) {
             Text(c.title(myId), fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-            SheetItem(Icons.Filled.Unarchive, "Unarchive", { sheet = null; scope.launch { try { repo.setFlag(c.id, "archive", false); ctx.toast("Moved back to chats") } catch (e: Exception) { ctx.toast(e.message ?: "Failed") } } })
-            SheetItem(Icons.Filled.Delete, "Delete chat", { sheet = null; confirm = c }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.Unarchive, "Unarchive", { sheet = null; scope.launch { try { repo.setFlag(c.id, "archive", false); ctx.toast("Moved back to chats") } catch (e: Exception) { ctx.toastErr(e, "Failed") } } })
+            SheetItem(Icons.Rounded.Delete, "Delete chat", { sheet = null; confirm = c }, tint = MaterialTheme.colorScheme.error)
         }
     }
     confirm?.let { c ->
         ConfirmDialog("Delete chat?", "It will leave your list. It comes back if someone writes to you again.", "Delete", true,
-            { scope.launch { try { repo.deleteChat(c.id) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't delete") } } }, { confirm = null })
+            { scope.launch { try { repo.deleteChat(c.id) } catch (e: Exception) { ctx.toastErr(e, "Couldn't delete") } } }, { confirm = null })
     }
 }
 
@@ -84,9 +85,9 @@ fun GroupsScreen(nav: Nav) {
     val previews by repo.previews.collectAsState()
     val groups = all.filter { it.isGroup }.sortedByDescending { it.lastMessageAt }
     Column(Modifier.fillMaxSize()) {
-        WispTopBar("Groups", onBack = { nav.pop() }) { IconButton(onClick = { nav.push(Route.NewGroup) }) { Icon(Icons.Filled.GroupAdd, "New group") } }
-        if (groups.isEmpty()) EmptyState(Icons.Filled.Groups, "No groups yet", "Create a group to chat with several people at once.") {
-            Button(onClick = { nav.push(Route.NewGroup) }) { Icon(Icons.Filled.GroupAdd, null); Text("  New group") }
+        WispTopBar("Groups", onBack = { nav.pop() }) { IconButton(onClick = { nav.push(Route.NewGroup) }) { Icon(Icons.Rounded.GroupAdd, "New group") } }
+        if (groups.isEmpty()) EmptyState(Icons.Rounded.Groups, "No groups yet", "Create a group to chat with several people at once.") {
+            Button(onClick = { nav.push(Route.NewGroup) }) { Icon(Icons.Rounded.GroupAdd, null); Text("  New group") }
         }
         else LazyColumn(Modifier.fillMaxSize()) {
             items(groups, key = { it.id }) { c ->
@@ -124,8 +125,8 @@ fun NewChatScreen(nav: Nav) {
         delay(300)
         remote = try { repo.searchUsers(q.removePrefix("@")).filter { it.id != repo.myId } } catch (_: Exception) { emptyList() }
     }
-    fun open(u: User) { scope.launch { try { val c = repo.openDirect(u.id); nav.replaceTop(Route.Chat(c.id)) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't open the chat") } } }
-    fun add(u: User) { requested = requested + u.id; scope.launch { try { social.sendRequest(u.id); ctx.toast("Request sent to ${u.displayName}") } catch (e: Exception) { requested = requested - u.id; ctx.toast(e.message ?: "Couldn't send the request") } } }
+    fun open(u: User) { scope.launch { try { val c = repo.openDirect(u.id); nav.replaceTop(Route.Chat(c.id)) } catch (e: Exception) { ctx.toastErr(e, "Couldn't open the chat") } } }
+    fun add(u: User) { requested = requested + u.id; scope.launch { try { social.sendRequest(u.id); ctx.toast("Request sent to ${u.displayName}") } catch (e: Exception) { requested = requested - u.id; ctx.toastErr(e, "Couldn't send the request") } } }
     val isContact = { id: String -> contacts.any { it.id == id } }
     val pending = { id: String -> id in requested || social.hasPendingRequest(id) }
 
@@ -139,12 +140,12 @@ fun NewChatScreen(nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         WispTopBar("New chat", onBack = { nav.pop() }, subtitle = "${contacts.size} contact${if (contacts.size == 1) "" else "s"}")
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp),
-            placeholder = { Text("Search name, @username or email") }, leadingIcon = { Icon(Icons.Filled.Search, null) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, "Clear") } })
+            placeholder = { Text("Search name, @username or email") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } })
         LazyColumn(Modifier.fillMaxSize()) {
             if (query.isBlank()) {
-                item { SheetItem(Icons.Filled.GroupAdd, "New group", { nav.push(Route.NewGroup) }) }
-                item { SheetItem(Icons.Filled.PersonAdd, if (incoming > 0) "Friend requests ($incoming)" else "Friend requests", { nav.push(Route.FriendRequests) }) }
+                item { SheetItem(Icons.Rounded.GroupAdd, "New group", { nav.push(Route.NewGroup) }) }
+                item { SheetItem(Icons.Rounded.PersonAdd, if (incoming > 0) "Friend requests ($incoming)" else "Friend requests", { nav.push(Route.FriendRequests) }) }
                 item { SectionTitle("Contacts") }
                 if (!loaded && contacts.isEmpty()) items(5) { SkeletonRow(it, 46.dp) }
                 else if (contacts.isEmpty()) item { Text("No contacts yet — search above or add people you like below.", color = wc.dim, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) }
@@ -201,15 +202,15 @@ fun NewGroupScreen(nav: Nav) {
                 items(selected, key = { it }) { id ->
                     contacts.firstOrNull { it.id == id }?.let { u ->
                         Column(Modifier.width(60.dp).clickable { selected = selected - id }, horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box { UserAvatar(u, 48.dp); Box(Modifier.align(Alignment.BottomEnd).size(18.dp).clip(CircleShape).background(wc.surface4), Alignment.Center) { Icon(Icons.Filled.Close, null, Modifier.size(12.dp)) } }
+                            Box { UserAvatar(u, 48.dp); Box(Modifier.align(Alignment.BottomEnd).size(18.dp).clip(CircleShape).background(wc.surface4), Alignment.Center) { Icon(Icons.Rounded.Close, null, Modifier.size(12.dp)) } }
                             Text(u.displayName.substringBefore(' '), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
-            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp), placeholder = { Text("Search contacts") }, leadingIcon = { Icon(Icons.Filled.Search, null) })
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp), placeholder = { Text("Search contacts") }, leadingIcon = { Icon(Icons.Rounded.Search, null) })
             val shown = contacts.filter { query.isBlank() || it.displayName.contains(query.trim(), true) || it.username.contains(query.trim(), true) }.sortedBy { it.displayName.lowercase() }
-            if (contacts.isEmpty()) EmptyState(Icons.Filled.People, "No contacts yet", "Add people first, then create a group.")
+            if (contacts.isEmpty()) EmptyState(Icons.Rounded.People, "No contacts yet", "Add people first, then create a group.")
             else LazyColumn(Modifier.fillMaxSize()) {
                 items(shown, key = { it.id }) { u ->
                     val on = u.id in selected
@@ -222,14 +223,14 @@ fun NewGroupScreen(nav: Nav) {
                     busy = true
                     scope.launch {
                         try { val c = repo.createGroup(name.trim(), selected, desc.trim(), avatar); nav.replaceTop(Route.Chat(c.id)) }
-                        catch (e: Exception) { ctx.toast(e.message ?: "Couldn't create the group"); busy = false }
+                        catch (e: Exception) { ctx.toastErr(e, "Couldn't create the group"); busy = false }
                     }
                 }) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Create", fontWeight = FontWeight.Bold) }
             }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                     Avatar(name.ifBlank { "G" }, "#64748b", 110.dp, url = avatar)
-                    Box(Modifier.align(Alignment.BottomEnd).size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Filled.CameraAlt, "Photo", Modifier.size(19.dp), tint = WispInk) }
+                    Box(Modifier.align(Alignment.BottomEnd).size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.CameraAlt, "Photo", Modifier.size(19.dp), tint = WispInk) }
                 }
                 OutlinedTextField(name, { name = it.take(40) }, Modifier.fillMaxWidth().padding(top = 22.dp), label = { Text("Group name") }, singleLine = true, shape = RoundedCornerShape(14.dp))
                 OutlinedTextField(desc, { desc = it.take(200) }, Modifier.fillMaxWidth().padding(top = 12.dp), label = { Text("Description (optional)") }, maxLines = 4, shape = RoundedCornerShape(14.dp))
@@ -258,7 +259,7 @@ fun ContactInfoScreen(convId: String, nav: Nav) {
     if (conv == null || other == null) { LaunchedEffect(Unit) { nav.pop() }; return }
     val online = presence[other.id]?.online ?: other.isOnline
     val lastSeen = presence[other.id]?.lastSeen ?: other.lastSeen
-    fun run(ok: String? = null, block: suspend () -> Unit) { scope.launch { try { block(); if (ok != null) ctx.toast(ok) } catch (e: Exception) { ctx.toast(e.message ?: "That didn't work") } } }
+    fun run(ok: String? = null, block: suspend () -> Unit) { scope.launch { try { block(); if (ok != null) ctx.toast(ok) } catch (e: Exception) { ctx.toastErr(e, "That didn't work") } } }
 
     Column(Modifier.fillMaxSize()) {
         WispTopBar("Contact info", onBack = { nav.pop() })
@@ -268,23 +269,26 @@ fun ContactInfoScreen(convId: String, nav: Nav) {
                 Text(other.displayName, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
                 Text("@${other.username}", color = wc.dim)
                 Text(if (online) "online" else formatLastSeen(lastSeen), color = if (online) MaterialTheme.colorScheme.primary else wc.dim, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
-                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = { nav.pop() }) { Icon(Icons.Filled.Chat, null); Text("  Message") }
-                    OutlinedButton(onClick = { startCall({ conv }, "audio") }) { Icon(Icons.Filled.Call, null); Text("  Audio") }
-                    OutlinedButton(onClick = { startCall({ conv }, "video") }) { Icon(Icons.Filled.Videocam, null); Text("  Video") }
+                // WhatsApp-style action tiles: equal widths, icon over label — never wraps the label letter by letter
+                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ActionTile(Icons.Outlined.Chat, "Message", Modifier.weight(1f)) { nav.pop() }
+                    ActionTile(Icons.Outlined.Call, "Audio", Modifier.weight(1f)) { startCall({ conv }, "audio") }
+                    ActionTile(Icons.Outlined.Videocam, "Video", Modifier.weight(1f)) { startCall({ conv }, "video") }
                 }
             }
             if (other.about.isNotBlank()) { SectionTitle("About"); Text(other.about, Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) }
             HorizontalDivider(color = wc.border, modifier = Modifier.padding(top = 12.dp))
-            InfoSwitch(Icons.Filled.NotificationsOff, "Mute notifications", conv.muted) { v -> run { repo.setFlag(conv.id, "mute", v) } }
-            InfoSwitch(Icons.Filled.PushPin, "Pin chat", conv.pinned) { v -> run { repo.setFlag(conv.id, "pin", v) } }
-            InfoSwitch(Icons.Filled.Archive, "Archive chat", conv.archived) { v -> run(if (v) "Archived" else "Unarchived") { repo.setFlag(conv.id, "archive", v) } }
+            MediaLinksDocsRow(conv.id, nav)
+            HorizontalDivider(color = wc.border, modifier = Modifier.padding(top = 12.dp))
+            InfoSwitch(Icons.Rounded.NotificationsOff, "Mute notifications", conv.muted) { v -> run { repo.setFlag(conv.id, "mute", v) } }
+            InfoSwitch(Icons.Rounded.PushPin, "Pin chat", conv.pinned) { v -> run { repo.setFlag(conv.id, "pin", v) } }
+            InfoSwitch(Icons.Rounded.Archive, "Archive chat", conv.archived) { v -> run(if (v) "Archived" else "Unarchived") { repo.setFlag(conv.id, "archive", v) } }
             HorizontalDivider(color = wc.border)
-            SheetItem(Icons.Filled.CleaningServices, "Clear chat", { confirm = "clear" })
-            SheetItem(Icons.Filled.Delete, "Delete chat", { confirm = "delete" }, tint = MaterialTheme.colorScheme.error)
-            SheetItem(Icons.Filled.Block, "Block ${other.displayName}", { confirm = "block" }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.CleaningServices, "Clear chat", { confirm = "clear" })
+            SheetItem(Icons.Rounded.Delete, "Delete chat", { confirm = "delete" }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.Block, "Block ${other.displayName}", { confirm = "block" }, tint = MaterialTheme.colorScheme.error)
             HorizontalDivider(color = wc.border)
-            Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.GridOn, null, Modifier.size(18.dp), tint = wc.wisp); Text("  Posts", fontWeight = FontWeight.SemiBold) }
+            Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.GridOn, null, Modifier.size(18.dp), tint = wc.wisp); Text("  Posts", fontWeight = FontWeight.SemiBold) }
             val p = posts
             when {
                 p == null -> Row(Modifier.fillMaxWidth()) { repeat(3) { Box(Modifier.weight(1f).aspectRatio(1f).padding(1.dp).shimmer()) } }
@@ -333,24 +337,24 @@ fun GroupInfoScreen(convId: String, nav: Nav) {
             try {
                 val url = withContext(Dispatchers.IO) { ImageUtil.decodeScaled(ctx, u, 800)?.let { ImageUtil.avatarDataUrl(ImageUtil.squareCrop(it), 256) } } ?: return@launch
                 repo.updateGroup(convId, avatar = url)
-            } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't update the photo") }
+            } catch (e: Exception) { ctx.toastErr(e, "Couldn't update the photo") }
         }
     }
     if (conv == null) { LaunchedEffect(Unit) { nav.pop() }; return }
     val amAdmin = conv.isAdmin(myId) || conv.createdBy == myId
-    fun run(ok: String? = null, block: suspend () -> Unit) { scope.launch { try { block(); if (ok != null) ctx.toast(ok) } catch (e: Exception) { ctx.toast(e.message ?: "That didn't work") } } }
+    fun run(ok: String? = null, block: suspend () -> Unit) { scope.launch { try { block(); if (ok != null) ctx.toast(ok) } catch (e: Exception) { ctx.toastErr(e, "That didn't work") } } }
 
     Column(Modifier.fillMaxSize()) {
         WispTopBar("Group info", onBack = { nav.pop() }) {
             if (amAdmin) IconButton(onClick = {
                 if (editing) run("Group updated") { repo.updateGroup(convId, name = name.trim().ifEmpty { conv.name }, description = desc.trim()); editing = false } else editing = true
-            }) { Icon(if (editing) Icons.Filled.Check else Icons.Filled.Edit, if (editing) "Save" else "Edit") }
+            }) { Icon(if (editing) Icons.Rounded.Check else Icons.Rounded.Edit, if (editing) "Save" else "Edit") }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.then(if (amAdmin) Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } else Modifier)) {
                     Avatar(conv.name.ifEmpty { "G" }, "#64748b", 110.dp, url = conv.avatar)
-                    if (amAdmin) Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Filled.CameraAlt, "Photo", Modifier.size(18.dp), tint = WispInk) }
+                    if (amAdmin) Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.CameraAlt, "Photo", Modifier.size(18.dp), tint = WispInk) }
                 }
                 if (editing) {
                     OutlinedTextField(name, { name = it.take(40) }, Modifier.fillMaxWidth().padding(top = 16.dp), label = { Text("Group name") }, singleLine = true, shape = RoundedCornerShape(14.dp))
@@ -362,12 +366,14 @@ fun GroupInfoScreen(convId: String, nav: Nav) {
                 }
             }
             HorizontalDivider(color = wc.border)
-            InfoSwitch(Icons.Filled.NotificationsOff, "Mute notifications", conv.muted) { v -> run { repo.setFlag(conv.id, "mute", v) } }
-            InfoSwitch(Icons.Filled.PushPin, "Pin chat", conv.pinned) { v -> run { repo.setFlag(conv.id, "pin", v) } }
-            if (amAdmin) InfoSwitch(Icons.Filled.AdminPanelSettings, "Only admins can send messages", conv.onlyAdminsCanMessage) { v -> run { repo.updateGroup(convId, onlyAdmins = v) } }
+            MediaLinksDocsRow(conv.id, nav)
+            HorizontalDivider(color = wc.border)
+            InfoSwitch(Icons.Rounded.NotificationsOff, "Mute notifications", conv.muted) { v -> run { repo.setFlag(conv.id, "mute", v) } }
+            InfoSwitch(Icons.Rounded.PushPin, "Pin chat", conv.pinned) { v -> run { repo.setFlag(conv.id, "pin", v) } }
+            if (amAdmin) InfoSwitch(Icons.Rounded.AdminPanelSettings, "Only admins can send messages", conv.onlyAdminsCanMessage) { v -> run { repo.updateGroup(convId, onlyAdmins = v) } }
             HorizontalDivider(color = wc.border)
             SectionTitle("${conv.participants.size} members")
-            if (amAdmin) SheetItem(Icons.Filled.PersonAdd, "Add members", { adding = true })
+            if (amAdmin) SheetItem(Icons.Rounded.PersonAdd, "Add members", { adding = true })
             conv.participants.sortedWith(compareByDescending<User> { conv.isAdmin(it.id) || it.id == conv.createdBy }.thenBy { it.displayName.lowercase() }).forEach { u ->
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { if (u.id != myId) nav.push(Route.Person(u)) }, onLongClick = { if (amAdmin && u.id != myId) memberSheet = u })
                     .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -380,8 +386,8 @@ fun GroupInfoScreen(convId: String, nav: Nav) {
                 }
             }
             HorizontalDivider(color = wc.border, modifier = Modifier.padding(top = 8.dp))
-            SheetItem(Icons.Filled.CleaningServices, "Clear chat", { confirm = "clear" })
-            SheetItem(Icons.Filled.ExitToApp, "Leave group", { confirm = "leave" }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.CleaningServices, "Clear chat", { confirm = "clear" })
+            SheetItem(Icons.Rounded.ExitToApp, "Leave group", { confirm = "leave" }, tint = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(32.dp).navigationBarsPadding())
         }
     }
@@ -389,11 +395,11 @@ fun GroupInfoScreen(convId: String, nav: Nav) {
         val isAdm = conv.isAdmin(u.id)
         Sheet({ memberSheet = null }) {
             Text(u.displayName, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-            SheetItem(Icons.Filled.Person, "View profile", { memberSheet = null; nav.push(Route.Person(u)) })
-            SheetItem(if (isAdm) Icons.Filled.RemoveModerator else Icons.Filled.AddModerator, if (isAdm) "Remove as admin" else "Make admin", {
+            SheetItem(Icons.Rounded.Person, "View profile", { memberSheet = null; nav.push(Route.Person(u)) })
+            SheetItem(if (isAdm) Icons.Rounded.RemoveModerator else Icons.Rounded.AddModerator, if (isAdm) "Remove as admin" else "Make admin", {
                 memberSheet = null; run { if (isAdm) repo.updateAdmins(convId, demote = listOf(u.id)) else repo.updateAdmins(convId, promote = listOf(u.id)) }
             })
-            SheetItem(Icons.Filled.PersonRemove, "Remove from group", { memberSheet = null; run("${u.displayName} removed") { repo.updateMembers(convId, remove = listOf(u.id)) } }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.PersonRemove, "Remove from group", { memberSheet = null; run("${u.displayName} removed") { repo.updateMembers(convId, remove = listOf(u.id)) } }, tint = MaterialTheme.colorScheme.error)
         }
     }
     if (adding) {
@@ -430,18 +436,18 @@ fun FriendRequestsScreen(nav: Nav) {
     val outgoing = requests.filter { it.outgoing }
     fun respond(id: String, accept: Boolean) {
         busy = busy + id
-        scope.launch { try { social.respond(id, accept); if (accept) ctx.toast("Added to contacts") } catch (e: Exception) { ctx.toast(e.message ?: "Failed") } finally { busy = busy - id } }
+        scope.launch { try { social.respond(id, accept); if (accept) ctx.toast("Added to contacts") } catch (e: Exception) { ctx.toastErr(e, "Failed") } finally { busy = busy - id } }
     }
     Column(Modifier.fillMaxSize()) {
         WispTopBar("Friend requests", onBack = { nav.pop() })
-        if (requests.isEmpty()) EmptyState(Icons.Filled.PersonAdd, "No pending requests", "When someone adds you, it shows up here.")
+        if (requests.isEmpty()) EmptyState(Icons.Rounded.PersonAdd, "No pending requests", "When someone adds you, it shows up here.")
         else LazyColumn(Modifier.fillMaxSize()) {
             if (incoming.isNotEmpty()) item { SectionTitle("Received") }
             items(incoming, key = { "i" + it.id }) { r ->
                 PersonRow(r.user, {
                     Row {
                         FilledTonalButton(enabled = r.id !in busy, onClick = { respond(r.id, true) }, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Accept") }
-                        IconButton(enabled = r.id !in busy, onClick = { respond(r.id, false) }) { Icon(Icons.Filled.Close, "Decline") }
+                        IconButton(enabled = r.id !in busy, onClick = { respond(r.id, false) }) { Icon(Icons.Rounded.Close, "Decline") }
                     }
                 }) { nav.push(Route.Person(r.user)) }
             }
@@ -478,7 +484,7 @@ fun MediaStorageScreen(nav: Nav) {
                     val counts = s.optJSONObject("counts"); val bytes = s.optJSONObject("bytes")
                     val total = s.optLong("totalBytes").coerceAtLeast(1L)
                     Text("${s.optInt("totalCount")} files · ${formatBytes(s.optLong("totalBytes"))}", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-                    listOf(Triple("image", "Photos", Icons.Filled.Image), Triple("video", "Videos", Icons.Filled.Videocam), Triple("audio", "Audio", Icons.Filled.Mic), Triple("file", "Documents", Icons.Filled.Description)).forEach { (k, label, icon) ->
+                    listOf(Triple("image", "Photos", Icons.Rounded.Image), Triple("video", "Videos", Icons.Rounded.Videocam), Triple("audio", "Audio", Icons.Rounded.Mic), Triple("file", "Documents", Icons.Rounded.Description)).forEach { (k, label, icon) ->
                         val b = bytes?.optLong(k) ?: 0L
                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -504,10 +510,10 @@ fun MediaStorageScreen(nav: Nav) {
                     r.forEach { row ->
                         Row(Modifier.fillMaxWidth().clickable { nav.openChat(row.convId) }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis); Text("${formatBytes(row.bytes)} · ${row.files} file${if (row.files == 1) "" else "s"}", fontSize = 12.sp, color = wc.dim) }
-                            IconButton(onClick = { scope.launch { repo.media.clearConversation(row.convId, alsoGallery = false); reload() } }) { Icon(Icons.Filled.Delete, "Free up space", tint = wc.dim) }
+                            IconButton(onClick = { scope.launch { repo.media.clearConversation(row.convId, alsoGallery = false); reload() } }) { Icon(Icons.Rounded.Delete, "Free up space", tint = wc.dim) }
                         }
                     }
-                    OutlinedButton(onClick = { confirmAll = true }, Modifier.padding(20.dp)) { Icon(Icons.Filled.DeleteSweep, null); Text("  Delete all downloaded media") }
+                    OutlinedButton(onClick = { confirmAll = true }, Modifier.padding(20.dp)) { Icon(Icons.Rounded.DeleteSweep, null); Text("  Delete all downloaded media") }
                 }
             }
             Spacer(Modifier.height(32.dp).navigationBarsPadding())
@@ -540,7 +546,7 @@ fun BroadcastScreen(nav: Nav) {
         Text("Each person gets your message as a normal one-to-one chat. They can't see who else received it.", color = wc.dim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp))
         when {
             !loaded && contacts.isEmpty() -> Box(Modifier.weight(1f)) { SkeletonList(6, 44.dp) }
-            contacts.isEmpty() -> Box(Modifier.weight(1f)) { EmptyState(Icons.Filled.Campaign, "No contacts yet", "Add people first, then broadcast to them.") }
+            contacts.isEmpty() -> Box(Modifier.weight(1f)) { EmptyState(Icons.Rounded.Campaign, "No contacts yet", "Add people first, then broadcast to them.") }
             else -> LazyColumn(Modifier.weight(1f)) {
                 items(contacts.sortedBy { it.displayName.lowercase() }, key = { it.id }) { u ->
                     val on = u.id in selected
@@ -561,7 +567,7 @@ fun BroadcastScreen(nav: Nav) {
                     if (ok > 0) { text = ""; selected = emptySet() }
                 }
             }, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp).size(48.dp)) {
-                if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = WispInk) else Icon(Icons.Filled.Send, "Send")
+                if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = WispInk) else Icon(Icons.Rounded.Send, "Send")
             }
         }
     }

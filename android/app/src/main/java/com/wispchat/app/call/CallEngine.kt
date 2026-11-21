@@ -57,6 +57,13 @@ data class CallState(
     val localVideo: VideoTrack? = null,
     val remoteCameraOff: Boolean = false,
     val unstable: Boolean = false,
+    val peerAvatar: String = "",
+    val peerColor: String = "",
+    /** The callee's phone/tab is actually ringing (server confirmed). */
+    val ringing: Boolean = false,
+    val remoteMuted: Boolean = false,
+    val route: AudioRoute = AudioRoute.EARPIECE,
+    val routes: Set<AudioRoute> = setOf(AudioRoute.EARPIECE, AudioRoute.SPEAKER),
 )
 
 /**
@@ -85,6 +92,11 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
     private var remoteSet = false
     private var ringTimeout: Job? = null
     private var disconnectJob: Job? = null
+
+    /** Ringtone / ring-back / busy tones. */
+    private val ringer = Ringer(ctx)
+    /** Audio focus, earpiece ⇄ speaker ⇄ headset routing, proximity sensor. */
+    private val audio = CallAudio(ctx) { r, all -> _state.update { it.copy(route = r, routes = all, speaker = r == AudioRoute.SPEAKER) } }
 
     init {
         scope.launch { repo.callEvents.collect { onEvent(it) } }
@@ -117,16 +129,23 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
         } catch (_: Exception) { fallback }
     }
 
-    private fun audioManager() = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    /** Picture + colour of the other person, from the chat list (pushes can't carry big data: avatars). */
+    private fun peerLook(convId: String, peerId: String, avatar: String, color: String): Pair<String, String> {
+        val u = repo.conversation(convId)?.participants?.firstOrNull { it.id == peerId }
+            ?: repo.conversations.value.asSequence().flatMap { it.participants.asSequence() }.firstOrNull { it.id == peerId }
+        return (avatar.ifEmpty { u?.avatar.orEmpty() }) to (color.ifEmpty { u?.avatarColor.orEmpty() })
+    }
 
     // ------------------------------------------------------------------ entry points
     fun startOutgoing(conv: Conversation, kind: String) {
         if (_state.value.phase != Phase.IDLE && _state.value.phase != Phase.ENDED) return
         val peer = conv.other(repo.myId) ?: return
         val callId = java.util.UUID.randomUUID().toString()
-        _state.value = CallState(Phase.OUTGOING, callId, conv.id, kind, peer.id, peer.displayName, outgoing = true, cameraOn = kind == "video", speaker = kind == "video")
+        _state.value = CallState(Phase.OUTGOING, callId, conv.id, kind, peer.id, peer.displayName, outgoing = true, cameraOn = kind == "video",
+            speaker = kind == "video", peerAvatar = peer.avatar, peerColor = peer.avatarColor)
         repo.callActive = true
-        CallService.start(ctx, peer.displayName, kind)
+        audio.start(kind == "video")
+        CallService.start(ctx)
         scope.launch {
             try {
                 ensureConnectedSocket()
@@ -141,23 +160,42 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
     }
 
     /** From the realtime `call:incoming` event (app open) or from a push (app was closed — the offer follows once the socket connects). */
-    fun onIncoming(callId: String, convId: String, kind: String, peerName: String, peerId: String, offer: JSONObject?) {
+    fun onIncoming(callId: String, convId: String, kind: String, peerName: String, peerId: String, offer: JSONObject?, avatar: String = "", color: String = "") {
         val st = _state.value
         if (st.callId == callId) { if (offer != null) { pendingOffer = offer; maybeAnswer() }; return }
         if (st.phase != Phase.IDLE && st.phase != Phase.ENDED) return // busy: the server auto-declines for us
+        if (callId in recentlyEnded) return // a late duplicate (push after the socket event) of a call that's already over
         pendingOffer = offer; answerWanted = false; remoteSet = false; pendingIce.clear()
-        _state.value = CallState(Phase.INCOMING, callId, convId, kind, peerId, peerName, outgoing = false, cameraOn = kind == "video", speaker = kind == "video")
+        val (av, col) = peerLook(convId, peerId, avatar, color)
+        _state.value = CallState(Phase.INCOMING, callId, convId, kind, peerId, peerName, outgoing = false, cameraOn = kind == "video",
+            speaker = kind == "video", peerAvatar = av, peerColor = col)
         repo.callActive = true // opens the live socket; the server re-sends the offer to it
         armRingTimeout()
+        // Ring like a phone: our own ringtone + vibration, a foreground "incoming call" notification (full screen when locked)…
+        ringer.ringIncoming()
+        CallService.start(ctx)
+        // …and the full-screen answer page straight away when WispChat is open on screen.
+        if (repo.appVisible) runCatching { ctx.startActivity(Notifier.callIntent(ctx, callId, convId, kind, peerName, peerId, null)) }
     }
+
+    /** The caller hung up / someone answered on another device while we were ringing (push "call-end"). */
+    fun remoteEnded(callId: String, reason: String) {
+        val st = _state.value
+        if (st.callId != callId) { Notifier.cancelIncomingCall(ctx); return }
+        if (st.phase == Phase.INCOMING) finish(if (reason == "answered") "answered elsewhere" else "missed")
+    }
+
+    private val recentlyEnded = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
 
     fun answer() {
         val st = _state.value
         if (st.phase != Phase.INCOMING) return
         answerWanted = true
+        ringer.stop()
         _state.update { it.copy(phase = Phase.CONNECTING) }
         Notifier.cancelIncomingCall(ctx)
-        CallService.start(ctx, st.peerName, st.kind)
+        audio.start(st.kind == "video")
+        CallService.start(ctx) // switches the notification to "ongoing call" with mic/camera access
         maybeAnswer()
     }
 
@@ -194,7 +232,8 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
     fun toggleMute() { val m = !_state.value.muted; audioTrack?.setEnabled(!m); _state.update { it.copy(muted = m); }; sendMedia() }
     fun toggleCamera() { val on = !_state.value.cameraOn; localVideoTrack?.setEnabled(on); _state.update { it.copy(cameraOn = on) }; sendMedia() }
     fun switchCamera() { capturer?.switchCamera(null); frontCamera = !frontCamera }
-    fun toggleSpeaker() { val on = !_state.value.speaker; audioManager().isSpeakerphoneOn = on; _state.update { it.copy(speaker = on) } }
+    fun toggleSpeaker() = audio.toggleSpeaker()
+    fun selectRoute(r: AudioRoute) = audio.select(r)
     private fun sendMedia() {
         val s = _state.value
         repo.rt.emit("call:media-state", JSONObject().put("callId", s.callId).put("muted", s.muted).put("cameraOff", !s.cameraOn))
@@ -215,7 +254,6 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
         }
         pc = f.createPeerConnection(cfg, observer) ?: error("peer")
-        val am = audioManager(); am.mode = AudioManager.MODE_IN_COMMUNICATION; am.isSpeakerphoneOn = _state.value.speaker
 
         val audioSource = f.createAudioSource(MediaConstraints())
         audioTrack = f.createAudioTrack("a0", audioSource).also { pc!!.addTrack(it, listOf("s0")) }
@@ -245,6 +283,7 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
                 when (s) {
                     PeerConnection.PeerConnectionState.CONNECTED -> {
                         disconnectJob?.cancel(); ringTimeout?.cancel()
+                        if (_state.value.phase != Phase.CONNECTED) { ringer.stop(); ringer.connected() }
                         _state.update { it.copy(phase = Phase.CONNECTED, connectedAt = if (it.connectedAt == 0L) System.currentTimeMillis() else it.connectedAt, unstable = false) }
                     }
                     PeerConnection.PeerConnectionState.DISCONNECTED -> {
@@ -297,10 +336,13 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
             else -> {
                 if (d.optString("callId") != st.callId) return
                 when (e.name) {
-                    "call:ringing" -> {}
+                    "call:ringing" -> if (st.phase == Phase.OUTGOING && !st.ringing) { _state.update { it.copy(ringing = true) }; ringer.ringBack() }
                     "call:answered" -> d.optJSONObject("answer")?.let { a ->
+                        ringer.stop()
                         try { pc?.setRemoteSuspend(sdpFrom(a)); remoteSet = true; flushIce(); _state.update { it.copy(phase = Phase.CONNECTING) } } catch (_: Exception) { finish("failed") }
                     }
+                    "call:peer-unstable" -> _state.update { it.copy(unstable = true) }
+                    "call:peer-reconnected" -> _state.update { it.copy(unstable = false) }
                     "call:ice-candidate" -> d.optJSONObject("candidate")?.let { c ->
                         val mid = if (c.isNull("sdpMid")) "0" else c.optString("sdpMid", "0")
                         val ic = IceCandidate(mid, c.optInt("sdpMLineIndex", 0), c.optString("candidate"))
@@ -316,7 +358,7 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
                             }
                         } catch (_: Exception) {}
                     }
-                    "call:media-state" -> _state.update { it.copy(remoteCameraOff = d.optBoolean("cameraOff", false)) }
+                    "call:media-state" -> _state.update { it.copy(remoteCameraOff = d.optBoolean("cameraOff", false), remoteMuted = d.optBoolean("muted", false)) }
                     "call:declined" -> finish("declined")
                     "call:busy" -> finish("busy")
                     "call:unavailable" -> finish("unavailable")
@@ -335,9 +377,15 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
     }
 
     private fun finish(reason: String) {
-        if (_state.value.phase == Phase.IDLE || _state.value.phase == Phase.ENDED) return
+        val before = _state.value
+        if (before.phase == Phase.IDLE || before.phase == Phase.ENDED) return
         ringTimeout?.cancel(); disconnectJob?.cancel()
+        ringer.stop()
+        recentlyEnded += before.callId; while (recentlyEnded.size > 20) recentlyEnded.remove(recentlyEnded.first())
         Notifier.cancelIncomingCall(ctx)
+        // a missed incoming call leaves a WhatsApp-style "Missed call" notification
+        if (before.phase == Phase.INCOMING && !before.outgoing && reason != "declined" && reason != "answered elsewhere")
+            Notifier.showMissedCall(ctx, before.convId, before.peerName, before.kind)
         try { capturer?.stopCapture() } catch (_: Exception) {}
         capturer?.dispose(); capturer = null
         helper?.dispose(); helper = null
@@ -346,7 +394,11 @@ class CallEngine(private val ctx: Context, private val repo: Repo) {
         audioTrack?.dispose(); audioTrack = null
         pc?.close(); pc = null
         pendingOffer = null; pendingIce.clear(); remoteSet = false; answerWanted = false
-        val am = audioManager(); am.mode = AudioManager.MODE_NORMAL; am.isSpeakerphoneOn = false
+        when {
+            reason == "busy" || reason == "unavailable" -> ringer.busy()
+            before.phase == Phase.CONNECTED || before.phase == Phase.CONNECTING || before.outgoing -> ringer.ended()
+        }
+        scope.launch { delay(if (reason == "busy" || reason == "unavailable") 2300 else 500); val ph = _state.value.phase; if (ph == Phase.IDLE || ph == Phase.ENDED) audio.stop() }
         CallService.stop(ctx)
         _state.update { it.copy(phase = Phase.ENDED, endReason = reason, remoteVideo = null, localVideo = null) }
         repo.callActive = false

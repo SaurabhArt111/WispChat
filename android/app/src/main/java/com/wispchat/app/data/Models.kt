@@ -194,8 +194,15 @@ data class StatusItem(
     val id: String, val kind: String, val url: String, val text: String, val bgColor: String, val caption: String,
     val fit: String, val createdAt: Long, val viewerCount: Int, val viewedByMe: Boolean,
     val viewers: List<StatusViewer>, val myReaction: String?,
+    /** When it disappears: the server's expiresAt, or 24 h after it was posted. Enforced on the phone too, even offline. */
+    val expiresAt: Long = if (createdAt > 0) createdAt + STATUS_TTL_MS else Long.MAX_VALUE,
+    /** Posted while offline, waiting in the queue. */
+    val pending: Boolean = false,
 ) {
+    val expired get() = System.currentTimeMillis() >= expiresAt
+
     companion object {
+        const val STATUS_TTL_MS = 24L * 60 * 60 * 1000
         fun from(o: JSONObject) = StatusItem(
             o.id(), o.str("kind"), o.str("url"), o.str("text"), o.str("bgColor").ifEmpty { "#5ef2c0" }, o.str("caption"),
             o.str("fit").ifEmpty { "cover" }, isoToMillis(o.str("createdAt")), o.optInt("viewerCount"), o.optBoolean("viewedByMe"),
@@ -205,6 +212,8 @@ data class StatusItem(
                     isoToMillis(v.str("at")), v.optInt("count", 1), v.str("emoji").ifEmpty { null })
             },
             o.str("myReaction").ifEmpty { null },
+            expiresAt = isoToMillis(o.str("expiresAt")).takeIf { it > 0 }
+                ?: isoToMillis(o.str("createdAt")).let { if (it > 0) it + STATUS_TTL_MS else Long.MAX_VALUE },
         )
     }
 }

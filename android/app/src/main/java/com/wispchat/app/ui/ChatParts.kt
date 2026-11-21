@@ -24,7 +24,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -72,7 +72,7 @@ import kotlin.math.roundToInt
 
 val QuickReactions = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
 
-private val urlRegex = Regex("""https?://[^\s<>"']+""")
+internal val urlRegex = Regex("""https?://[^\s<>"']+""")
 fun firstUrl(text: String): String? = urlRegex.find(text)?.value?.trimEnd('.', ',', ')', '!', '?')
 
 /** Text with tappable links (LinkAnnotation opens them through the system browser). */
@@ -154,7 +154,7 @@ fun CallPill(m: Message, mine: Boolean) {
     }
     Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), Alignment.Center) {
         Row(Modifier.clip(RoundedCornerShape(14.dp)).background(wc.surface3).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (m.callKind == "video") Icons.Filled.Videocam else Icons.Filled.Call, null, Modifier.size(16.dp), tint = if (missed) MaterialTheme.colorScheme.error else wc.wisp)
+            Icon(if (m.callKind == "video") Icons.Rounded.Videocam else Icons.Rounded.Call, null, Modifier.size(16.dp), tint = if (missed) MaterialTheme.colorScheme.error else wc.wisp)
             Text("  $label · ${formatClock(m.createdAt)}", fontSize = 12.sp, color = wc.dim)
         }
     }
@@ -210,10 +210,26 @@ fun MessageBubble(
     ) {
         // the reply arrow that appears behind the bubble while dragging
         if (off.value > 8f) Box(Modifier.align(Alignment.CenterStart).graphicsLayer { alpha = (off.value / trigger).coerceIn(0f, 1f); scaleX = 0.6f + 0.4f * (off.value / trigger).coerceIn(0f, 1f); scaleY = scaleX }
-            .size(32.dp).clip(CircleShape).background(wc.surface4), Alignment.Center) { Icon(Icons.Filled.Reply, null, Modifier.size(18.dp), tint = wc.wisp) }
+            .size(32.dp).clip(CircleShape).background(wc.surface4), Alignment.Center) { Icon(Icons.Rounded.Reply, null, Modifier.size(18.dp), tint = wc.wisp) }
 
         Row(Modifier.fillMaxWidth().offset { IntOffset(off.value.roundToInt(), 0) }, horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                val jumbo = remember(m.text, m.deleted, m.locked, m.attachments.size, m.replyTo, m.forwardedFrom, m.statusReply) {
+                    if (m.deleted || m.locked || m.attachments.isNotEmpty() || m.replyTo != null || m.forwardedFrom != null || m.statusReply != null) 0 else emojiOnlyCount(m.text)
+                }
+                val sticker = !m.deleted && m.attachments.size == 1 && isStickerAttachment(m.attachments[0]) && m.text.isBlank() && m.replyTo == null && m.statusReply == null
+                if (jumbo in 1..3 || sticker) {
+                    // WhatsApp-style: 1–3 emoji (or a sticker) are shown big, with NO bubble behind them — just a small time pill.
+                    Column(Modifier.combinedClickable(onClick = { if (m.sendState == 2 && !selecting) onRetry() else onTap() }, onLongClick = onLong),
+                        horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                        if (showName && !mine) Text(m.sender?.displayName.orEmpty(), color = senderColor(m.sender?.id.orEmpty()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 4.dp))
+                        if (sticker) MediaCell(m, m.attachments[0], Modifier.size(164.dp), onOpenMedia, bare = true)
+                        else Text(m.text.trim(), fontSize = when (jumbo) { 1 -> 58.sp; 2 -> 46.sp; else -> 38.sp }, lineHeight = when (jumbo) { 1 -> 68.sp; 2 -> 56.sp; else -> 48.sp },
+                            modifier = Modifier.padding(horizontal = 2.dp))
+                        Row(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(10.dp)).background(if (mine) wc.bubbleMine else androidx.compose.ui.graphics.SolidColor(wc.bubbleTheirs)).padding(horizontal = 8.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically) { MetaRow(m, mine, ink.copy(alpha = 0.8f)) }
+                    }
+                } else
                 Column(
                     Modifier.widthIn(max = 310.dp).clip(shape)
                         .then(if (mine) Modifier.background(wc.bubbleMine) else Modifier.background(wc.bubbleTheirs))
@@ -222,7 +238,7 @@ fun MessageBubble(
                 ) {
                     if (showName && !mine) Text(m.sender?.displayName.orEmpty(), color = senderColor(m.sender?.id.orEmpty()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp))
                     if (m.forwardedFrom != null) Row(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Shortcut, null, Modifier.size(13.dp), tint = faintInk)
+                        Icon(Icons.Rounded.Shortcut, null, Modifier.size(13.dp), tint = faintInk)
                         Text(" Forwarded", fontSize = 11.5.sp, fontStyle = FontStyle.Italic, color = faintInk)
                     }
                     m.replyTo?.let { r -> ReplyQuote(r, mine, ink) { onJumpTo(r.id) } }
@@ -231,30 +247,73 @@ fun MessageBubble(
                     val text = m.text
                     when {
                         m.deleted -> Row(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Block, null, Modifier.size(14.dp), tint = faintInk); Text(" This message was deleted", fontSize = 14.sp, fontStyle = FontStyle.Italic, color = faintInk)
+                            Icon(Icons.Rounded.Block, null, Modifier.size(14.dp), tint = faintInk); Text(" This message was deleted", fontSize = 14.sp, fontStyle = FontStyle.Italic, color = faintInk)
                         }
                         m.locked -> Row(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Lock, null, Modifier.size(14.dp), tint = faintInk); Text(" Can't decrypt on this device", fontSize = 13.sp, color = faintInk)
+                            Icon(Icons.Rounded.Lock, null, Modifier.size(14.dp), tint = faintInk); Text(" Can't decrypt on this device", fontSize = 13.sp, color = faintInk)
                         }
                         text.isNotEmpty() -> {
                             Text(linkified(text, if (mine) ink else wc.wisp), fontSize = 16.sp, color = ink, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                             firstUrl(text)?.let { LinkPreviewCard(it, ink) }
                         }
                     }
-                    Row(Modifier.align(Alignment.End).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (m.sendState == 2) Text("Failed — tap to retry  ", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                        if (m.edited && !m.deleted) Text("edited  ", fontSize = 11.sp, color = faintInk)
-                        Text(formatClock(m.createdAt), fontSize = 11.sp, color = faintInk)
-                        if (mine && !m.deleted) Icon(
-                            when { m.sendState == 1 -> Icons.Filled.Schedule; m.sendState == 2 -> Icons.Filled.ErrorOutline; m.readBy.size > 1 -> Icons.Filled.DoneAll; else -> Icons.Filled.Done },
-                            null, Modifier.padding(start = 4.dp).size(15.dp),
-                            tint = when { m.sendState == 2 -> MaterialTheme.colorScheme.error; m.readBy.size > 1 -> Sky; else -> faintInk })
-                    }
+                    Row(Modifier.align(Alignment.End).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) { MetaRow(m, mine, faintInk) }
                 }
                 if (m.reactions.isNotEmpty() && !m.deleted) ReactionsRow(m, mine, onReact)
             }
         }
     }
+}
+
+/** time · edited · ticks — shared by normal bubbles and the bubble-less big-emoji / sticker messages. */
+@Composable
+private fun MetaRow(m: Message, mine: Boolean, faintInk: Color) {
+    if (m.sendState == 2) Text("Failed — tap to retry  ", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+    if (m.edited && !m.deleted) Text("edited  ", fontSize = 11.sp, color = faintInk)
+    Text(formatClock(m.createdAt), fontSize = 11.sp, color = faintInk)
+    if (mine && !m.deleted) Icon(
+        when { m.sendState == 1 -> Icons.Rounded.Schedule; m.sendState == 2 -> Icons.Rounded.ErrorOutline; m.readBy.size > 1 -> Icons.Rounded.DoneAll; else -> Icons.Rounded.Done },
+        null, Modifier.padding(start = 4.dp).size(15.dp),
+        tint = when { m.sendState == 2 -> MaterialTheme.colorScheme.error; m.readBy.size > 1 -> Sky; else -> faintInk })
+}
+
+/** Stickers are sent as an image named "sticker…" (GIF / WebP / PNG). */
+fun isStickerAttachment(a: Attachment) = a.kind == "image" && a.name.startsWith("sticker", ignoreCase = true)
+fun isGifAttachment(a: Attachment) = a.mimeType.equals("image/gif", true) || a.name.endsWith(".gif", true)
+
+/**
+ * How many emoji the text is made of, if it is ONLY emoji (spaces allowed); 0 otherwise.
+ * Counts grapheme clusters, so 👍🏽, 👨‍👩‍👧 and 🇮🇳 each count as one.
+ */
+fun emojiOnlyCount(text: String): Int {
+    val t = text.trim()
+    if (t.isEmpty() || t.length > 64) return 0
+    val bi = java.text.BreakIterator.getCharacterInstance().apply { setText(t) }
+    var count = 0
+    var start = bi.first(); var end = bi.next()
+    while (end != java.text.BreakIterator.DONE) {
+        val g = t.substring(start, end)
+        if (g.isNotBlank()) { if (!isEmojiCluster(g)) return 0; count++ }
+        start = end; end = bi.next()
+    }
+    return count
+}
+
+private fun isEmojiCluster(g: String): Boolean {
+    var i = 0; var sawEmoji = false
+    while (i < g.length) {
+        val cp = g.codePointAt(i); i += Character.charCount(cp)
+        when {
+            cp == 0x200D || cp == 0xFE0F || cp == 0xFE0E || cp == 0x20E3 -> {}                 // joiners, variation selectors, keycap
+            cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F -> {}                              // skin tones, flag tags
+            cp in 0x1F000..0x1FAFF || cp in 0x2600..0x27BF || cp in 0x2300..0x23FF || cp in 0x2B00..0x2BFF ||
+                cp in 0x2190..0x21FF || cp == 0x00A9 || cp == 0x00AE || cp == 0x203C || cp == 0x2049 || cp == 0x2122 ||
+                cp == 0x2139 || cp == 0x3030 || cp == 0x303D || cp == 0x3297 || cp == 0x3299 || cp in 0x2934..0x2935 -> sawEmoji = true
+            (cp in 0x30..0x39 || cp == 0x23 || cp == 0x2A) && g.contains('\u20E3') -> sawEmoji = true // keycaps 1️⃣ #️⃣
+            else -> return false
+        }
+    }
+    return sawEmoji
 }
 
 @Composable
@@ -349,26 +408,33 @@ private fun AttachmentsBlock(m: Message, mine: Boolean, ink: Color, onOpen: (Mes
 }
 
 @Composable
-private fun MediaCell(m: Message, a: Attachment, modifier: Modifier, onOpen: (Message, Attachment) -> Unit, extra: Int = 0) {
+fun MediaCell(m: Message, a: Attachment, modifier: Modifier, onOpen: (Message, Attachment) -> Unit, extra: Int = 0, bare: Boolean = false) {
     val repo = LocalContext.current.repo
     val scope = rememberCoroutineScope()
     val tick by repo.mediaTick.collectAsState()
     val downloaded = remember(tick, a.url) { repo.isDownloaded(a) }
     var busy by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
-    val bmp by rememberAttachmentBitmap(m, a, downloaded && a.kind == "image", 640)
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF111820)).clickable(enabled = !busy) {
+    val gif = isGifAttachment(a) || (bare && a.kind == "image")
+    val bmp by rememberAttachmentBitmap(m, a, downloaded && a.kind == "image" && !gif, 640)
+    // GIFs / stickers: hand the decrypted bytes to Coil so they animate
+    val gifBytes by produceState<ByteArray?>(null, a.url, downloaded, gif) {
+        if (gif && downloaded) value = try { repo.attachmentBytes(m, a) } catch (_: Exception) { null }
+    }
+    Box(modifier.clip(RoundedCornerShape(12.dp)).then(if (bare) Modifier else Modifier.background(Color(0xFF111820))).clickable(enabled = !busy) {
         if (downloaded) onOpen(m, a) else { busy = true; failed = false; scope.launch { try { repo.downloadNow(m, a) } catch (_: Exception) { failed = true }; busy = false } }
     }, Alignment.Center) {
         bmp?.let { Image(it.asImageBitmap(), a.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-        if (bmp == null && downloaded && a.kind == "image") CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+        gifBytes?.let { coil.compose.AsyncImage(model = it, contentDescription = a.name, modifier = Modifier.fillMaxSize(), contentScale = if (bare) ContentScale.Fit else ContentScale.Crop) }
+        if (bmp == null && gifBytes == null && downloaded && a.kind == "image") CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+        if (gif && !bare && downloaded) Text("GIF", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(5.dp)).background(Color(0x99000000)).padding(horizontal = 5.dp, vertical = 1.dp))
         if (!downloaded) Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(Color(0x99000000)), Alignment.Center) {
-                if (busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = Color.White) else Icon(if (failed) Icons.Filled.Refresh else Icons.Filled.Download, null, tint = Color.White)
+                if (busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = Color.White) else Icon(if (failed) Icons.Rounded.Refresh else Icons.Rounded.Download, null, tint = Color.White)
             }
             Text(if (failed) "Retry" else if (a.size > 0) formatBytes(a.size) else "Download", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         } else if (a.kind == "video") {
-            Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x99000000)), Alignment.Center) { Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
+            Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x99000000)), Alignment.Center) { Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
             if (a.duration > 0) Text(formatDuration(a.duration.toInt()), color = Color.White, fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 5.dp, vertical = 1.dp))
         }
         if (extra > 0) Box(Modifier.fillMaxSize().background(Color(0x99000000)), Alignment.Center) { Text("+$extra", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
@@ -390,12 +456,12 @@ private fun FileRow(m: Message, a: Attachment, ink: Color) {
                 val f = repo.playableFile(m, a)
                 val mime = a.mimeType.ifEmpty { "*/*" }
                 ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(fileUri(f), mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), a.name.ifEmpty { "Open file" }))
-            } catch (e: android.content.ActivityNotFoundException) { ctx.toast("No app can open this file") } catch (e: Exception) { ctx.toast("Couldn't download — check your connection") }
+            } catch (e: android.content.ActivityNotFoundException) { ctx.toast("No app can open this file") } catch (e: Exception) { if (e !is kotlinx.coroutines.CancellationException) ctx.toast("Couldn't download — check your connection") }
             busy = false
         }
     }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(wc.wispDim), Alignment.Center) {
-            if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Icon(if (downloaded) Icons.Filled.InsertDriveFile else Icons.Filled.CloudDownload, null, tint = wc.wisp)
+            if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Icon(if (downloaded) Icons.Rounded.InsertDriveFile else Icons.Rounded.CloudDownload, null, tint = wc.wisp)
         }
         Column(Modifier.padding(start = 10.dp).weight(1f, fill = false)) {
             Text(a.name.ifEmpty { "File" }, fontSize = 14.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -437,13 +503,13 @@ private fun AudioRow(m: Message, a: Attachment, mine: Boolean, ink: Color) {
     Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp).widthIn(min = 220.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(42.dp).clip(CircleShape).background(if (mine) Color.Black.copy(alpha = 0.18f) else wc.wispDim).clickable(enabled = !busy) { toggle() }, Alignment.Center) {
             if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(if (!downloaded) Icons.Filled.Download else if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = if (mine) ink else wc.wisp)
+            else Icon(if (!downloaded) Icons.Rounded.Download else if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = if (mine) ink else wc.wisp)
         }
         Column(Modifier.padding(start = 10.dp).weight(1f)) {
             LinearProgressIndicator(progress = { if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f }, Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = if (mine) ink else wc.wisp, trackColor = ink.copy(alpha = 0.2f))
             Text(if (dur > 0) "${formatDuration((if (playing || pos > 0) pos else dur) / 1000)}" else formatBytes(a.size), fontSize = 11.sp, color = ink.copy(alpha = 0.65f), modifier = Modifier.padding(top = 3.dp))
         }
-        Icon(Icons.Filled.Mic, null, Modifier.padding(start = 6.dp).size(18.dp), tint = ink.copy(alpha = 0.55f))
+        Icon(Icons.Rounded.Mic, null, Modifier.padding(start = 6.dp).size(18.dp), tint = ink.copy(alpha = 0.55f))
     }
 }
 
@@ -453,7 +519,7 @@ data class MediaItem(val m: Message, val a: Attachment)
 
 /** Swipe left / right through every photo and video of the chat; pinch / double-tap to zoom; drag down to close. */
 @Composable
-fun MediaViewer(items: List<MediaItem>, start: Int, onDismiss: () -> Unit) {
+fun MediaViewer(items: List<MediaItem>, start: Int, onDismiss: () -> Unit, onShowInChat: ((Message) -> Unit)? = null) {
     val ctx = LocalContext.current
     val repo = ctx.repo
     val scope = rememberCoroutineScope()
@@ -488,12 +554,13 @@ fun MediaViewer(items: List<MediaItem>, start: Int, onDismiss: () -> Unit) {
             }
             AnimatedVisibility(chrome && dragY == 0f, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
                 Row(Modifier.fillMaxWidth().background(Color(0x99000000)).statusBarsPadding().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.ArrowBack, "Close", tint = Color.White) }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Rounded.ArrowBack, "Close", tint = Color.White) }
                     Column(Modifier.weight(1f)) {
                         Text(if (cur?.m?.sender?.id == repo.myId) "You" else cur?.m?.sender?.displayName.orEmpty(), color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         cur?.let { Text("${formatDayLabel(it.m.createdAt)}, ${formatClock(it.m.createdAt)}  ·  ${pager.currentPage + 1}/${items.size}", color = Color(0xB3FFFFFF), fontSize = 12.sp) }
                     }
-                    IconButton(onClick = { cur?.let { c -> scope.launch { ctx.toast(if (try { repo.saveAttachmentToDevice(c.m, c.a) } catch (_: Exception) { false }) "Saved to your device" else "Couldn't save") } } }) { Icon(Icons.Filled.Download, "Save", tint = Color.White) }
+                    if (onShowInChat != null) IconButton(onClick = { cur?.let { onShowInChat(it.m) } }) { Icon(Icons.Rounded.Forum, "Show in chat", tint = Color.White) }
+                    IconButton(onClick = { cur?.let { c -> scope.launch { ctx.toast(if (try { repo.saveAttachmentToDevice(c.m, c.a) } catch (_: Exception) { false }) "Saved to your device" else "Couldn't save") } } }) { Icon(Icons.Rounded.Download, "Save", tint = Color.White) }
                     IconButton(onClick = {
                         cur?.let { c -> scope.launch {
                             try {
@@ -501,7 +568,7 @@ fun MediaViewer(items: List<MediaItem>, start: Int, onDismiss: () -> Unit) {
                                 ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(c.a.mimeType.ifEmpty { "*/*" }).putExtra(Intent.EXTRA_STREAM, fileUri(f)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
                             } catch (_: Exception) { ctx.toast("Couldn't share") }
                         } }
-                    }) { Icon(Icons.Filled.Share, "Share", tint = Color.White) }
+                    }) { Icon(Icons.Rounded.Share, "Share", tint = Color.White) }
                 }
             }
             val caption = cur?.m?.text.orEmpty()
@@ -533,7 +600,7 @@ fun EmojiPanel(onPick: (String) -> Unit, onBackspace: () -> Unit) {
                     Text(icon, fontSize = 20.sp, modifier = Modifier.graphicsLayer { alpha = if (tab == i) 1f else 0.5f })
                 }
             }
-            IconButton(onClick = onBackspace) { Icon(Icons.Filled.Backspace, "Delete", tint = wc.dim) }
+            IconButton(onClick = onBackspace) { Icon(Icons.Rounded.Backspace, "Delete", tint = wc.dim) }
         }
         HorizontalDivider(color = wc.border)
         LazyVerticalGrid(GridCells.Adaptive(44.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(6.dp)) {

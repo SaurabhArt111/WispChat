@@ -23,7 +23,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -102,8 +102,8 @@ fun ExploreTab(nav: Nav) {
         Column(Modifier.fillMaxSize()) {
             WispTopBar("Explore")
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp),
-                placeholder = { Text("Search people by @username or name") }, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, "Clear") } },
+                placeholder = { Text("Search users") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search))
             if (query.trim().length >= 2) {
                 LazyColumn(Modifier.fillMaxSize()) {
@@ -119,8 +119,8 @@ fun ExploreTab(nav: Nav) {
                 }
                 when {
                     loading && posts.isEmpty() -> Column(Modifier.fillMaxSize()) { repeat(4) { Row(Modifier.fillMaxWidth()) { repeat(3) { Box(Modifier.weight(1f).aspectRatio(1f).padding(1.dp).shimmer()) } } } }
-                    failed -> EmptyState(Icons.Filled.CloudOff, "Couldn't load posts", "Check your connection.") { TextButton(onClick = { reload() }) { Text("Try again") } }
-                    posts.isEmpty() -> EmptyState(Icons.Filled.Explore, "Nothing to explore yet", if (scopeName == "contacts") "Your friends haven't posted anything." else "Posts from people will appear here.")
+                    failed -> EmptyState(Icons.Rounded.CloudOff, "Couldn't load posts", "Check your connection.") { TextButton(onClick = { reload() }) { Text("Try again") } }
+                    posts.isEmpty() -> EmptyState(Icons.Rounded.Explore, "Nothing to explore yet", if (scopeName == "contacts") "Your friends haven't posted anything." else "Posts from people will appear here.")
                     else -> LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), grid, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
                         items(posts, key = { it.id }) { p -> PostThumb(p, Modifier.clickable { nav.push(Route.PostView(posts, posts.indexOf(p))) }) }
                         if (loadingMore) items(3) { Box(Modifier.aspectRatio(1f).shimmer()) }
@@ -130,7 +130,7 @@ fun ExploreTab(nav: Nav) {
         }
         AnimatedVisibility(newPosts > 0 && query.isBlank(), Modifier.align(Alignment.TopCenter).padding(top = 150.dp), enter = fadeIn() + scaleIn(), exit = fadeOut()) {
             Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary).clickable { reload(); scope.launch { grid.scrollToItem(0) } }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ArrowUpward, null, Modifier.size(16.dp), tint = WispInk)
+                Icon(Icons.Rounded.ArrowUpward, null, Modifier.size(16.dp), tint = WispInk)
                 Text("  $newPosts new post${if (newPosts > 1) "s" else ""}", color = WispInk, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
@@ -152,9 +152,9 @@ fun PersonRow(u: User, trailing: (@Composable () -> Unit)? = null, onClick: () -
 @Composable
 fun PostThumb(p: Post, modifier: Modifier = Modifier) {
     Box(modifier.aspectRatio(1f).background(wc.surface3)) {
-        if (p.kind == "video") Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(wc.surface3, wc.surface4))), Alignment.Center) { Icon(Icons.Filled.PlayCircle, null, Modifier.size(34.dp), tint = wc.dim) }
+        if (p.kind == "video") Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(wc.surface3, wc.surface4))), Alignment.Center) { Icon(Icons.Rounded.PlayCircle, null, Modifier.size(34.dp), tint = wc.dim) }
         else NetworkImage(p.url, Modifier.fillMaxSize())
-        if (p.kind == "video") Icon(Icons.Filled.Videocam, null, Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp), tint = Color.White)
+        if (p.kind == "video") Icon(Icons.Rounded.Videocam, null, Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp), tint = Color.White)
         if (p.isContact) Text("Friend", Modifier.align(Alignment.BottomStart).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 5.dp, vertical = 1.dp), color = Color.White, fontSize = 10.sp)
     }
 }
@@ -211,7 +211,7 @@ fun PostViewerScreen(initial: List<Post>, start: Int, nav: Nav) {
         val p = list.getOrNull(i) ?: return
         list[i] = p.copy(likedByMe = !p.likedByMe, likeCount = (p.likeCount + if (p.likedByMe) -1 else 1).coerceAtLeast(0))
         scope.launch {
-            try { val (liked, n) = social.like(p.id); val j = list.indexOfFirst { it.id == p.id }; if (j >= 0) list[j] = list[j].copy(likedByMe = liked, likeCount = n) }
+            try { social.like(p.id)?.let { (liked, n) -> val j = list.indexOfFirst { it.id == p.id }; if (j >= 0) list[j] = list[j].copy(likedByMe = liked, likeCount = n) } }
             catch (_: Exception) { val j = list.indexOfFirst { it.id == p.id }; if (j >= 0) list[j] = p }
         }
     }
@@ -227,7 +227,7 @@ fun PostViewerScreen(initial: List<Post>, start: Int, nav: Nav) {
                 }
                 var showHeart by remember { mutableStateOf(false) }
                 LaunchedEffect(heart) { if (heart > 0) { showHeart = true; delay(650); showHeart = false } }
-                AnimatedVisibility(showHeart, Modifier.align(Alignment.Center), enter = scaleIn() + fadeIn(), exit = fadeOut()) { Icon(Icons.Filled.Favorite, null, Modifier.size(110.dp), tint = Color.White.copy(alpha = 0.92f)) }
+                AnimatedVisibility(showHeart, Modifier.align(Alignment.Center), enter = scaleIn() + fadeIn(), exit = fadeOut()) { Icon(Icons.Rounded.Favorite, null, Modifier.size(110.dp), tint = Color.White.copy(alpha = 0.92f)) }
 
                 // author + caption
                 Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000)))).navigationBarsPadding().padding(start = 14.dp, end = 80.dp, top = 40.dp, bottom = 16.dp)) {
@@ -241,13 +241,13 @@ fun PostViewerScreen(initial: List<Post>, start: Int, nav: Nav) {
                 }
                 // action rail
                 Column(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 10.dp, bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    RailButton(if (p.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, p.likeCount.toString(), if (p.likedByMe) Color(0xFFFF5A6E) else Color.White) { toggleLike(page) }
-                    RailButton(Icons.Filled.ChatBubbleOutline, p.commentCount.toString(), Color.White) { commentsFor = p.id }
-                    if (p.isMine) RailButton(Icons.Filled.MoreVert, "", Color.White) { menuFor = p }
+                    RailButton(if (p.likedByMe) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, p.likeCount.toString(), if (p.likedByMe) Color(0xFFFF5A6E) else Color.White) { toggleLike(page) }
+                    RailButton(Icons.Rounded.ChatBubbleOutline, p.commentCount.toString(), Color.White) { commentsFor = p.id }
+                    if (p.isMine) RailButton(Icons.Rounded.MoreVert, "", Color.White) { menuFor = p }
                 }
             }
         }
-        IconButton(onClick = { nav.pop() }, Modifier.statusBarsPadding().padding(4.dp)) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+        IconButton(onClick = { nav.pop() }, Modifier.statusBarsPadding().padding(4.dp)) { Icon(Icons.Rounded.ArrowBack, "Back", tint = Color.White) }
     }
 
     commentsFor?.let { id -> list.firstOrNull { it.id == id }?.let { p ->
@@ -255,13 +255,13 @@ fun PostViewerScreen(initial: List<Post>, start: Int, nav: Nav) {
     } }
     menuFor?.let { p ->
         Sheet(onDismiss = { menuFor = null }) {
-            SheetItem(Icons.Filled.Edit, "Edit post", { menuFor = null; nav.push(Route.NewPost(Uri.EMPTY, p)) })
-            SheetItem(Icons.Filled.Delete, "Delete post", { menuFor = null; confirmDelete = p }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.Edit, "Edit post", { menuFor = null; nav.push(Route.NewPost(Uri.EMPTY, p)) })
+            SheetItem(Icons.Rounded.Delete, "Delete post", { menuFor = null; confirmDelete = p }, tint = MaterialTheme.colorScheme.error)
         }
     }
     confirmDelete?.let { p ->
         ConfirmDialog("Delete this post?", "It will be removed for everyone.", "Delete", true, {
-            scope.launch { try { social.deletePost(p.id); list.removeAll { it.id == p.id } } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't delete") } }
+            scope.launch { try { social.deletePost(p.id); list.removeAll { it.id == p.id } } catch (e: Exception) { ctx.toastErr(e, "Couldn't delete") } }
         }, { confirmDelete = null })
     }
 }
@@ -310,18 +310,18 @@ private fun CommentsSheet(post: Post, onDismiss: () -> Unit, onCount: (Int) -> U
                     try {
                         if (ed != null) { social.editComment(post.id, ed.id, t); val i = comments.indexOfFirst { it.id == ed.id }; if (i >= 0) comments[i] = ed.copy(text = t, edited = true) }
                         else { comments.add(social.comment(post.id, t)); onCount(comments.size) }
-                    } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't post comment") }
+                    } catch (e: Exception) { ctx.toastErr(e, "Couldn't post comment") }
                 }
-            }) { Icon(Icons.Filled.Send, "Send", tint = MaterialTheme.colorScheme.primary) }
+            }) { Icon(Icons.Rounded.Send, "Send", tint = MaterialTheme.colorScheme.primary) }
         }
     }
     actions?.let { c ->
         AlertDialog(onDismissRequest = { actions = null }, containerColor = wc.surface2, confirmButton = {}, text = {
             Column {
-                if (c.mine) SheetItem(Icons.Filled.Edit, "Edit", { actions = null; editing = c; text = c.text })
-                SheetItem(Icons.Filled.Delete, "Delete", {
+                if (c.mine) SheetItem(Icons.Rounded.Edit, "Edit", { actions = null; editing = c; text = c.text })
+                SheetItem(Icons.Rounded.Delete, "Delete", {
                     actions = null
-                    scope.launch { try { social.deleteComment(post.id, c.id); comments.removeAll { it.id == c.id }; onCount(comments.size) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't delete") } }
+                    scope.launch { try { social.deleteComment(post.id, c.id); comments.removeAll { it.id == c.id }; onCount(comments.size) } catch (e: Exception) { ctx.toastErr(e, "Couldn't delete") } }
                 }, tint = MaterialTheme.colorScheme.error)
             }
         })
@@ -348,9 +348,10 @@ fun NewPostScreen(uri: Uri, editing: Post?, nav: Nav) {
                 busy = true
                 scope.launch {
                     try {
-                        if (editing != null) social.updatePost(editing.id, caption, media) else social.createPost(media!!, caption)
+                        if (editing != null) social.updatePost(editing.id, caption, media)
+                        else if (social.createPost(media!!, caption) == null) ctx.toast("You're offline — your post will be shared when you're back online")
                         nav.pop()
-                    } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't save the post"); busy = false }
+                    } catch (e: Exception) { ctx.toastErr(e, "Couldn't save the post"); busy = false }
                 }
             }) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (editing != null) "Save" else "Post", fontWeight = FontWeight.Bold) }
         }
@@ -360,7 +361,7 @@ fun NewPostScreen(uri: Uri, editing: Post?, nav: Nav) {
                 media != null -> AsyncImage(model = media, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 editing != null -> if (editing.kind == "video") VideoPlayer(Uri.parse(absoluteUrl(editing.url)), Modifier.fillMaxSize(), loop = true) else NetworkImage(editing.url, Modifier.fillMaxSize(), ContentScale.Fit)
             }
-            if (editing != null) FilledTonalButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) { Icon(Icons.Filled.Image, null); Text("  Change photo / video") }
+            if (editing != null) FilledTonalButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }, modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) { Icon(Icons.Rounded.Image, null); Text("  Change photo / video") }
         }
         OutlinedTextField(caption, { caption = it.take(500) }, Modifier.fillMaxWidth().padding(14.dp), placeholder = { Text("Write a caption…") }, maxLines = 4, shape = RoundedCornerShape(18.dp))
     }
@@ -389,7 +390,7 @@ fun PersonScreen(user: User, nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         WispTopBar(user.displayName, onBack = { nav.pop() }) {
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
+                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
                 DropdownMenu(menu, { menu = false }) { DropdownMenuItem({ Text("Block", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; confirmBlock = true }) }
             }
         }
@@ -401,20 +402,20 @@ fun PersonScreen(user: User, nav: Nav) {
                 if (user.about.isNotBlank()) Text(user.about, modifier = Modifier.padding(top = 10.dp), textAlign = TextAlign.Center)
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     when {
-                        isContact -> Button(onClick = { scope.launch { try { val c = repo.openDirect(user.id); nav.replaceTop(Route.Chat(c.id)) } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't open chat") } } }) { Icon(Icons.Filled.Chat, null); Text("  Message") }
+                        isContact -> Button(onClick = { scope.launch { try { val c = repo.openDirect(user.id); nav.replaceTop(Route.Chat(c.id)) } catch (e: Exception) { ctx.toastErr(e, "Couldn't open chat") } } }) { Icon(Icons.Rounded.Chat, null); Text("  Message") }
                         incoming != null -> {
-                            Button(onClick = { scope.launch { try { social.respond(incoming.id, true); ctx.toast("You're now contacts") } catch (e: Exception) { ctx.toast(e.message ?: "Failed") } } }) { Text("Accept request") }
+                            Button(onClick = { scope.launch { try { social.respond(incoming.id, true); ctx.toast("You're now contacts") } catch (e: Exception) { ctx.toastErr(e, "Failed") } } }) { Text("Accept request") }
                             OutlinedButton(onClick = { scope.launch { try { social.respond(incoming.id, false) } catch (_: Exception) {} } }) { Text("Decline") }
                         }
                         else -> Button(enabled = !busy && outgoing == null, onClick = {
                             busy = true
-                            scope.launch { try { social.sendRequest(user.id); ctx.toast("Request sent") } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't send request") }; busy = false }
-                        }) { Icon(Icons.Filled.PersonAdd, null); Text(if (outgoing != null) "  Request sent" else "  Add contact") }
+                            scope.launch { try { social.sendRequest(user.id); ctx.toast("Request sent") } catch (e: Exception) { ctx.toastErr(e, "Couldn't send request") }; busy = false }
+                        }) { Icon(Icons.Rounded.PersonAdd, null); Text(if (outgoing != null) "  Request sent" else "  Add contact") }
                     }
                 }
             }
             HorizontalDivider(color = wc.border)
-            Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.GridOn, null, Modifier.size(18.dp), tint = wc.wisp); Text("  Posts", fontWeight = FontWeight.SemiBold) }
+            Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.GridOn, null, Modifier.size(18.dp), tint = wc.wisp); Text("  Posts", fontWeight = FontWeight.SemiBold) }
             val p = posts
             when {
                 p == null -> Column { repeat(2) { Row(Modifier.fillMaxWidth()) { repeat(3) { Box(Modifier.weight(1f).aspectRatio(1f).padding(1.dp).shimmer()) } } } }
@@ -425,6 +426,6 @@ fun PersonScreen(user: User, nav: Nav) {
         }
     }
     if (confirmBlock) ConfirmDialog("Block ${user.displayName}?", "They won't be able to message you or see your status.", "Block", true, {
-        scope.launch { try { repo.toggleBlock(user.id); ctx.toast("Blocked"); nav.pop() } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't block") } }
+        scope.launch { try { repo.toggleBlock(user.id); ctx.toast("Blocked"); nav.pop() } catch (e: Exception) { ctx.toastErr(e, "Couldn't block") } }
     }, { confirmBlock = false })
 }

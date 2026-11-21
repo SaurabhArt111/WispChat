@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.rounded.BrokenImage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,14 +33,26 @@ import coil.compose.AsyncImage
 import com.wispchat.app.App
 import kotlinx.coroutines.delay
 
-/** An image at a server path (`/uploads/…`) or a full URL. */
+/**
+ * An image at a server path (`/uploads/…`), a full URL, or a local `file://` copy (posted while offline).
+ * If it can't be loaded (e.g. the server lost the file) a quiet "image unavailable" mark is shown instead of a blank box.
+ */
 @Composable
 fun NetworkImage(url: String, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, description: String? = null) {
-    val full = if (url.startsWith("http")) url else App.instance.repo.api.base + url
-    AsyncImage(model = full, contentDescription = description, modifier = modifier, contentScale = contentScale)
+    val full = absoluteUrl(url)
+    var failed by remember(full) { mutableStateOf(false) }
+    Box(modifier, Alignment.Center) {
+        AsyncImage(model = full, contentDescription = description, modifier = Modifier.fillMaxSize(), contentScale = contentScale,
+            onError = { failed = true }, onSuccess = { failed = false })
+        if (failed || url.isBlank()) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.BrokenImage, "Image unavailable",
+            Modifier.fillMaxSize(0.28f), tint = androidx.compose.ui.graphics.Color(0x80FFFFFF))
+    }
 }
 
-fun absoluteUrl(path: String): String = if (path.startsWith("http")) path else App.instance.repo.api.base + path
+fun absoluteUrl(path: String): String = when {
+    path.startsWith("http") || path.startsWith("file:") || path.startsWith("content:") -> path
+    else -> App.instance.repo.api.base + path
+}
 
 /**
  * Video playback without extra libraries (Android's own VideoView). [playing] pauses / resumes it,

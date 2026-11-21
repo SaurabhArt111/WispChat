@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -53,7 +53,7 @@ fun rememberCallStarter(): (suspend () -> Conversation?, String) -> Unit {
                 val conv = p.first() ?: run { ctx.toast("Couldn't start the call"); return@launch }
                 ctx.calls.startOutgoing(conv, p.second)
                 ctx.startActivity(Intent(ctx, CallActivity::class.java))
-            } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't start the call") }
+            } catch (e: Exception) { ctx.toastErr(e, "Couldn't start the call") }
         }
     }
     return remember {
@@ -116,12 +116,12 @@ fun CallsTab(nav: Nav) {
                 WispTopBar("", onBack = { searching = false; query = "" }) {}
                 // search field replaces the title row
                 OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp),
-                    placeholder = { Text("Search calls") }, leadingIcon = { Icon(Icons.Filled.Search, null) })
+                    placeholder = { Text("Search calls") }, leadingIcon = { Icon(Icons.Rounded.Search, null) })
             } else {
                 WispTopBar("Calls") {
-                    IconButton(onClick = { searching = true }) { Icon(Icons.Filled.Search, "Search") }
+                    IconButton(onClick = { searching = true }) { Icon(Icons.Rounded.Search, "Search") }
                     Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
                         DropdownMenu(menu, { menu = false }) {
                             DropdownMenuItem({ Text("New call") }, onClick = { menu = false; nav.push(Route.NewCall) })
                             DropdownMenuItem({ Text("Refresh") }, onClick = { menu = false; scope.launch { social.refreshCalls() } })
@@ -153,8 +153,8 @@ fun CallsTab(nav: Nav) {
                     }
                     if (shown.isEmpty()) item {
                         Box(Modifier.fillParentMaxHeight(0.7f)) {
-                            EmptyState(Icons.Filled.Call, if (missedOnly) "No missed calls" else "No calls yet", if (missedOnly) "You're all caught up." else "Start a voice or video call with any of your contacts.") {
-                                if (!missedOnly) Button(onClick = { nav.push(Route.NewCall) }) { Icon(Icons.Filled.Call, null); Text("  New call") }
+                            EmptyState(Icons.Rounded.Call, if (missedOnly) "No missed calls" else "No calls yet", if (missedOnly) "You're all caught up." else "Start a voice or video call with any of your contacts.") {
+                                if (!missedOnly) Button(onClick = { nav.push(Route.NewCall) }) { Icon(Icons.Rounded.Call, null); Text("  New call") }
                             }
                         }
                     } else {
@@ -166,12 +166,12 @@ fun CallsTab(nav: Nav) {
                                 Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                                     Text(name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (c.missed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(if (c.outgoing) Icons.Filled.CallMade else if (c.missed) Icons.Filled.CallMissed else Icons.Filled.CallReceived, null, Modifier.size(15.dp),
+                                        Icon(if (c.outgoing) Icons.Rounded.CallMade else if (c.missed) Icons.Rounded.CallMissed else Icons.Rounded.CallReceived, null, Modifier.size(15.dp),
                                             tint = if (c.missed) MaterialTheme.colorScheme.error else wc.wisp)
                                         Text("  ${callSubtitle(c)} · ${formatListTime(c.createdAt)}", fontSize = 13.sp, color = wc.dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
-                                IconButton(onClick = { callBack(c, c.kind) }) { Icon(if (c.kind == "video") Icons.Filled.Videocam else Icons.Filled.Call, "Call back", tint = wc.wisp) }
+                                IconButton(onClick = { callBack(c, c.kind) }) { Icon(if (c.kind == "video") Icons.Rounded.Videocam else Icons.Rounded.Call, "Call back", tint = wc.wisp) }
                             }
                         }
                         if (hasMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) } }
@@ -180,7 +180,7 @@ fun CallsTab(nav: Nav) {
             }
         }
         FloatingActionButton(onClick = { nav.push(Route.NewCall) }, Modifier.align(Alignment.BottomEnd).padding(18.dp), containerColor = MaterialTheme.colorScheme.primary, contentColor = WispInk) {
-            Icon(Icons.Filled.AddIcCall, "New call")
+            Icon(Icons.Rounded.AddIcCall, "New call")
         }
     }
 
@@ -188,16 +188,16 @@ fun CallsTab(nav: Nav) {
         val peerId = c.peer?.id
         Sheet({ actions = null }) {
             Text(c.peer?.displayName ?: c.convName, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-            SheetItem(Icons.Filled.Call, "Voice call", { actions = null; callBack(c, "audio") })
-            SheetItem(Icons.Filled.Videocam, "Video call", { actions = null; callBack(c, "video") })
-            SheetItem(Icons.Filled.Chat, "Open chat", { actions = null; nav.openChat(c.convId) })
+            SheetItem(Icons.Rounded.Call, "Voice call", { actions = null; callBack(c, "audio") })
+            SheetItem(Icons.Rounded.Videocam, "Video call", { actions = null; callBack(c, "video") })
+            SheetItem(Icons.Rounded.Chat, "Open chat", { actions = null; nav.openChat(c.convId) })
             if (peerId != null) {
                 val fav = peerId in favs
-                SheetItem(if (fav) Icons.Filled.StarBorder else Icons.Filled.Star, if (fav) "Remove from favourites" else "Add to favourites", {
+                SheetItem(if (fav) Icons.Rounded.StarBorder else Icons.Rounded.Star, if (fav) "Remove from favourites" else "Add to favourites", {
                     actions = null; repo.settings.toggleCallFav(peerId); favs = repo.settings.callFavs()
                 })
             }
-            SheetItem(Icons.Filled.Delete, "Delete from call log", { actions = null; scope.launch { social.deleteCallLogLocal(setOf(c.id)) } }, tint = MaterialTheme.colorScheme.error)
+            SheetItem(Icons.Rounded.Delete, "Delete from call log", { actions = null; scope.launch { social.deleteCallLogLocal(setOf(c.id)) } }, tint = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -223,10 +223,10 @@ fun NewCallScreen(nav: Nav) {
     Column(Modifier.fillMaxSize()) {
         WispTopBar("New call", onBack = { nav.pop() }, subtitle = "${contacts.size} contacts")
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp),
-            placeholder = { Text("Search contacts") }, leadingIcon = { Icon(Icons.Filled.Search, null) })
+            placeholder = { Text("Search contacts") }, leadingIcon = { Icon(Icons.Rounded.Search, null) })
         when {
             !loaded && contacts.isEmpty() -> SkeletonList(7, 46.dp)
-            shown.isEmpty() -> EmptyState(Icons.Filled.People, if (contacts.isEmpty()) "No contacts yet" else "No matches", if (contacts.isEmpty()) "Add people from Explore or New chat to call them." else "")
+            shown.isEmpty() -> EmptyState(Icons.Rounded.People, if (contacts.isEmpty()) "No contacts yet" else "No matches", if (contacts.isEmpty()) "Add people from Explore or New chat to call them." else "")
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(shown, key = { it.id }) { u ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -236,9 +236,9 @@ fun NewCallScreen(nav: Nav) {
                             Text("@${u.username}", fontSize = 13.sp, color = wc.dim, maxLines = 1)
                         }
                         val fav = u.id in favs
-                        IconButton(onClick = { repo.settings.toggleCallFav(u.id); favs = repo.settings.callFavs() }) { Icon(if (fav) Icons.Filled.Star else Icons.Filled.StarBorder, "Favourite", tint = if (fav) Color(0xFFFFC857) else wc.dim) }
-                        IconButton(onClick = { startCall({ repo.openDirect(u.id) }, "audio") }) { Icon(Icons.Filled.Call, "Voice call", tint = wc.wisp) }
-                        IconButton(onClick = { startCall({ repo.openDirect(u.id) }, "video") }) { Icon(Icons.Filled.Videocam, "Video call", tint = wc.wisp) }
+                        IconButton(onClick = { repo.settings.toggleCallFav(u.id); favs = repo.settings.callFavs() }) { Icon(if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder, "Favourite", tint = if (fav) Color(0xFFFFC857) else wc.dim) }
+                        IconButton(onClick = { startCall({ repo.openDirect(u.id) }, "audio") }) { Icon(Icons.Rounded.Call, "Voice call", tint = wc.wisp) }
+                        IconButton(onClick = { startCall({ repo.openDirect(u.id) }, "video") }) { Icon(Icons.Rounded.Videocam, "Video call", tint = wc.wisp) }
                     }
                 }
             }

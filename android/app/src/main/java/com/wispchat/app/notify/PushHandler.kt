@@ -1,7 +1,10 @@
 package com.wispchat.app.notify
 
 import android.content.Context
+import com.wispchat.app.calls
 import com.wispchat.app.repo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * One place that turns a push (from Firebase or from the fallback background socket) into a
@@ -30,13 +33,16 @@ object PushHandler {
                 Notifier.showMessage(ctx.applicationContext, conv, msgId, d["senderName"].orEmpty().ifEmpty { "New message" }, text, group, d["ts"]?.toLongOrNull() ?: System.currentTimeMillis())
             }
             "call" -> {
-                if (repo.appVisible) return // the app's own call UI handles it while open
                 val callId = d["callId"].orEmpty()
                 if (callId.isEmpty() || !firstTime("c:$callId")) return
-                Notifier.showIncomingCall(ctx.applicationContext, callId, d["conversationId"].orEmpty(), d["kind"].orEmpty().ifEmpty { "audio" },
-                    d["callerName"].orEmpty().ifEmpty { "Someone" }, d["callerId"].orEmpty())
+                // Starts ringing (ringtone + vibration), the foreground call notification and — if the app is open — the answer screen.
+                // The engine ignores a call it already knows from the live socket, so this never rings twice.
+                withContext(Dispatchers.Main) {
+                    ctx.applicationContext.calls.onIncoming(callId, d["conversationId"].orEmpty(), d["kind"].orEmpty().ifEmpty { "audio" },
+                        d["callerName"].orEmpty().ifEmpty { "Someone" }, d["callerId"].orEmpty(), null, d["callerAvatar"].orEmpty(), d["callerColor"].orEmpty())
+                }
             }
-            "call-end" -> Notifier.cancelIncomingCall(ctx.applicationContext)
+            "call-end" -> withContext(Dispatchers.Main) { ctx.applicationContext.calls.remoteEnded(d["callId"].orEmpty(), d["reason"].orEmpty()) }
         }
     }
 }

@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -84,7 +84,7 @@ fun StatusTab(nav: Nav) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WispTopBar("Status") {
-                IconButton(onClick = { nav.push(Route.StatusPrivacy) }) { Icon(Icons.Filled.Shield, "Status privacy") }
+                IconButton(onClick = { nav.push(Route.StatusPrivacy) }) { Icon(Icons.Rounded.Shield, "Status privacy") }
             }
             if (loading && feed.isEmpty()) SkeletonList(6, 50.dp)
             else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 150.dp)) {
@@ -92,11 +92,15 @@ fun StatusTab(nav: Nav) {
                     Row(Modifier.fillMaxWidth().clickable { if (my != null) nav.push(Route.StatusView(me?.id.orEmpty())) else addMedia() }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box {
                             if (my != null) SegmentedRing(my.items.size, 0, 50.dp) { UserAvatar(me, 50.dp) } else Box(Modifier.size(62.dp), Alignment.Center) { UserAvatar(me, 56.dp) }
-                            if (my == null) Box(Modifier.align(Alignment.BottomEnd).size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp), tint = WispInk) }
+                            if (my == null) Box(Modifier.align(Alignment.BottomEnd).size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.Add, null, Modifier.size(16.dp), tint = WispInk) }
                         }
                         Column(Modifier.padding(start = 14.dp).weight(1f)) {
                             Text("My Status", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                            Text(if (my != null) "${my.items.size}/$MAX_STATUSES update${if (my.items.size > 1) "s" else ""} · ${formatListTime(my.latestAt)}" else "Tap to add a status update", color = wc.dim, fontSize = 13.sp)
+                            Text(when {
+                                my == null -> "Tap to add a status update"
+                                my.items.any { it.pending } -> "Waiting for network · ${my.items.count { it.pending }} will post when you're back online"
+                                else -> "${my.items.size}/$MAX_STATUSES update${if (my.items.size > 1) "s" else ""} · ${formatListTime(my.latestAt)}"
+                            }, color = wc.dim, fontSize = 13.sp)
                         }
                     }
                 }
@@ -111,8 +115,8 @@ fun StatusTab(nav: Nav) {
             }
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(18.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            SmallFloatingActionButton(onClick = { addText() }, containerColor = wc.surface3, contentColor = MaterialTheme.colorScheme.onSurface) { Icon(Icons.Filled.TextFields, "Text status") }
-            FloatingActionButton(onClick = { addMedia() }, containerColor = MaterialTheme.colorScheme.primary, contentColor = WispInk) { Icon(Icons.Filled.PhotoCamera, "Photo or video status") }
+            SmallFloatingActionButton(onClick = { addText() }, containerColor = wc.surface3, contentColor = MaterialTheme.colorScheme.onSurface) { Icon(Icons.Rounded.TextFields, "Text status") }
+            FloatingActionButton(onClick = { addMedia() }, containerColor = MaterialTheme.colorScheme.primary, contentColor = WispInk) { Icon(Icons.Rounded.PhotoCamera, "Photo or video status") }
         }
     }
 }
@@ -199,13 +203,13 @@ fun StatusViewerScreen(userId: String, nav: Nav) {
                 }
             }
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { nav.pop() }, Modifier.size(36.dp)) { Icon(Icons.Filled.ArrowBack, "Close", tint = Color.White) }
+                IconButton(onClick = { nav.pop() }, Modifier.size(36.dp)) { Icon(Icons.Rounded.ArrowBack, "Close", tint = Color.White) }
                 UserAvatar(entry.user, 38.dp)
                 Column(Modifier.padding(start = 10.dp).weight(1f)) {
                     Text(if (own) "My Status" else entry.user.displayName, color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Text(formatListTime(item.createdAt), color = Color(0xCCFFFFFF), fontSize = 12.sp)
+                    Text(if (item.pending) "Waiting to post…" else formatListTime(item.createdAt), color = Color(0xCCFFFFFF), fontSize = 12.sp)
                 }
-                if (own) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, "Delete", tint = Color.White) }
+                if (own) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Rounded.Delete, "Delete", tint = Color.White) }
             }
         }
         // ---- bottom: caption, then viewers / reply
@@ -213,7 +217,7 @@ fun StatusViewerScreen(userId: String, nav: Nav) {
             if (item.caption.isNotBlank()) Text(item.caption, color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp))
             if (own) {
                 Row(Modifier.fillMaxWidth().clickable { sheet = true }.padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Visibility, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Visibility, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Text("  ${item.viewerCount}", color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
             } else {
@@ -237,7 +241,7 @@ fun StatusViewerScreen(userId: String, nav: Nav) {
                                 ctx.toast("Reply sent")
                             } catch (ex: Exception) { ctx.toast(ex.message ?: "Couldn't send") }
                         }
-                    }) { Icon(Icons.Filled.Send, "Send", tint = MaterialTheme.colorScheme.primary) }
+                    }) { Icon(Icons.Rounded.Send, "Send", tint = MaterialTheme.colorScheme.primary) }
                 }
             }
         }
@@ -279,7 +283,7 @@ fun StatusTextEditor(nav: Nav) {
             textStyle = TextStyle(color = ink, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), cursorBrush = SolidColor(ink),
             decorationBox = { inner -> Box(contentAlignment = Alignment.Center) { if (text.isEmpty()) Text("Type a status", color = ink.copy(alpha = 0.55f), fontSize = 30.sp, fontWeight = FontWeight.Bold); inner() } })
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp)) {
-            IconButton(onClick = { nav.pop() }) { Icon(Icons.Filled.Close, "Cancel", tint = ink) }
+            IconButton(onClick = { nav.pop() }) { Icon(Icons.Rounded.Close, "Cancel", tint = ink) }
         }
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -290,9 +294,9 @@ fun StatusTextEditor(nav: Nav) {
             FloatingActionButton(onClick = {
                 if (text.isBlank() || busy) return@FloatingActionButton
                 busy = true
-                scope.launch { try { social.postTextStatus(text, color); nav.pop() } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't post"); busy = false } }
+                scope.launch { try { social.postTextStatus(text, color); nav.pop() } catch (e: Exception) { ctx.toastErr(e, "Couldn't post"); busy = false } }
             }, containerColor = MaterialTheme.colorScheme.primary, contentColor = WispInk) {
-                if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = WispInk) else Icon(Icons.Filled.Send, "Post")
+                if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = WispInk) else Icon(Icons.Rounded.Send, "Post")
             }
         }
     }
@@ -311,7 +315,7 @@ fun StatusMediaEditor(uri: Uri, nav: Nav) {
         if (isVideo) VideoPlayer(uri, Modifier.fillMaxSize(), loop = true)
         else AsyncImage(model = uri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = if (fit == "contain") ContentScale.Fit else ContentScale.Crop)
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { nav.pop() }) { Icon(Icons.Filled.Close, "Cancel", tint = Color.White) }
+            IconButton(onClick = { nav.pop() }) { Icon(Icons.Rounded.Close, "Cancel", tint = Color.White) }
             Spacer(Modifier.weight(1f))
             if (!isVideo) {
                 FilterChip(selected = fit == "cover", onClick = { fit = "cover" }, label = { Text("Fill") })
@@ -326,9 +330,9 @@ fun StatusMediaEditor(uri: Uri, nav: Nav) {
             FloatingActionButton(onClick = {
                 if (busy) return@FloatingActionButton
                 busy = true
-                scope.launch { try { social.postMediaStatus(uri, caption, fit); nav.pop() } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't post"); busy = false } }
+                scope.launch { try { social.postMediaStatus(uri, caption, fit); nav.pop() } catch (e: Exception) { ctx.toastErr(e, "Couldn't post"); busy = false } }
             }, containerColor = MaterialTheme.colorScheme.primary, contentColor = WispInk) {
-                if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = WispInk) else Icon(Icons.Filled.Send, "Post")
+                if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = WispInk) else Icon(Icons.Rounded.Send, "Post")
             }
         }
     }
@@ -375,7 +379,7 @@ fun StatusPrivacyScreen(nav: Nav) {
         } else Spacer(Modifier.weight(1f))
         Button(onClick = {
             busy = true
-            scope.launch { try { repo.social.setStatusPrivacy(mode, except.toList(), only.toList()); ctx.toast("Status privacy saved"); nav.pop() } catch (e: Exception) { ctx.toast(e.message ?: "Couldn't save"); busy = false } }
+            scope.launch { try { repo.social.setStatusPrivacy(mode, except.toList(), only.toList()); ctx.toast("Status privacy saved"); nav.pop() } catch (e: Exception) { ctx.toastErr(e, "Couldn't save"); busy = false } }
         }, enabled = !busy && (mode == "contacts" || (if (mode == "contacts_except") true else only.isNotEmpty())), modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding().height(50.dp)) { Text("Save") }
     }
 }

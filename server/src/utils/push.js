@@ -166,6 +166,9 @@ export function callPayload({ callId, conversationId, kind, from }) {
     kind,
     callerId: from?._id,
     callerName: from?.displayName || "Someone",
+    // Only a short URL fits in a push (data: avatars are kilobytes); the app falls back to its own copy.
+    callerAvatar: typeof from?.avatar === "string" && !from.avatar.startsWith("data:") && from.avatar.length < 400 ? from.avatar : "",
+    callerColor: from?.avatarColor || "",
     ts: Date.now(),
   };
 }

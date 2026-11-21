@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -68,39 +68,39 @@ fun ProfileTab(nav: Nav) {
     val incoming = requests.count { !it.outgoing }
 
     Column(Modifier.fillMaxSize()) {
-        WispTopBar("Profile") { IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Filled.Settings, "Settings") } }
+        WispTopBar("Profile") { IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, "Settings") } }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.clickable { nav.push(Route.EditProfile) }) {
                     UserAvatar(user, 120.dp)
-                    Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Filled.Edit, "Edit", Modifier.size(18.dp), tint = WispInk) }
+                    Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.Edit, "Edit", Modifier.size(18.dp), tint = WispInk) }
                 }
                 Text(user.displayName, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable {
                     clipboard.setText(AnnotatedString("@${user.username}")); ctx.toast("Username copied to clipboard")
                 }.padding(horizontal = 8.dp, vertical = 2.dp)) {
                     Text("@${user.username}", color = wc.dim)
-                    Icon(Icons.Filled.ContentCopy, "Copy", Modifier.padding(start = 6.dp).size(14.dp), tint = wc.dim)
+                    Icon(Icons.Rounded.ContentCopy, "Copy", Modifier.padding(start = 6.dp).size(14.dp), tint = wc.dim)
                 }
                 if (user.about.isNotBlank()) Text(user.about, Modifier.padding(top = 10.dp), textAlign = TextAlign.Center)
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = { nav.push(Route.EditProfile) }) { Text("Edit profile") }
-                    OutlinedButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) { Icon(Icons.Filled.AddPhotoAlternate, null); Text("  New post") }
+                    OutlinedButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) { Icon(Icons.Rounded.AddPhotoAlternate, null); Text("  New post") }
                 }
             }
             HorizontalDivider(color = wc.border)
-            SheetItem(Icons.Filled.PersonAdd, if (incoming > 0) "Friend requests ($incoming)" else "Friend requests", { nav.push(Route.FriendRequests) })
-            SheetItem(Icons.Filled.Visibility, "Status privacy", { nav.push(Route.StatusPrivacy) })
+            SheetItem(Icons.Rounded.PersonAdd, if (incoming > 0) "Friend requests ($incoming)" else "Friend requests", { nav.push(Route.FriendRequests) })
+            SheetItem(Icons.Rounded.Visibility, "Status privacy", { nav.push(Route.StatusPrivacy) })
             HorizontalDivider(color = wc.border)
             Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.GridOn, null, Modifier.size(18.dp), tint = wc.wisp)
+                Icon(Icons.Rounded.GridOn, null, Modifier.size(18.dp), tint = wc.wisp)
                 Text("  Posts${posts?.let { " · ${it.size}" } ?: ""}", fontWeight = FontWeight.SemiBold)
             }
             val p = posts
             when {
                 p == null -> Column { repeat(2) { Row(Modifier.fillMaxWidth()) { repeat(3) { Box(Modifier.weight(1f).aspectRatio(1f).padding(1.dp).shimmer()) } } } }
                 p.isEmpty() -> Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(64.dp).clip(CircleShape).background(wc.wispDim), Alignment.Center) { Icon(Icons.Filled.GridOn, null, tint = wc.wisp) }
+                    Box(Modifier.size(64.dp).clip(CircleShape).background(wc.wispDim), Alignment.Center) { Icon(Icons.Rounded.GridOn, null, tint = wc.wisp) }
                     Text("Share your first post", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
                     Text("Your posts will appear here.", color = wc.dim, fontSize = 14.sp)
                 }
@@ -141,14 +141,14 @@ fun EditProfileScreen(nav: Nav) {
                 busy = true
                 scope.launch {
                     try { repo.updateProfile(name, about, newAvatar, if (color != user.avatarColor) color else null); ctx.toast("Profile updated"); nav.pop() }
-                    catch (e: Exception) { ctx.toast(e.message ?: "Couldn't save"); busy = false }
+                    catch (e: Exception) { ctx.toastErr(e, "Couldn't save"); busy = false }
                 }
             }) { if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Save", fontWeight = FontWeight.Bold) }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.clickable { photoMenu = true }) {
                 Avatar(name.ifBlank { user.displayName }, color, 130.dp, url = previewUrl)
-                Box(Modifier.align(Alignment.BottomEnd).size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Filled.CameraAlt, "Change photo", Modifier.size(20.dp), tint = WispInk) }
+                Box(Modifier.align(Alignment.BottomEnd).size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.CameraAlt, "Change photo", Modifier.size(20.dp), tint = WispInk) }
             }
             Text("Accent colour", color = wc.dim, fontSize = 13.sp, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -162,8 +162,8 @@ fun EditProfileScreen(nav: Nav) {
         }
     }
     if (photoMenu) Sheet({ photoMenu = false }) {
-        SheetItem(Icons.Filled.PhotoLibrary, "Choose from gallery", { photoMenu = false; pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-        if (previewUrl.isNotEmpty()) SheetItem(Icons.Filled.Delete, "Remove photo", { photoMenu = false; newAvatar = "" }, tint = MaterialTheme.colorScheme.error)
+        SheetItem(Icons.Rounded.PhotoLibrary, "Choose from gallery", { photoMenu = false; pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+        if (previewUrl.isNotEmpty()) SheetItem(Icons.Rounded.Delete, "Remove photo", { photoMenu = false; newAvatar = "" }, tint = MaterialTheme.colorScheme.error)
     }
     cropping?.let { bmp ->
         AvatarCropper(bmp, onCancel = { cropping = null }, onDone = { out ->
@@ -190,7 +190,7 @@ private fun AvatarCropper(src: Bitmap, onCancel: () -> Unit, onDone: (Bitmap) ->
     androidx.compose.ui.window.Dialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(Color.Black).systemBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, "Cancel", tint = Color.White) }
+                IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, "Cancel", tint = Color.White) }
                 Text("Move and scale", color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 TextButton(onClick = {
                     val k = base() * zoom

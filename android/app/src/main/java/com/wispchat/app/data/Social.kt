@@ -62,6 +62,75 @@ class Social(private val repo: Repo) {
     val events: SharedFlow<Realtime.Event> = _events
 
     private var statusJob: Job? = null
+    private var expiryJob: Job? = null
+
+    /** Publishes the status feed minus anything older than 24 h — also while offline, from the cached copy. */
+    private fun setStatus(list: List<StatusEntry>) {
+        val now = System.currentTimeMillis()
+        _status.value = list.map { e -> e.copy(items = e.items.filter { it.expiresAt > now }) }.filter { it.items.isNotEmpty() }
+    }
+
+    /** Removes statuses the moment they turn 24 h old, without needing the server. */
+    private fun startExpiryClock() {
+        expiryJob?.cancel()
+        expiryJob = scope.launch {
+            while (true) {
+                val next = _status.value.flatMap { it.items }.minOfOrNull { it.expiresAt } ?: Long.MAX_VALUE
+                val wait = (next - System.currentTimeMillis()).coerceIn(1_000L, 60_000L)
+                delay(wait)
+                val before = _status.value
+                setStatus(before)
+                if (_status.value != before) runCatching { prunedCache() }
+            }
+        }
+    }
+
+    /** Keeps the on-disk copy free of expired slides too. */
+    private suspend fun prunedCache() {
+        val raw = db.kvGet("status") ?: return
+        val now = System.currentTimeMillis()
+        val arr = JSONArray(raw); val out = JSONArray()
+        for (i in 0 until arr.length()) {
+            val e = arr.optJSONObject(i) ?: continue
+            val items = e.optJSONArray("items") ?: continue
+            val kept = JSONArray()
+            for (k in 0 until items.length()) {
+                val it = items.optJSONObject(k) ?: continue
+                val exp = isoToMillis(it.str("expiresAt")).takeIf { v -> v > 0 } ?: (isoToMillis(it.str("createdAt")) + StatusItem.STATUS_TTL_MS)
+                if (exp > now) kept.put(it)
+            }
+            if (kept.length() > 0) out.put(e.put("items", kept))
+        }
+        db.kvPut("status", out.toString())
+    }
+
+    /** Re-applies status actions still waiting in the offline queue (views, reactions, deletes, posts). */
+    private suspend fun overlay(list: List<StatusEntry>): List<StatusEntry> {
+        val acts = try { repo.pending.all() } catch (_: Exception) { emptyList() }
+        if (acts.isEmpty()) return list
+        var out = list
+        for (a in acts) {
+            val x = a.extra?.let { runCatching { JSONObject(it) }.getOrNull() } ?: continue
+            val id = x.optString("id")
+            out = when (a.kind) {
+                "status-view" -> out.map { e -> e.copy(items = e.items.map { if (it.id == id) it.copy(viewedByMe = true) else it }) }
+                "status-react" -> out.map { e -> e.copy(items = e.items.map { if (it.id == id) it.copy(myReaction = x.optString("emoji")) else it }) }
+                "status-delete" -> out.map { e -> e.copy(items = e.items.filterNot { it.id == id }) }.filter { it.items.isNotEmpty() }
+                "status-text", "status-media" -> {
+                    val me = repo.me.value ?: continue
+                    val at = x.optLong("at", a.createdAt)
+                    val preview = x.optString("file").takeIf { it.isNotEmpty() }?.let { "file://$it" }.orEmpty()
+                    val item = StatusItem(x.optString("localId"), x.optString("kind", "text"), preview, x.optString("text"),
+                        x.optString("bgColor").ifEmpty { "#5ef2c0" }, x.optString("caption"), x.optString("fit").ifEmpty { "cover" }, at, 0, true,
+                        emptyList(), null, at + StatusItem.STATUS_TTL_MS, pending = true)
+                    val mine = out.firstOrNull { it.user.id == me.id }
+                    if (mine == null) out + StatusEntry(me, listOf(item)) else out.map { if (it.user.id == me.id) it.copy(items = it.items + item) else it }
+                }
+                else -> out
+            }
+        }
+        return out
+    }
 
     val myStatus: StatusEntry? get() = _status.value.firstOrNull { it.user.id == repo.myId }
     val othersStatus: List<StatusEntry> get() = _status.value.filter { it.user.id != repo.myId }.sortedByDescending { it.latestAt }
@@ -71,7 +140,8 @@ class Social(private val repo: Repo) {
     fun onSignedIn() {
         scope.launch {
             runCatching { db.kvGet("contacts")?.let { s -> _contacts.value = JSONArray(s).mapObjects(User::from) } }
-            runCatching { db.kvGet("status")?.let { s -> _status.value = JSONArray(s).mapObjects(StatusEntry::from); _statusLoading.value = false } }
+            runCatching { db.kvGet("status")?.let { s -> setStatus(overlay(JSONArray(s).mapObjects(StatusEntry::from))); _statusLoading.value = false } }
+            startExpiryClock()
             runCatching { db.kvGet("calls")?.let { s -> _calls.value = JSONArray(s).mapObjects(CallLog::fromStored) } }
             if (_calls.value.isNotEmpty()) _callsLoading.value = false
             launch { refreshContacts() }
@@ -82,6 +152,7 @@ class Social(private val repo: Repo) {
     }
 
     fun onSignedOut() {
+        expiryJob?.cancel()
         _contacts.value = emptyList(); _requests.value = emptyList(); _status.value = emptyList(); _calls.value = emptyList()
         _statusLoading.value = true; _callsLoading.value = true; _newPosts.value = 0; _contactsLoaded.value = false
     }
@@ -128,13 +199,13 @@ class Social(private val repo: Repo) {
     }
 
     suspend fun sendRequest(userId: String) {
-        api.post("/users/friend-requests", JSONObject().put("userId", userId))
+        repo.sendOrQueue("friend-request", "POST", "/users/friend-requests", JSONObject().put("userId", userId), dedupe = "friend-request:$userId") ?: return
         refreshRequests()
     }
 
     suspend fun respond(requestId: String, accept: Boolean) {
-        api.post("/users/friend-requests/$requestId/respond", JSONObject().put("accept", accept))
         _requests.update { it.filterNot { r -> r.id == requestId } }
+        repo.sendOrQueue("friend-respond", "POST", "/users/friend-requests/$requestId/respond", JSONObject().put("accept", accept), dedupe = "friend-respond:$requestId") ?: return
         refreshContacts()
         if (accept) repo.refreshConversations()
     }
@@ -155,38 +226,64 @@ class Social(private val repo: Repo) {
     suspend fun refreshStatus() {
         try {
             val arr = api.request("GET", "/status", null, if (repo.net.online) 3 else 0).optJSONArray("feed") ?: JSONArray()
-            _status.value = arr.mapObjects(StatusEntry::from)
+            setStatus(overlay(arr.mapObjects(StatusEntry::from)))
             db.kvPut("status", arr.toString())
-        } catch (_: Exception) {} finally { _statusLoading.value = false }
+        } catch (_: Exception) {
+            setStatus(overlay(_status.value.map { e -> e.copy(items = e.items.filterNot { it.pending }) }))
+        } finally { _statusLoading.value = false }
     }
 
+    /** Text status: posted now, or kept as "pending" on your status and posted when the server is reachable. */
     suspend fun postTextStatus(text: String, bgColor: String) {
-        api.post("/status", JSONObject().put("kind", "text").put("text", text.trim()).put("bgColor", bgColor))
-        refreshStatus()
+        val body = JSONObject().put("kind", "text").put("text", text.trim()).put("bgColor", bgColor)
+        val localId = "local-" + java.util.UUID.randomUUID()
+        val r = repo.sendOrQueue("status-text", "POST", "/status", body,
+            JSONObject().put("localId", localId).put("kind", "text").put("text", text.trim()).put("bgColor", bgColor).put("at", System.currentTimeMillis()),
+            dedupe = "status-post:$localId")
+        if (r == null) setStatus(overlay(_status.value.map { e -> e.copy(items = e.items.filterNot { it.pending }) })) else refreshStatus()
     }
 
     suspend fun postMediaStatus(uri: Uri, caption: String, fit: String) {
         val up = readUpload(uri, 1600)
-        api.multipart("POST", "/status", mapOf("caption" to caption.trim(), "fit" to fit), up)
-        refreshStatus()
+        val fields = mapOf("caption" to caption.trim(), "fit" to fit)
+        try {
+            if (!repo.net.online || !repo.reachable.value || repo.pending.count.value > 0) throw ApiException(0, "offline", true)
+            api.multipart("POST", "/status", fields, up)
+            refreshStatus()
+        } catch (e: ApiException) {
+            if (!(e.transient || e.status == 0)) throw e
+            val localId = "local-" + java.util.UUID.randomUUID()
+            val x = JSONObject().put("localId", localId).put("kind", if (up.second.startsWith("video")) "video" else "image")
+                .put("caption", caption.trim()).put("fit", fit).put("at", System.currentTimeMillis())
+            repo.pending.enqueueUpload("status-media", "POST", "/status", fields, up, extra = x)
+            setStatus(overlay(_status.value.map { e -> e.copy(items = e.items.filterNot { it.pending }) }))
+        }
     }
 
     suspend fun viewStatus(item: StatusItem) {
-        if (item.viewedByMe) return
-        // Mark seen locally right away so the ring turns grey instantly.
+        if (item.viewedByMe || item.pending) return
+        // Mark seen locally right away so the ring turns grey instantly; the server hears about it when reachable.
         _status.update { l -> l.map { e -> e.copy(items = e.items.map { if (it.id == item.id) it.copy(viewedByMe = true) else it }) } }
-        try { api.request("POST", "/status/${item.id}/view", JSONObject(), 0) } catch (_: Exception) {}
+        repo.pending.enqueue("status-view", "POST", "/status/${item.id}/view", JSONObject(), JSONObject().put("id", item.id), dedupe = "status-view:${item.id}")
     }
 
     suspend fun reactStatus(item: StatusItem, emoji: String) {
+        if (item.pending) return
         _status.update { l -> l.map { e -> e.copy(items = e.items.map { if (it.id == item.id) it.copy(myReaction = emoji) else it }) } }
-        api.post("/status/${item.id}/react", JSONObject().put("emoji", emoji))
+        repo.pending.enqueue("status-react", "POST", "/status/${item.id}/react", JSONObject().put("emoji", emoji),
+            JSONObject().put("id", item.id).put("emoji", emoji), dedupe = "status-react:${item.id}")
     }
 
     suspend fun deleteStatus(id: String) {
-        api.delete("/status/$id")
         _status.update { l -> l.map { e -> e.copy(items = e.items.filterNot { it.id == id }) }.filter { it.items.isNotEmpty() } }
-        refreshStatus()
+        if (id.startsWith("local-")) {
+            // never reached the server: just drop it from the queue
+            repo.pending.cancel("status-post:$id")
+            repo.pending.all().filter { it.kind == "status-media" && it.extra?.contains(id) == true }.forEach { repo.db.removeAction(it.id) }
+            repo.pending.refreshCount()
+            return
+        }
+        repo.pending.enqueue("status-delete", "DELETE", "/status/$id", null, JSONObject().put("id", id), dedupe = "status-delete:$id")
     }
 
     suspend fun setStatusPrivacy(mode: String, exceptUsers: List<String>, onlyUsers: List<String>) {
@@ -210,9 +307,9 @@ class Social(private val repo: Repo) {
 
     suspend fun post(id: String): Post? = Post.from(api.get("/posts/$id").getJSONObject("post"))
 
-    /** Returns (liked, count). */
-    suspend fun like(postId: String): Pair<Boolean, Int> {
-        val r = api.post("/posts/$postId/like")
+    /** Returns (liked, count) — or null when the server is unreachable and the like was queued (keep the optimistic state). */
+    suspend fun like(postId: String): Pair<Boolean, Int>? {
+        val r = repo.sendOrQueue("like", "POST", "/posts/$postId/like", JSONObject(), JSONObject().put("id", postId)) ?: return null
         return r.optBoolean("likedByMe") to r.optInt("likeCount")
     }
 
@@ -225,10 +322,19 @@ class Social(private val repo: Repo) {
 
     suspend fun deleteComment(postId: String, commentId: String) { api.delete("/posts/$postId/comment/$commentId") }
 
+    /** New post. Offline it is queued and published as soon as the server is reachable (returns null then). */
     suspend fun createPost(uri: Uri, caption: String): Post? {
         val up = readUpload(uri, 1800)
-        val r = api.multipart("POST", "/posts", mapOf("caption" to caption.trim()), up)
-        return r.optJSONObject("post")?.let { Post.from(it) }
+        val fields = mapOf("caption" to caption.trim())
+        try {
+            if (!repo.net.online || !repo.reachable.value) throw ApiException(0, "offline", true)
+            val r = api.multipart("POST", "/posts", fields, up)
+            return r.optJSONObject("post")?.let { Post.from(it) }
+        } catch (e: ApiException) {
+            if (!(e.transient || e.status == 0)) throw e
+            repo.pending.enqueueUpload("post-create", "POST", "/posts", fields, up)
+            return null
+        }
     }
 
     suspend fun updatePost(id: String, caption: String, uri: Uri?): Post? {

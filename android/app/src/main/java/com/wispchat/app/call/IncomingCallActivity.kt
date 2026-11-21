@@ -8,11 +8,17 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,17 +27,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,17 +44,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wispchat.app.calls
-import com.wispchat.app.ui.Avatar
+import com.wispchat.app.ui.MainActivity
 import com.wispchat.app.ui.WispTheme
 
-/** Full-screen incoming call, shown over the lock screen. */
+/** Full-screen incoming call (also over the lock screen): caller photo with pulsing rings, Decline · Message · Answer. */
 class IncomingCallActivity : ComponentActivity() {
     private var wantsAnswer by mutableStateOf(false)
 
@@ -70,8 +71,17 @@ class IncomingCallActivity : ComponentActivity() {
                 fun accept() = permLauncher.launch(if (needVideo) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA) else arrayOf(Manifest.permission.RECORD_AUDIO))
                 // Opened via the notification's "Answer" button: go straight to answering.
                 LaunchedEffect(wantsAnswer) { if (wantsAnswer) { wantsAnswer = false; accept() } }
-                LaunchedEffect(st.phase) { if (st.phase == Phase.ENDED || st.phase == Phase.IDLE) finish() }
-                IncomingUi(st.peerName, st.kind, onAccept = ::accept, onDecline = { calls.decline(); finish() })
+                LaunchedEffect(st.phase) {
+                    if (st.phase == Phase.ENDED || st.phase == Phase.IDLE) finish()
+                    if (st.phase == Phase.CONNECTING || st.phase == Phase.CONNECTED) openCall() // answered (e.g. from the notification)
+                }
+                BackHandler { /* keep ringing; the notification stays — like the phone app */ moveTaskToBack(true) }
+                IncomingUi(st, onAccept = ::accept, onDecline = { calls.decline(); finish() }, onMessage = {
+                    val conv = st.convId
+                    calls.decline()
+                    startActivity(Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_CONVERSATION, conv).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                    finish()
+                })
             }
         }
     }
@@ -96,26 +106,32 @@ class IncomingCallActivity : ComponentActivity() {
 }
 
 @Composable
-private fun IncomingUi(name: String, kind: String, onAccept: () -> Unit, onDecline: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF18233A), Color(0xFF080B12)))).safeDrawingPadding()) {
-        Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 56.dp)) {
-                Avatar(name, "#6EE7B7", 120.dp)
-                Spacer(Modifier.height(24.dp))
-                Text(name, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Icon(if (kind == "video") Icons.Filled.Videocam else Icons.Filled.Call, null, Modifier.padding(top = 12.dp).size(26.dp), tint = MaterialTheme.colorScheme.primary)
+private fun IncomingUi(st: CallState, onAccept: () -> Unit, onDecline: () -> Unit, onMessage: () -> Unit) {
+    val video = st.kind == "video"
+    CallBackdrop {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 28.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 24.dp)) {
+                EncryptedLabel()
+                Spacer(Modifier.height(18.dp))
+                Text(if (video) "WispChat video call" else "WispChat voice call", fontSize = 15.sp, color = Color.White.copy(alpha = 0.7f))
+                Text(st.peerName, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 6.dp))
             }
-            Row(Modifier.fillMaxWidth().padding(bottom = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                RoundButton(Icons.Filled.CallEnd, Color(0xFFE5484D), "Decline", onDecline)
-                RoundButton(if (kind == "video") Icons.Filled.Videocam else Icons.Filled.Call, Color(0xFF2FBF71), "Answer", onAccept)
+            CallerPortrait(st.peerName, st.peerAvatar, st.peerColor, 132.dp, pulsing = true)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // the Answer button gently bobs, like the phone app's "swipe up" hint
+                val t = rememberInfiniteTransition(label = "bob")
+                val bob by t.animateFloat(0f, -8f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y")
+                Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+                    CallControl(Icons.Rounded.CallEnd, "Decline", onDecline, color = Color(0xFFE5484D), size = 72.dp)
+                    CallControl(Icons.Rounded.Chat, "Message", onMessage, size = 52.dp)
+                    Box(Modifier.offset(y = bob.dp)) { CallControl(if (video) Icons.Rounded.Videocam else Icons.Rounded.Call, "Answer", onAccept, color = Color(0xFF22C55E), size = 72.dp) }
+                }
             }
         }
     }
 }
 
+/** Kept for other screens that used the old helper. */
 @Composable
-internal fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, desc: String, onClick: () -> Unit, size: Int = 76) {
-    Box(Modifier.size(size.dp).clip(CircleShape).background(color).clickable(onClick = onClick), Alignment.Center) {
-        Icon(icon, desc, tint = Color.White, modifier = Modifier.size((size * 0.42f).dp))
-    }
-}
+internal fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, desc: String, onClick: () -> Unit, size: Int = 76) =
+    CallControl(icon, desc, onClick, color = color, size = size.dp)

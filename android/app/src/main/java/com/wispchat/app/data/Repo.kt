@@ -70,6 +70,15 @@ class Repo(
     /** Everything that is not chats: status, Explore, call log, contacts, friend requests. */
     val social: Social by lazy { Social(this) }
 
+    /** Offline action queue (react / edit / delete / flags / status…), replayed in order once the server answers. */
+    val pending: Pending by lazy { Pending(this) }
+    private val _reachable = MutableStateFlow(true)
+    /** False while the server can't be reached (no internet, or the host is down / waking up). */
+    val reachable: StateFlow<Boolean> = _reachable
+    private val _syncing = MutableStateFlow<Set<String>>(emptySet())
+    /** Chats whose history is being fetched from the server right now (header shows "Updating…"). */
+    val syncingChats: StateFlow<Set<String>> = _syncing
+
     private val _calls = MutableSharedFlow<Realtime.Event>(extraBufferCapacity = 64)
     val callEvents: SharedFlow<Realtime.Event> = _calls
 
@@ -93,12 +102,45 @@ class Repo(
         rt.onAuthInvalid = { scope.launch { signOutLocal("Your session expired. Please sign in again.", wipe = false) } }
         scope.launch { rt.events.collect { handle(it) } }
         net.onBackOnline = { scope.launch { syncNow() } }
+        api.onReachable = { ok -> setReachable(ok) }
+        scope.launch { rt.connected.collect { if (it) setReachable(true) } }
+        scope.launch { net.kind.collect { if (it == Net.Kind.NONE) _reachable.value = false } }
+        // While something is waiting and the app is open, keep probing the server; the first answer drains the queue.
+        scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(20_000)
+                if (_me.value != null && appVisible && net.online && pending.count.value > 0) syncPending()
+            }
+        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) { appVisible = true; syncSocket() }
             override fun onStop(owner: LifecycleOwner) { appVisible = false; syncSocket() }
         })
         // Show the cached chat list immediately — before (and regardless of) any network call.
         if (_me.value != null) scope.launch { loadConversationsFromDb() }
+    }
+
+    private fun setReachable(ok: Boolean) {
+        val was = _reachable.value
+        _reachable.value = ok && net.online
+        if (!was && _reachable.value) requestSync() // just came back: replay what was done offline, one by one
+    }
+
+    /** Kick off a replay of the outbox + action queue (non-blocking), and make sure Android retries it in the background. */
+    fun requestSync() {
+        if (_me.value == null) return
+        scope.launch { syncPending() }
+        com.wispchat.app.data.SyncWorker.schedule(ctx)
+    }
+
+    /** Sends unsent messages and replays queued actions. Both keep their own order; they don't depend on each other. */
+    suspend fun syncPending() {
+        if (_me.value == null || !net.online) return
+        kotlinx.coroutines.coroutineScope {
+            launch { try { flushOutbox() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {} }
+            launch { try { pending.flush() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {} }
+        }
+        pending.refreshCount()
     }
 
     private fun syncSocket() {
@@ -108,9 +150,10 @@ class Repo(
     /** Everything that should happen as soon as we're online again. */
     suspend fun syncNow() {
         if (_me.value == null) return
+        syncPending() // first replay what was done offline, so the refresh below already reflects it
         refreshConversations()
-        flushOutbox()
-        store.activeConversation.takeIf { it.isNotEmpty() }?.let { loadMessages(it) }
+        store.activeConversation.takeIf { it.isNotEmpty() }?.let { refreshMessages(it) }
+        social.refreshStatus()
     }
 
     // ------------------------------------------------------------------ session
@@ -193,7 +236,7 @@ class Repo(
         com.wispchat.app.notify.PushRegistrar.register(this)
         social.onSignedIn()
         syncSocket()
-        scope.launch { if (_conversations.value.isEmpty()) loadConversationsFromDb(); refreshConversations(); flushOutbox() }
+        scope.launch { pending.refreshCount(); if (_conversations.value.isEmpty()) loadConversationsFromDb(); syncPending(); refreshConversations() }
     }
 
     /** Explicit sign-out: also removes this account's downloaded data from the phone. */
@@ -207,6 +250,7 @@ class Repo(
         com.wispchat.app.service.RealtimeService.stop(ctx)
         com.wispchat.app.notify.PushRegistrar.unregister(this)
         social.onSignedOut()
+        com.wispchat.app.data.SyncWorker.cancel(ctx)
         store.clearSession()
         priv = null
         if (wipe) { wipeLocalData(); store.lastUserId = null }
@@ -223,7 +267,7 @@ class Repo(
     private suspend fun loadConversationsFromDb() {
         val rows = db.loadConversations()
         if (rows.isEmpty() || _conversations.value.isNotEmpty()) return
-        _conversations.value = rows.map { Conversation.from(it, myId) }
+        _conversations.value = overlayPending(rows.map { Conversation.from(it, myId) })
         _conversations.value.forEach { c -> c.lastMessage?.let { m -> setPreview(c.id, decrypt(m)) } }
     }
 
@@ -233,13 +277,78 @@ class Repo(
             val arr = api.request("GET", "/conversations", null, if (net.online) 4 else 0).getJSONArray("conversations")
             val raws = (0 until arr.length()).map { arr.getJSONObject(it) }
             val list = raws.map { Conversation.from(it, myId) }
-            _conversations.value = list.sortedByDescending { it.lastMessageAt }
+            _conversations.value = overlayPending(list).sortedByDescending { it.lastMessageAt }
             _convError.value = false
             db.saveConversations(list.zip(raws).map { (c, r) -> Triple(c.id, c.lastMessageAt, r) })
             list.forEach { c -> c.lastMessage?.let { m -> setPreview(c.id, decrypt(m)) } }
         } catch (e: Exception) {
             _convError.value = _conversations.value.isEmpty() // cached chats are shown, so this is not an error screen
         } finally { _convLoading.value = false }
+    }
+
+    /** Re-applies queued (not yet synced) chat changes on top of what the server / cache said. */
+    private suspend fun overlayPending(list: List<Conversation>): List<Conversation> {
+        val acts = try { pending.all() } catch (_: Exception) { emptyList() }
+        if (acts.isEmpty()) return list
+        var out = list
+        for (a in acts) {
+            val x = a.extra?.let { runCatching { JSONObject(it) }.getOrNull() } ?: continue
+            val cid = x.optString("conv"); if (cid.isEmpty()) continue
+            out = when (a.kind) {
+                "flag" -> out.map { c -> if (c.id != cid) c else when (x.optString("flag")) {
+                    "mute" -> c.copy(muted = x.optBoolean("value")); "pin" -> c.copy(pinned = x.optBoolean("value")); else -> c.copy(archived = x.optBoolean("value")) } }
+                "folder" -> out.map { c -> if (c.id == cid) c.copy(folder = x.optString("folder").ifEmpty { null }) else c }
+                "read" -> out.map { c -> if (c.id == cid) c.copy(unread = 0) else c }
+                "delete-chat" -> out.filterNot { it.id == cid }
+                else -> out
+            }
+        }
+        return out
+    }
+
+    /** Re-applies queued message changes (reaction / edit / delete for everyone) to server copies before they're stored. */
+    private suspend fun overlayMessages(raws: List<JSONObject>): List<JSONObject> {
+        val acts = try { pending.all() } catch (_: Exception) { emptyList() }
+        if (acts.isEmpty()) return raws
+        val byId = raws.associateBy { it.optString("_id") }
+        for (a in acts) {
+            val x = a.extra?.let { runCatching { JSONObject(it) }.getOrNull() } ?: continue
+            val j = byId[x.optString("messageId")] ?: continue
+            when (a.kind) {
+                "react" -> Pending.patchReaction(j, myId, x.optString("emoji"))
+                "edit" -> a.body?.let { Pending.patchEdit(j, JSONObject(it)) }
+                "delete-everyone" -> Pending.patchDeleted(j)
+            }
+        }
+        return raws
+    }
+
+    /** Re-reads my own profile from the server (after a queued profile change was refused). */
+    private suspend fun refreshMe() {
+        val fresh = api.get("/auth/me").getJSONObject("user")
+        fresh.optJSONObject("e2ee")?.apply { remove("wrappedPrivateKey"); remove("wrapIv"); remove("kdfSalt"); remove("kdfIterations") }
+        store.userJson = fresh.toString()
+        _me.value = User.from(fresh)
+    }
+
+    /** A queued action reached the server. */
+    internal suspend fun onActionDone(a: LocalDb.ActionRow, extra: JSONObject, res: JSONObject) {
+        when (a.kind) {
+            "edit" -> res.optJSONObject("message")?.let { saved ->
+                val conv = extra.optString("conv")
+                replaceMessage(withContext(Dispatchers.Default) { decrypt(Message.from(saved, conv)) }, saved)
+            }
+            "profile" -> res.optJSONObject("user")?.let { applyMeUpdate(it) }
+        }
+    }
+
+    /** The server refused a queued action for good: put back what the server actually has. */
+    internal suspend fun onActionRejected(a: LocalDb.ActionRow, extra: JSONObject) {
+        val conv = extra.optString("conv")
+        when (a.kind) {
+            "react", "edit", "delete-everyone" -> if (conv.isNotEmpty()) scope.launchSafe { refreshMessages(conv) }
+            "profile" -> scope.launchSafe { refreshMe() }
+        }
     }
 
     suspend fun openDirect(userId: String): Conversation {
@@ -317,19 +426,39 @@ class Repo(
 
     /** Opens a chat: shows what's on the phone immediately, then refreshes from the server if reachable. */
     suspend fun loadMessages(convId: String) {
+        loadLocalMessages(convId)
+        refreshMessages(convId)
+    }
+
+    /** The on-device copy only — instant, works offline. Returns how many messages there are. */
+    suspend fun loadLocalMessages(convId: String): Int {
         val local = fromRows(convId, db.loadMessages(convId, 80))
         publish(convId, local)
         local.lastOrNull()?.let { setPreview(convId, it) }
         autoDownload(local)
+        return local.size
+    }
+
+    /** Every message of a chat stored on this phone (plus what's on screen), decrypted — for "Media, links and docs". */
+    suspend fun chatArchive(convId: String): List<Message> {
+        val stored = fromRows(convId, db.loadMessages(convId, 5000))
+        return (stored + _messages.value[convId].orEmpty()).filter { !it.deleted && it.sendState == 0 }.distinctBy { it.id }.sortedByDescending { it.createdAt }
+    }
+
+    /** Fetches the newest history from the server (quietly does nothing while it can't be reached). */
+    suspend fun refreshMessages(convId: String) {
+        if (!net.online) return
+        _syncing.update { it + convId }
         try {
-            val arr = api.request("GET", "/messages/$convId?limit=60", null, if (net.online) 3 else 0).getJSONArray("messages")
-            val raws = (0 until arr.length()).map { arr.getJSONObject(it) }.filterNot { db.isHidden(it.optString("_id")) }
+            val arr = api.request("GET", "/messages/$convId?limit=60", null, 2).getJSONArray("messages")
+            val raws = overlayMessages((0 until arr.length()).map { arr.getJSONObject(it) }.filterNot { db.isHidden(it.optString("_id")) })
             db.saveMessages(convId, raws)
-            val merged = fromRows(convId, db.loadMessages(convId, maxOf(80, local.size)))
+            val merged = fromRows(convId, db.loadMessages(convId, maxOf(80, _messages.value[convId]?.count { it.sendState == 0 } ?: 0)))
             publish(convId, merged)
             merged.lastOrNull()?.let { setPreview(convId, it) }
             autoDownload(merged)
         } catch (_: Exception) { /* offline: the on-device copy is already on screen */ }
+        finally { _syncing.update { it - convId } }
     }
 
     private suspend fun publish(convId: String, serverMessages: List<Message>) {
@@ -343,7 +472,7 @@ class Repo(
         if (rows.size < 40 && net.online) {
             try {
                 val arr = api.get("/messages/$convId?limit=60&before=" + java.net.URLEncoder.encode(java.time.Instant.ofEpochMilli(first.createdAt).toString(), "UTF-8")).getJSONArray("messages")
-                db.saveMessages(convId, (0 until arr.length()).map { arr.getJSONObject(it) }.filterNot { db.isHidden(it.optString("_id")) })
+                db.saveMessages(convId, overlayMessages((0 until arr.length()).map { arr.getJSONObject(it) }.filterNot { db.isHidden(it.optString("_id")) }))
                 rows = db.loadMessages(convId, 40, first.createdAt)
             } catch (_: Exception) {}
         }
@@ -384,7 +513,8 @@ class Repo(
         body.put("attachments", JSONArray())
         db.putOutbox(LocalDb.OutboxRow(clientId, conv.id, System.currentTimeMillis(), "text", body, emptyList(), false))
         publish(conv.id, _messages.value[conv.id].orEmpty().filterNot { it.sendState != 0 })
-        flushOutbox()
+        pending.refreshCount()
+        requestSync() // sent in the background: leaving the chat never cancels it
     }
 
     /** One file waiting to be sent: already copied into private storage. */
@@ -406,6 +536,19 @@ class Repo(
         enqueueMedia(conv, items, caption, replyTo)
     }
 
+    /** Sends a GIF / sticker picked from the GIF panel: downloaded once, then sent (end-to-end encrypted) like any photo. */
+    suspend fun sendRemoteGif(conv: Conversation, url: String, sticker: Boolean, replyTo: String? = null) {
+        val bytes = withContext(Dispatchers.IO) {
+            api.http.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { r ->
+                if (!r.isSuccessful) throw ApiException(r.code, "Couldn't download that GIF")
+                r.body?.bytes() ?: ByteArray(0)
+            }
+        }
+        if (bytes.isEmpty()) throw ApiException(0, "Couldn't download that GIF")
+        val f = File(ctx.cacheDir, "gif_${System.currentTimeMillis()}.gif").apply { writeBytes(bytes) }
+        sendFile(conv, f, if (sticker) "sticker.gif" else "gif.gif", "image/gif", "", replyTo)
+    }
+
     /** Sends a file we produced ourselves (voice note, camera photo): it is moved into the outbox. */
     suspend fun sendFile(conv: Conversation, file: File, name: String, mime: String, caption: String = "", replyTo: String? = null) {
         if (!file.exists() || file.length() == 0L) return
@@ -421,7 +564,8 @@ class Repo(
         val body = withContext(Dispatchers.Default) { sealBody(clientId, envelopeFor(conv), caption.trim(), replyTo) }
         db.putOutbox(LocalDb.OutboxRow(clientId, conv.id, System.currentTimeMillis(), "media", body, files, false))
         publish(conv.id, _messages.value[conv.id].orEmpty().filter { it.sendState == 0 })
-        flushOutbox()
+        pending.refreshCount()
+        requestSync()
     }
 
     /** Sends everything waiting in the outbox, oldest first. Safe to call any time; stops quietly while offline. */
@@ -458,18 +602,19 @@ class Repo(
                     row.files.forEach { File(it.split("\t")[0]).delete() }
                     val m = decrypt(Message.from(saved, row.conv))
                     putMessage(m, saved)
+                    pending.refreshCount()
                 } catch (e: ApiException) {
                     if (e.transient || e.status == 0) return // still no usable connection: keep waiting
                     db.putOutbox(row.copy(failed = true)) // the server rejected it: let the person retry or delete
                     publish(row.conv, _messages.value[row.conv].orEmpty().filter { it.sendState == 0 })
-                } catch (e: Exception) { return }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { return }
             }
         }
     }
 
     suspend fun retryFailed(clientId: String) {
         db.outbox().firstOrNull { it.clientId == clientId }?.let { db.putOutbox(it.copy(failed = false)); publish(it.conv, _messages.value[it.conv].orEmpty().filter { m -> m.sendState == 0 }) }
-        flushOutbox()
+        requestSync()
     }
 
     /** Cancels a message that hasn't been sent yet. */
@@ -503,7 +648,7 @@ class Repo(
     suspend fun markRead(convId: String) {
         _conversations.update { l -> l.map { if (it.id == convId) it.copy(unread = 0) else it } }
         com.wispchat.app.notify.Notifier.clearConversation(ctx, convId)
-        if (net.online) try { api.request("POST", "/messages/$convId/read", JSONObject(), 0) } catch (_: Exception) {}
+        pending.enqueue("read", "POST", "/messages/$convId/read", JSONObject(), JSONObject().put("conv", convId), dedupe = "read:$convId")
     }
 
     fun typing(convId: String, on: Boolean) = rt.emit(if (on) "typing:start" else "typing:stop", JSONObject().put("conversationId", convId))
@@ -557,14 +702,15 @@ class Repo(
         db.hideMessage(m.id)
         _messages.update { cur -> cur + (m.conversationId to cur[m.conversationId].orEmpty().filterNot { it.id == m.id }) }
         _mediaTick.update { it + 1 }
-        if (net.online) try { api.request("DELETE", "/messages/msg/${m.id}", JSONObject().put("forEveryone", false), 0) } catch (_: Exception) {}
+        pending.enqueue("delete-me", "DELETE", "/messages/msg/${m.id}", JSONObject().put("forEveryone", false), JSONObject().put("messageId", m.id).put("conv", m.conversationId))
     }
 
-    /** "Delete for everyone" (own messages, needs internet). */
+    /** "Delete for everyone" (own messages). Works offline too: it disappears now and the server is told later. */
     suspend fun deleteForEveryone(m: Message, alsoMedia: Boolean) {
-        api.request("DELETE", "/messages/msg/${m.id}", JSONObject().put("forEveryone", true), 0)
+        if (m.sendState != 0) { cancelPending(m); return }
         if (alsoMedia) media.deleteFiles(m.attachments.map { it.url }, alsoGallery = true)
         markDeletedLocally(m.id, m.conversationId)
+        pending.enqueue("delete-everyone", "DELETE", "/messages/msg/${m.id}", JSONObject().put("forEveryone", true), JSONObject().put("messageId", m.id).put("conv", m.conversationId))
     }
 
     /** Keeps the message but removes its files from this phone (they can be downloaded again while still on the server). */
@@ -600,7 +746,20 @@ class Repo(
         val arr = api.get("/users/blocked").optJSONArray("blocked") ?: JSONArray()
         return (0 until arr.length()).map { User.from(arr.getJSONObject(it)) }
     }
-    suspend fun toggleBlock(userId: String) { api.post("/users/block/$userId") }
+    suspend fun toggleBlock(userId: String) { sendOrQueue("block", "POST", "/users/block/$userId", JSONObject()) }
+
+    /**
+     * Sends now when the server is reachable and nothing older is waiting; otherwise queues it (returns null).
+     * Errors the server really means (403, 404…) are still thrown so the screen can show them.
+     */
+    suspend fun sendOrQueue(kind: String, method: String, path: String, body: JSONObject?, extra: JSONObject? = null, dedupe: String? = null): JSONObject? {
+        if (net.online && _reachable.value && pending.count.value == 0) {
+            try { return api.request(method, path, body, 0) }
+            catch (e: ApiException) { if (!(e.transient || e.status == 0)) throw e }
+        }
+        pending.enqueue(kind, method, path, body, extra, dedupe)
+        return null
+    }
 
     // ------------------------------------------------------------------ realtime
     private suspend fun handle(e: Realtime.Event) {
@@ -677,8 +836,11 @@ class Repo(
         val myName = _me.value?.displayName.orEmpty()
         val next = if (mine?.emoji == emoji) before.filter { it.userId != myId } else before.filter { it.userId != myId } + Reaction(myId, myName, emoji)
         patchMessage(m.conversationId, m.id) { it.copy(reactions = next) }
-        try { api.request("POST", "/messages/msg/${m.id}/react", JSONObject().put("emoji", emoji), 0) }
-        catch (e: Exception) { patchMessage(m.conversationId, m.id) { it.copy(reactions = before) }; throw e }
+        val nextEmoji = next.firstOrNull { it.userId == myId }?.emoji.orEmpty()
+        db.patchMessage(m.id) { Pending.patchReaction(it, myId, nextEmoji) }
+        // Not de-duplicated on purpose: the server toggles, so every tap must be replayed in order.
+        pending.enqueue("react", "POST", "/messages/msg/${m.id}/react", JSONObject().put("emoji", emoji),
+            JSONObject().put("messageId", m.id).put("conv", m.conversationId).put("emoji", nextEmoji))
     }
 
     /** Edit your own message. The new text is sealed with the message's existing key, so attached files stay readable. */
@@ -691,8 +853,11 @@ class Repo(
             body.put("text", sealed.ciphertextB64).put("iv", sealed.ivB64).put("encrypted", true)
                 .put("keys", JSONArray(m.keys.map { JSONObject().put("user", it.user).put("wrappedKey", it.wrappedKey).put("keyIv", it.keyIv) }))
         } else body.put("text", clean)
-        val saved = api.request("PATCH", "/messages/msg/${m.id}", body, 0).getJSONObject("message")
-        replaceMessage(withContext(Dispatchers.Default) { decrypt(Message.from(saved, m.conversationId)) }, saved)
+        // Shown edited right away (and kept on the phone); the server gets it as soon as it's reachable.
+        db.patchMessage(m.id) { Pending.patchEdit(it, body) }
+        patchMessage(m.conversationId, m.id) { it.copy(text = clean, rawText = body.optString("text"), iv = if (body.has("iv")) body.optString("iv") else it.iv, edited = true) }
+        if (_conversations.value.firstOrNull { it.id == m.conversationId }?.lastMessage?.id == m.id) _previews.update { it + (m.conversationId to clean) }
+        pending.enqueue("edit", "PATCH", "/messages/msg/${m.id}", body, JSONObject().put("messageId", m.id).put("conv", m.conversationId), dedupe = "edit:${m.id}")
     }
 
     /** Forward re-encrypts the message (and re-uploads its files) separately for every destination chat. */
@@ -739,30 +904,30 @@ class Repo(
     /** Optimistic: the row changes instantly; if the server refuses, it is put back. [flag] = "mute" | "pin" | "archive". */
     suspend fun setFlag(convId: String, flag: String, value: Boolean) {
         val key = mapOf("mute" to "muted", "pin" to "pinned", "archive" to "archived")[flag] ?: return
-        val old = conversationOrNull(convId) ?: return
-        val before = when (flag) { "mute" -> old.muted; "pin" -> old.pinned; else -> old.archived }
+        conversationOrNull(convId) ?: return
         applyFlags(convId, JSONObject().put(key, value))
-        try { api.request("POST", "/conversations/$convId/flag", JSONObject().put("flag", flag).put("value", value), 0) }
-        catch (e: Exception) { applyFlags(convId, JSONObject().put(key, before)); throw e }
+        // Latest wins: muting then unmuting offline sends only the final state.
+        pending.enqueue("flag", "POST", "/conversations/$convId/flag", JSONObject().put("flag", flag).put("value", value),
+            JSONObject().put("conv", convId).put("flag", flag).put("value", value), dedupe = "flag:$convId:$flag")
     }
 
     suspend fun setFolder(convId: String, folder: String?) {
-        val r = api.request("POST", "/conversations/$convId/folder", JSONObject().put("folder", folder ?: JSONObject.NULL), 0)
-        applyFlags(convId, JSONObject().put("folder", r.str("folder")))
+        applyFlags(convId, JSONObject().put("folder", folder ?: ""))
+        pending.enqueue("folder", "POST", "/conversations/$convId/folder", JSONObject().put("folder", folder ?: JSONObject.NULL),
+            JSONObject().put("conv", convId).put("folder", folder ?: ""), dedupe = "folder:$convId")
     }
 
-    /** "Clear chat": empties the history for me (server + this phone). */
+    /** "Clear chat": empties the history for me (this phone now, the server as soon as it's reachable). */
     suspend fun clearChatEverywhere(convId: String, alsoMedia: Boolean) {
-        api.request("POST", "/conversations/$convId/clear", JSONObject(), 0)
         clearChat(convId, alsoMedia)
+        pending.enqueue("clear", "POST", "/conversations/$convId/clear", JSONObject(), JSONObject().put("conv", convId))
     }
 
     /** "Delete chat": one-sided — it leaves my list and comes back when someone writes again. */
     suspend fun deleteChat(convId: String) {
-        api.request("POST", "/conversations/$convId/delete", JSONObject(), 0)
         clearChat(convId, alsoMedia = true)
         _conversations.update { it.filterNot { c -> c.id == convId } }
-        refreshConversations()
+        pending.enqueue("delete-chat", "POST", "/conversations/$convId/delete", JSONObject(), JSONObject().put("conv", convId), dedupe = "delete-chat:$convId")
     }
 
     suspend fun markUnread(convId: String) { _conversations.update { l -> l.map { if (it.id == convId && it.unread == 0) it.copy(unread = 1) else it } } }
@@ -821,8 +986,9 @@ class Repo(
         val b = JSONObject()
         displayName?.let { b.put("displayName", it.trim()) }; about?.let { b.put("about", it.trim()) }
         avatarDataUrl?.let { b.put("avatar", it) }; avatarColor?.let { b.put("avatarColor", it) }
-        val u = api.request("PATCH", "/users/profile", b, 0).getJSONObject("user")
-        applyMeUpdate(u)
+        val r = sendOrQueue("profile", "PATCH", "/users/profile", b, dedupe = if (avatarDataUrl == null) "profile:text" else null)
+        // Queued offline: show the new name / about / photo right away; the server copy replaces it later.
+        applyMeUpdate(r?.optJSONObject("user") ?: b)
     }
 
     fun statusPrivacy(): JSONObject = store.userJson?.let { JSONObject(it).optJSONObject("statusPrivacy") } ?: JSONObject().put("mode", "contacts")

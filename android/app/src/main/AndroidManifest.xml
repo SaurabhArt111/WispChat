@@ -13,12 +13,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- Lets the call service run as a "phone call" while ringing / in a call (normal permissions, granted at install) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Only needed to save to the gallery on Android 8–9; newer versions use MediaStore without it -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- In-app camera's "recent photos" strip and gallery (read-only) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -62,7 +70,7 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:showWhenLocked="true"
-           
+            android:excludeFromRecents="false"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
         <!-- Fallback only (phones without Firebase push): a quiet background connection -->
@@ -75,11 +83,11 @@
                 android:value="Persistent connection that delivers new-message and incoming-call notifications" />
         </service>
 
-        <!-- Keeps the call alive (mic/camera) when the app is minimised -->
+        <!-- Rings (custom incoming-call notification) and keeps the call alive (mic/camera) when the app is minimised -->
         <service
             android:name=".call.CallService"
             android:exported="false"
-            android:foregroundServiceType="microphone|camera" />
+            android:foregroundServiceType="phoneCall|microphone|camera" />
 
         <!-- Firebase push (data-only): messages and calls arrive with the app closed, no always-on notification -->
         <service

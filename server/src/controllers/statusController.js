@@ -61,6 +61,8 @@ export async function getFeed(req, res) {
       caption: s.caption,
       fit: s.fit || "cover",
       createdAt: s.createdAt,
+      // Lets apps hide a slide the moment it expires, even while they're offline.
+      expiresAt: s.expiresAt,
       // The footer counts people, while each person's row separately shows
       // how many times they viewed this slide.
       viewerCount: new Set(

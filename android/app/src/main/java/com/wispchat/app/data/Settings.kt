@@ -44,15 +44,35 @@ class Settings(context: Context) {
     val messageNotifications: StateFlow<Boolean> = _msgNotif
     fun setMessageNotifications(v: Boolean) { p.edit().putBoolean("notifMsg", v).apply(); _msgNotif.value = v }
 
-    /** Chat wallpapers: a global default plus an optional per-chat override. Values are preset ids (see ui.Wallpapers). */
+    /**
+     * Chat wallpapers, same model as the web app: a global default (Settings → Chats → Wallpaper) that every chat uses,
+     * plus an optional per-chat override. Values are preset ids (see ui.Wallpapers) or "file:<path>" for your own photo.
+     * New installs start with the WispChat doodle pattern.
+     */
     private val _wallpaperTick = MutableStateFlow(0)
     val wallpaperTick: StateFlow<Int> = _wallpaperTick
-    fun wallpaper(convId: String?): String = (convId?.let { p.getString("wp_$it", null) }) ?: p.getString("wp_default", "none") ?: "none"
+    fun globalWallpaper(): String = p.getString("wp_default", DEFAULT_WALLPAPER) ?: DEFAULT_WALLPAPER
+    /** The chat's own choice, or null when it follows the global default. */
+    fun chatWallpaper(convId: String): String? = p.getString("wp_$convId", null)
+    fun wallpaper(convId: String?): String = (convId?.let { chatWallpaper(it) }) ?: globalWallpaper()
     fun setWallpaper(convId: String?, id: String?) {
         val key = if (convId == null) "wp_default" else "wp_$convId"
+        val old = p.getString(key, null)
         p.edit().apply { if (id == null) remove(key) else putString(key, id) }.apply()
+        // a replaced custom photo is no longer needed on disk (unless another chat still uses it)
+        if (old != null && old != id && old.startsWith("file:") && p.all.values.none { it == old }) runCatching { java.io.File(old.removePrefix("file:")).delete() }
         _wallpaperTick.value += 1
     }
+
+    /** How much a photo wallpaper is darkened (0–0.8) so bubbles stay readable. */
+    private val _wpDim = MutableStateFlow(p.getFloat("wpDim", 0.35f))
+    val wallpaperDim: StateFlow<Float> = _wpDim
+    fun setWallpaperDim(v: Float) { p.edit().putFloat("wpDim", v).apply(); _wpDim.value = v; _wallpaperTick.value += 1 }
+
+    /** Show the doodle pattern on top of colour wallpapers too (WhatsApp's "Doodles" switch). */
+    private val _doodles = MutableStateFlow(p.getBoolean("wpDoodles", true))
+    val wallpaperDoodles: StateFlow<Boolean> = _doodles
+    fun setWallpaperDoodles(v: Boolean) { p.edit().putBoolean("wpDoodles", v).apply(); _doodles.value = v; _wallpaperTick.value += 1 }
 
     /** "Enter is send" etc. live above; this is the in-app sounds toggle (message sent / received ticks). */
     private val _sounds = MutableStateFlow(p.getBoolean("inAppSounds", true))
@@ -70,6 +90,15 @@ class Settings(context: Context) {
         _drafts.value = if (text.isBlank()) _drafts.value - convId else _drafts.value + (convId to text)
     }
 
+    /** Recently used emoji (newest first) — the "Recents" row of the emoji panel. */
+    private val _recentEmoji = MutableStateFlow(p.getString("recentEmoji", "")!!.split("\u0001").filter { it.isNotEmpty() })
+    val recentEmoji: StateFlow<List<String>> = _recentEmoji
+    fun useEmoji(e: String) {
+        val next = (listOf(e) + _recentEmoji.value.filter { it != e }).take(32)
+        _recentEmoji.value = next
+        p.edit().putString("recentEmoji", next.joinToString("\u0001")).apply()
+    }
+
     /** Favourite call contacts (user ids) — shown first in the new-call sheet. */
     fun callFavs(): Set<String> = p.getStringSet("callFavs", emptySet()) ?: emptySet()
     fun toggleCallFav(id: String) {
@@ -84,4 +113,6 @@ class Settings(context: Context) {
     var bytesReceived: Long
         get() = p.getLong("recv", 0)
         set(v) = p.edit().putLong("recv", v).apply()
+
+    companion object { const val DEFAULT_WALLPAPER = "doodle" }
 }

@@ -30,6 +30,7 @@ sealed interface Route {
     data object EditProfile : Route
     data class NewPost(val uri: Uri, val editing: Post? = null) : Route
     data object NewCall : Route
+    data class MediaDocs(val convId: String) : Route
 }
 
 class Nav {
@@ -56,6 +57,15 @@ class Nav {
     fun replaceTop(r: Route) { if (stack.isNotEmpty()) stack[stack.lastIndex] = r else stack.add(r) }
 
     fun goTab(i: Int) { tabRequest = i }
+
+    /** Go back to the chat (closing info pages on top of it) and scroll to one message. */
+    fun showMessage(convId: String, messageId: String) {
+        val at = stack.indexOfLast { it is Route.Chat && it.id == convId }
+        if (at >= 0) {
+            while (stack.lastIndex > at) stack.removeAt(stack.lastIndex)
+            stack[at] = Route.Chat(convId, messageId)
+        } else stack.add(Route.Chat(convId, messageId))
+    }
 }
 
 const val TAB_CHATS = 0

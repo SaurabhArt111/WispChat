@@ -36,7 +36,7 @@ dark theme, pages and behaviour, with WhatsApp-style gestures.
 ## Chat screen
 Presence / last seen / typing, voice & video call buttons, in-chat search with next/previous, day separators, reply quotes (tap to jump),
 forwarded labels, edited labels, reactions, read ticks, link previews, image grids, video, voice-note player, files, call entries,
-scroll-to-bottom button with unread count, endless history, wallpapers (same presets as web), emoji panel, camera, photo/video preview with
+scroll-to-bottom button with unread count, endless history, wallpapers (same system as web: global default + per-chat, presets, the WispChat doodle pattern by default, your own photo), emoji panel, camera, photo/video preview with
 caption, documents, **voice notes**, edit & reply banners, per-chat drafts, offline outbox with retry.
 
 ## Notifications — why the old behaviour was wrong and what changed
@@ -53,6 +53,11 @@ caption, documents, **voice notes**, edit & reply banners, per-chat drafts, offl
   Some phone brands also need the app excluded from aggressive battery saving.
 
 ## Offline-first
+**Pending actions:** everything else you do while the server can't be reached (reactions, edits, deletes, mute / pin / archive, mark read,
+status posts / views, likes, friend requests, profile edits…) is applied on the phone immediately, stored in the `actions` table and replayed
+one by one in order once the server answers (`data/Pending.kt`; `data/SyncWorker.kt` retries in the background). Statuses disappear 24 h after
+posting even with no connection.
+
 Chat list, messages and downloaded media live on the phone (`data/LocalDb.kt`, `data/MediaCache.kt`); the app opens instantly with no
 internet, encrypted chats stay ciphertext at rest, messages written offline go through an outbox and send automatically.
 Auto-download rules, gallery saving, delete-for-me/everyone with "also delete from device" and per-chat storage cleanup are in Settings.

@@ -1,3 +1,72 @@
+# WispChat — native Android update 5 (big emoji, camera, GIFs & stickers, media/links/docs)
+
+- **Big emoji with no bubble**: a message of 1–3 emoji only is shown large (bigger for one) with no bubble behind it, just a small time pill —
+  like WhatsApp. Stickers are shown the same way (borderless). GIFs now animate in the chat.
+- **New in-app camera** (`ui/CameraScreen.kt`, CameraX): full-screen preview, tap to focus, pinch to zoom, double-tap to flip, flash
+  (off / on / auto), Photo and Video modes with a recording timer, a strip of your **recent photos & videos** above the shutter and a gallery
+  button. **Swipe up** (on the preview or the strip) opens the full **Recents** gallery with an album switcher and multi-select (up to 10).
+  Asks for photo access once; without it the gallery button falls back to Android's photo picker.
+- **Emoji panel** (`ui/ExpressionPanel.kt`): drag the handle up to expand it to most of the screen (down to shrink), WhatsApp layout with
+  Recents + all categories in one scroll and a category bar, and working **GIF** and **Sticker** tabs (trending + search). Tap one to send it.
+  GIF/sticker search goes through the server so no key ships in the app: **set `GIPHY_API_KEY` in `server/.env`** (free key from
+  developers.giphy.com) — until then the tabs explain how to turn it on.
+- **Contact info / Group info → "Media, links and docs"** with the 4 newest photos/videos in a row; tapping opens a **Media | Links | Docs**
+  page (`ui/MediaDocs.kt`). Tapping a link or document jumps to that message in the chat (highlighted); a photo opens the viewer, which has a
+  **Show in chat** button. Jumping loads older history automatically if the message isn't on screen yet. Lists what's stored on the phone.
+- **Web**: videos in chat are now WhatsApp-style tiles in the media grid (real still frame, play button, length) that open in the full-screen
+  viewer, instead of a small letter-boxed player in the bubble; the send-preview shows the whole video uncropped.
+- **Server**: new `GET /api/gifs?type=gifs|stickers&q=` (GIPHY proxy, cached).
+- New Android dependencies: CameraX 1.4.1, coil-gif, coil-video. New permissions: read photos/videos (for the camera's gallery strip).
+
+Not built here (no Android SDK / Maven access): Kotlin files pass a compiler syntax check, and the web client builds. Test on a device:
+camera photo + video + swipe-up gallery, emoji panel drag, a GIF send, Media/Links/Docs → tap a doc.
+
+# WispChat — native Android update 4 (wallpapers, offline queue, icons, phone-like calls)
+
+**Bugs from the screenshots**
+- *"The coroutine scope left the composition"* toast: sending / uploading ran inside the chat screen, so leaving the chat cancelled it and the
+  cancellation was shown as an error. Messages now send from the app's own background scope (leaving never cancels them) and no screen shows
+  cancellation as an error any more (`toastErr`).
+- Chat stuck on grey skeleton bubbles: the chat waited for the server (slow while Render wakes up) before showing anything. It now shows what's
+  on the phone instantly and refreshes in the background; the header says *connecting…* while the server is unreachable.
+- Contact info: the **Video** button wrapped letter by letter — Message · Audio · Video are now equal-width tiles.
+- Explore: images that can't be loaded show an "image unavailable" mark instead of a blank grey box. (Blank posts usually mean the files are gone
+  from the server: Render's free disk is wiped on every restart — see the note in `server/server.js`.)
+
+**Wallpapers (same system as the web app)** — `ui/Wallpaper.kt`
+- Global default (Settings → Chats → Default wallpaper) + per-chat override with **Use default** (chat ⋮ → Wallpaper).
+- Every chat now starts with the **WispChat doodle pattern** (theme-aware, drawn on the phone). Also: Plain, Doodle grid, Midnight, Emerald Haze,
+  Violet Dusk, Ember, Slate, six solid colours, and **your own photo** (with a dim slider). A *Doodles* switch adds the pattern over colour wallpapers.
+
+**Offline: everything waits and is replayed in order** — `data/Pending.kt`, `data/SyncWorker.kt`
+- Anything done while the server can't be reached (no internet *or* server down / asleep) is applied on the phone straight away and queued:
+  reactions, edits, delete for me / for everyone, mark read, mute / pin / archive, folders, clear / delete chat, block, profile name / about / photo,
+  status text / photo / video posts, status views / reactions / deletes, post likes, new posts, friend requests.
+- When the server answers again the queue is replayed **one by one, oldest first** (messages keep their own outbox). A WorkManager job retries in
+  the background even if the app is closed. Chat list and chat show "N pending" with a Retry button.
+
+**Status expires after 24 h even offline** — every slide carries `expiresAt` (server sends it now; otherwise createdAt + 24 h) and the phone removes it the
+moment it turns 24 h old, from the screen and from the on-device cache.
+
+**Icons** — Rounded icon set throughout; the bottom bar uses **outlined icons normally and filled icons when active** (WhatsApp-style), with labels and a pill.
+
+**Calls that behave like phone calls** — `call/*`
+- Fixed: an incoming call while the app was **open** never rang (nothing showed it). It now opens the full-screen answer page.
+- Rings with the phone's own ringtone + vibration (respects silent / vibrate), caller hears a ring-back tone ("Ringing…"), busy / ended tones,
+  short vibration on connect, missed-call notification with **Call back**.
+- **Custom call notification**: caller photo, "WispChat voice/video call · end-to-end encrypted", Answer / Decline, full screen over the lock screen,
+  run from a `phoneCall` foreground service so it keeps ringing even if the app was closed. Ongoing call notification has photo, timer, **Mute · Speaker · Hang up**.
+- Audio like the phone app: audio focus (music pauses), earpiece / speaker / Bluetooth / wired headset routing that follows headsets being plugged in,
+  proximity sensor turns the screen off at your ear.
+- New call screens: pulsing caller photo, Decline · Message · Answer, draggable self-view, auto-hiding video controls, audio-output picker,
+  minimise (Back) keeps the call running.
+- Settings → Notifications → Calls: "Allow full-screen incoming calls" shortcut (Android 14+ asks for it).
+
+**Server**: status items include `expiresAt`; call pushes include `callerAvatar` (short URLs only) and `callerColor`.
+
+**Not verified on a device** (no Android SDK / Maven access in this environment): every Kotlin file passed a parser check with the Kotlin 2.0 compiler,
+but the project wasn't built. Build with Android Studio, then test: call with the app open / closed / screen locked, offline actions → back online.
+
 # WispChat — update 3 (stability, notifications, calls, new identity)
 
 **Renamed to WispChat** (user-facing; the Android package id stays `com.wispchat.app` so updates/installs keep working). New icon-only logo, launcher/splash/status-bar/favicon assets regenerated, icon-led sign-in/welcome/bottom-nav, refreshed theme (`styles/theme.css`).

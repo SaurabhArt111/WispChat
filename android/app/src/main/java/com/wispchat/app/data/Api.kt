@@ -29,6 +29,10 @@ class Api(private val store: Store, counter: okhttp3.Interceptor? = null) {
 
     private val json = "application/json; charset=utf-8".toMediaType()
 
+    /** Told whether the server just answered (true) or couldn't be reached (false) — drives the offline queue. */
+    @Volatile var onReachable: ((Boolean) -> Unit)? = null
+    private fun reached(ok: Boolean) { try { onReachable?.invoke(ok) } catch (_: Exception) {} }
+
     fun absolute(path: String) = if (path.startsWith("http")) path else base + path
 
     private fun builder(path: String): Request.Builder =
@@ -45,14 +49,15 @@ class Api(private val store: Store, counter: okhttp3.Interceptor? = null) {
                     http.newCall(req).execute().use { res ->
                         val text = res.body?.string().orEmpty()
                         val obj = try { if (text.isBlank()) JSONObject() else JSONObject(text) } catch (e: Exception) { JSONObject() }
-                        if (res.isSuccessful) return@withContext obj
                         val transient = res.code in intArrayOf(408, 429, 502, 503, 504)
+                        reached(!transient)
+                        if (res.isSuccessful) return@withContext obj
                         throw ApiException(res.code, obj.optString("message", "Request failed (${res.code})"), transient)
                     }
                 } catch (e: ApiException) {
                     if (!e.transient || attempt >= retries) throw e
                 } catch (e: IOException) {
-                    if (attempt >= retries) throw ApiException(0, "Can't reach the server. Check your connection.", true)
+                    if (attempt >= retries) { reached(false); throw ApiException(0, "Can't reach the server. Check your connection.", true) }
                 }
                 delay(longArrayOf(1500, 3000, 6000, 10000)[minOf(attempt, 3)])
                 attempt++
@@ -73,9 +78,12 @@ class Api(private val store: Store, counter: okhttp3.Interceptor? = null) {
             val meta = encMeta.joinToString(prefix = "[", postfix = "]") { if (it == null) "null" else "{\"iv\":\"$it\"}" }
             mp.addFormDataPart("encMeta", meta)
             val req = builder("/messages/upload/media").post(mp.build()).build()
-            http.newCall(req).execute().use { res ->
+            val call = try { http.newCall(req).execute() } catch (e: IOException) { reached(false); throw ApiException(0, "Can't reach the server. Check your connection.", true) }
+            call.use { res ->
                 val text = res.body?.string().orEmpty()
-                if (!res.isSuccessful) throw ApiException(res.code, "Upload failed (${res.code})")
+                val transient = res.code in intArrayOf(408, 429, 502, 503, 504)
+                reached(!transient)
+                if (!res.isSuccessful) throw ApiException(res.code, "Upload failed (${res.code})", transient)
                 val arr = JSONObject(text).optJSONArray("attachments") ?: return@use emptyList()
                 (0 until arr.length()).map { Attachment.from(arr.getJSONObject(it)) }
             }
@@ -88,10 +96,13 @@ class Api(private val store: Store, counter: okhttp3.Interceptor? = null) {
             fields.forEach { (k, v) -> mp.addFormDataPart(k, v) }
             file?.let { (name, mime, bytes) -> mp.addFormDataPart(fileField, name, bytes.toRequestBody(mime.toMediaType())) }
             val req = builder(path).method(method, mp.build()).build()
-            http.newCall(req).execute().use { res ->
+            val call = try { http.newCall(req).execute() } catch (e: IOException) { reached(false); throw ApiException(0, "Can't reach the server. Check your connection.", true) }
+            call.use { res ->
                 val text = res.body?.string().orEmpty()
                 val obj = try { if (text.isBlank()) JSONObject() else JSONObject(text) } catch (e: Exception) { JSONObject() }
-                if (!res.isSuccessful) throw ApiException(res.code, obj.optString("message", "Request failed (${res.code})"), res.code in intArrayOf(408, 429, 502, 503, 504))
+                val transient = res.code in intArrayOf(408, 429, 502, 503, 504)
+                reached(!transient)
+                if (!res.isSuccessful) throw ApiException(res.code, obj.optString("message", "Request failed (${res.code})"), transient)
                 obj
             }
         }
