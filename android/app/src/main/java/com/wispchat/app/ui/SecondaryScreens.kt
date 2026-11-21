@@ -244,6 +244,7 @@ fun NewGroupScreen(nav: Nav) {
 
 @Composable
 fun ContactInfoScreen(convId: String, nav: Nav) {
+    var photoOpen by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val repo = ctx.repo
     val social = repo.social
@@ -265,7 +266,8 @@ fun ContactInfoScreen(convId: String, nav: Nav) {
         WispTopBar("Contact info", onBack = { nav.pop() })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                UserAvatar(other, 110.dp)
+                Box(Modifier.clip(CircleShape).clickable { photoOpen = true }) { UserAvatar(other, 110.dp) }
+                if (photoOpen) ProfilePhotoViewer(other.displayName, other.avatar, other.avatarColor) { photoOpen = false }
                 Text(other.displayName, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
                 Text("@${other.username}", color = wc.dim)
                 Text(if (online) "online" else formatLastSeen(lastSeen), color = if (online) MaterialTheme.colorScheme.primary else wc.dim, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
@@ -318,6 +320,7 @@ private fun InfoSwitch(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 
 @Composable
 fun GroupInfoScreen(convId: String, nav: Nav) {
+    var photoOpen by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val repo = ctx.repo
     val social = repo.social
@@ -353,7 +356,8 @@ fun GroupInfoScreen(convId: String, nav: Nav) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.then(if (amAdmin) Modifier.clickable { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } else Modifier)) {
-                    Avatar(conv.name.ifEmpty { "G" }, "#64748b", 110.dp, url = conv.avatar)
+                    Box(Modifier.clip(CircleShape).clickable { photoOpen = true }) { Avatar(conv.name.ifEmpty { "G" }, "#64748b", 110.dp, url = conv.avatar) }
+                    if (photoOpen) ProfilePhotoViewer(conv.name.ifEmpty { "Group" }, conv.avatar, "#64748b") { photoOpen = false }
                     if (amAdmin) Box(Modifier.align(Alignment.BottomEnd).size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.CameraAlt, "Photo", Modifier.size(18.dp), tint = WispInk) }
                 }
                 if (editing) {

@@ -176,10 +176,13 @@ private fun AccountPage(onBack: () -> Unit) {
 
 @Composable
 private fun PrivacyPage(onBack: () -> Unit, openBlocked: () -> Unit) = PageScaffold("Privacy", onBack) {
+    val st = LocalContext.current.repo.settings
+    val secure by st.screenSecurity.collectAsState()
     SectionLabel("Who can reach me")
     Item(Icons.Outlined.Block, "Blocked accounts", "People you've blocked", onClick = openBlocked)
     SectionLabel("Protection")
     Item(Icons.Outlined.Lock, "End-to-end encryption", "Always on for chats where everyone has a key. Downloaded media is stored encrypted on this phone.")
+    SwitchItem(Icons.Outlined.Screenshot, "Screen security", "Block screenshots and black out screen recordings of WispChat", secure) { st.setScreenSecurity(it) }
 }
 
 @Composable

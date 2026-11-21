@@ -174,7 +174,10 @@ fun MessageBubble(
     m: Message, mine: Boolean, showName: Boolean, selected: Boolean, highlighted: Boolean, selecting: Boolean,
     onOpenMedia: (Message, Attachment) -> Unit, onJumpTo: (String) -> Unit, onReact: (Message, String) -> Unit,
     onRetry: () -> Unit, onReply: () -> Unit, onLong: () -> Unit, onTap: () -> Unit, modifier: Modifier = Modifier,
+    onDoubleTap: () -> Unit = {},
 ) {
+    // Double-tap anywhere on a message (text OR photo) = quick reactions; long-press anywhere = menu.
+    val double: () -> Unit = { if (!selecting && !m.deleted && m.sendState == 0) onDoubleTap() }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val off = remember { Animatable(0f) }
@@ -191,7 +194,7 @@ fun MessageBubble(
             // the whole row (not just the bubble) selects / toggles selection
             .combinedClickable(
                 indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                onClick = { if (selecting) onTap() }, onLongClick = onLong,
+                onClick = { if (selecting) onTap() }, onLongClick = onLong, onDoubleClick = double,
             )
             .then(if (canReply) Modifier.pointerInput(m.id) {
                 detectHorizontalDragGestures(
@@ -220,10 +223,10 @@ fun MessageBubble(
                 val sticker = !m.deleted && m.attachments.size == 1 && isStickerAttachment(m.attachments[0]) && m.text.isBlank() && m.replyTo == null && m.statusReply == null
                 if (jumbo in 1..3 || sticker) {
                     // WhatsApp-style: 1–3 emoji (or a sticker) are shown big, with NO bubble behind them — just a small time pill.
-                    Column(Modifier.combinedClickable(onClick = { if (m.sendState == 2 && !selecting) onRetry() else onTap() }, onLongClick = onLong),
+                    Column(Modifier.combinedClickable(onClick = { if (m.sendState == 2 && !selecting) onRetry() else onTap() }, onLongClick = onLong, onDoubleClick = double),
                         horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                         if (showName && !mine) Text(m.sender?.displayName.orEmpty(), color = senderColor(m.sender?.id.orEmpty()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 4.dp))
-                        if (sticker) MediaCell(m, m.attachments[0], Modifier.size(164.dp), onOpenMedia, bare = true)
+                        if (sticker) MediaCell(m, m.attachments[0], Modifier.size(164.dp), onOpenMedia, bare = true, onLong = onLong, onDouble = double, selecting = selecting, onTapSelecting = onTap)
                         else Text(m.text.trim(), fontSize = when (jumbo) { 1 -> 58.sp; 2 -> 46.sp; else -> 38.sp }, lineHeight = when (jumbo) { 1 -> 68.sp; 2 -> 56.sp; else -> 48.sp },
                             modifier = Modifier.padding(horizontal = 2.dp))
                         Row(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(10.dp)).background(if (mine) wc.bubbleMine else androidx.compose.ui.graphics.SolidColor(wc.bubbleTheirs)).padding(horizontal = 8.dp, vertical = 2.dp),
@@ -233,7 +236,7 @@ fun MessageBubble(
                 Column(
                     Modifier.widthIn(max = 310.dp).clip(shape)
                         .then(if (mine) Modifier.background(wc.bubbleMine) else Modifier.background(wc.bubbleTheirs))
-                        .combinedClickable(onClick = { if (m.sendState == 2 && !selecting) onRetry() else onTap() }, onLongClick = onLong)
+                        .combinedClickable(onClick = { if (m.sendState == 2 && !selecting) onRetry() else onTap() }, onLongClick = onLong, onDoubleClick = double)
                         .padding(horizontal = 6.dp, vertical = 5.dp),
                 ) {
                     if (showName && !mine) Text(m.sender?.displayName.orEmpty(), color = senderColor(m.sender?.id.orEmpty()), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp))
@@ -243,7 +246,7 @@ fun MessageBubble(
                     }
                     m.replyTo?.let { r -> ReplyQuote(r, mine, ink) { onJumpTo(r.id) } }
                     m.statusReply?.let { StatusReplyCard(it, ink) }
-                    if (!m.deleted && m.attachments.isNotEmpty()) AttachmentsBlock(m, mine, ink, onOpenMedia)
+                    if (!m.deleted && m.attachments.isNotEmpty()) AttachmentsBlock(m, mine, ink, onOpenMedia, Gestures(onLong, double, selecting, onTap))
                     val text = m.text
                     when {
                         m.deleted -> Row(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -381,7 +384,7 @@ private fun LinkPreviewCard(url: String, ink: Color) {
 // ================================================================================================ attachments
 
 @Composable
-private fun AttachmentsBlock(m: Message, mine: Boolean, ink: Color, onOpen: (Message, Attachment) -> Unit) {
+private fun AttachmentsBlock(m: Message, mine: Boolean, ink: Color, onOpen: (Message, Attachment) -> Unit, g: Gestures) {
     val visual = m.attachments.filter { it.kind == "image" || it.kind == "video" }
     val others = m.attachments.filter { it.kind != "image" && it.kind != "video" }
     if (visual.isNotEmpty()) {
@@ -390,25 +393,31 @@ private fun AttachmentsBlock(m: Message, mine: Boolean, ink: Color, onOpen: (Mes
             1 -> {
                 val a = visual[0]
                 val ratio = if (a.width > 0 && a.height > 0) (a.width.toFloat() / a.height).coerceIn(0.72f, 1.5f) else 1f
-                MediaCell(m, a, Modifier.width(250.dp).aspectRatio(ratio), onOpen)
+                MediaCell(m, a, Modifier.width(250.dp).aspectRatio(ratio), onOpen, onLong = g.long, onDouble = g.double, selecting = g.selecting, onTapSelecting = g.tap)
             }
             else -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 visual.take(4).chunked(2).forEachIndexed { r, row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         row.forEachIndexed { c, a ->
                             val extra = if (r == 1 && c == 1 && visual.size > 4) visual.size - 4 else 0
-                            MediaCell(m, a, Modifier.size(cell), onOpen, extra)
+                            MediaCell(m, a, Modifier.size(cell), onOpen, extra, onLong = g.long, onDouble = g.double, selecting = g.selecting, onTapSelecting = g.tap)
                         }
                     }
                 }
             }
         }
     }
-    others.forEach { a -> if (a.kind == "audio") AudioRow(m, a, mine, ink) else FileRow(m, a, ink) }
+    others.forEach { a -> if (a.kind == "audio") AudioRow(m, a, mine, ink) else FileRow(m, a, ink, g) }
 }
 
+/** The bubble's gestures, handed to photos / files inside it so they behave exactly like the rest of the message. */
+class Gestures(val long: () -> Unit, val double: () -> Unit, val selecting: Boolean, val tap: () -> Unit)
+
 @Composable
-fun MediaCell(m: Message, a: Attachment, modifier: Modifier, onOpen: (Message, Attachment) -> Unit, extra: Int = 0, bare: Boolean = false) {
+fun MediaCell(
+    m: Message, a: Attachment, modifier: Modifier, onOpen: (Message, Attachment) -> Unit, extra: Int = 0, bare: Boolean = false,
+    onLong: (() -> Unit)? = null, onDouble: (() -> Unit)? = null, selecting: Boolean = false, onTapSelecting: () -> Unit = {},
+) {
     val repo = LocalContext.current.repo
     val scope = rememberCoroutineScope()
     val tick by repo.mediaTick.collectAsState()
@@ -421,9 +430,12 @@ fun MediaCell(m: Message, a: Attachment, modifier: Modifier, onOpen: (Message, A
     val gifBytes by produceState<ByteArray?>(null, a.url, downloaded, gif) {
         if (gif && downloaded) value = try { repo.attachmentBytes(m, a) } catch (_: Exception) { null }
     }
-    Box(modifier.clip(RoundedCornerShape(12.dp)).then(if (bare) Modifier else Modifier.background(Color(0xFF111820))).clickable(enabled = !busy) {
-        if (downloaded) onOpen(m, a) else { busy = true; failed = false; scope.launch { try { repo.downloadNow(m, a) } catch (_: Exception) { failed = true }; busy = false } }
-    }, Alignment.Center) {
+    Box(modifier.clip(RoundedCornerShape(12.dp)).then(if (bare) Modifier else Modifier.background(Color(0xFF111820)))
+        // long-press on the photo opens the same message menu as the rest of the bubble (it used to do nothing)
+        .combinedClickable(enabled = !busy, onLongClick = onLong, onDoubleClick = onDouble, onClick = {
+            if (selecting) onTapSelecting()
+            else if (downloaded) onOpen(m, a) else { busy = true; failed = false; scope.launch { try { repo.downloadNow(m, a) } catch (_: Exception) { failed = true }; busy = false } }
+        }), Alignment.Center) {
         bmp?.let { Image(it.asImageBitmap(), a.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         gifBytes?.let { coil.compose.AsyncImage(model = it, contentDescription = a.name, modifier = Modifier.fillMaxSize(), contentScale = if (bare) ContentScale.Fit else ContentScale.Crop) }
         if (bmp == null && gifBytes == null && downloaded && a.kind == "image") CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -442,14 +454,16 @@ fun MediaCell(m: Message, a: Attachment, modifier: Modifier, onOpen: (Message, A
 }
 
 @Composable
-private fun FileRow(m: Message, a: Attachment, ink: Color) {
+private fun FileRow(m: Message, a: Attachment, ink: Color, g: Gestures? = null) {
     val ctx = LocalContext.current
     val repo = ctx.repo
     val scope = rememberCoroutineScope()
     val tick by repo.mediaTick.collectAsState()
     val downloaded = remember(tick, a.url) { repo.isDownloaded(a) }
     var busy by remember { mutableStateOf(false) }
-    Row(Modifier.padding(bottom = 3.dp).widthIn(min = 200.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.16f)).clickable(enabled = !busy) {
+    Row(Modifier.padding(bottom = 3.dp).widthIn(min = 200.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.16f))
+        .combinedClickable(enabled = !busy, onLongClick = g?.long, onDoubleClick = g?.double) {
+        if (g?.selecting == true) { g.tap(); return@combinedClickable }
         busy = true
         scope.launch {
             try {

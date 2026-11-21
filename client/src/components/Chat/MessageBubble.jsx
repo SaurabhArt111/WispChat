@@ -427,7 +427,11 @@ function MessageBubble({
         <div
           className={`bubble ${isMine ? "mine" : "theirs"} ${
             message.pending ? "pending" : ""
-          } ${message.failed ? "failed" : ""}`}
+          } ${message.failed ? "failed" : ""} ${
+            message.attachments?.length === 1 && /^sticker/i.test(message.attachments[0]?.name || "") && !decryptedText?.trim() && !message.replyTo
+              ? "bubble-sticker"
+              : ""
+          }`}
         >
           {!isMine && isGroup && !grouped && (
             <div className="bubble-sender" style={{ color: message.sender?.avatarColor || "var(--wisp)" }}>

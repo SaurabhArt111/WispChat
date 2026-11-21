@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.wispchat.app.calls
+import com.wispchat.app.repo
 import com.wispchat.app.ui.Sheet
 import com.wispchat.app.ui.WispTheme
 import kotlinx.coroutines.delay
@@ -87,6 +88,7 @@ class CallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.wispchat.app.ui.MainActivity.applySecure(this, applicationContext.repo.settings.screenSecurity.value)
         if (android.os.Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
         else @Suppress("DEPRECATION") window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

@@ -176,17 +176,23 @@ private fun BottomNav(current: Int, unread: Int, unseenStatus: Boolean, me: com.
     }
 }
 
-/** The Status tab icon: a dashed ring with a dot (outlined) or a solid ring with a full centre (filled, when active). */
+/**
+ * The Status tab icon (WhatsApp "Updates" style): a ring that is solid for most of the way round and breaks into
+ * three short dashes at the top-left, with a dot in the middle. Active = thicker ring and a full centre.
+ */
 @Composable
 fun StatusRingIcon(tint: Color, size: androidx.compose.ui.unit.Dp = 25.dp, filled: Boolean = false) {
     Canvas(Modifier.size(size)) {
-        val w = (if (filled) 2.4.dp else 1.9.dp).toPx()
+        val w = (if (filled) 2.3.dp else 1.8.dp).toPx()
         val r = this.size.minDimension / 2 - w
-        val dashes = if (filled) 1 else 10
-        val sweep = 360f / dashes
-        if (filled) drawCircle(tint, r, center, style = Stroke(w))
-        else for (k in 0 until dashes) drawArc(tint, k * sweep + 4f, sweep - 12f, false, Offset(w, w), Size(r * 2, r * 2), style = Stroke(w, cap = StrokeCap.Round))
-        drawCircle(tint, r * (if (filled) 0.58f else 0.3f), center)
+        val tl = Offset(center.x - r, center.y - r)
+        val box = Size(r * 2, r * 2)
+        // solid part: from 3 o'clock round the bottom up to ~10 o'clock
+        drawArc(tint, -45f, 270f, false, tl, box, style = Stroke(w, cap = StrokeCap.Round))
+        // dashed part across the top-left
+        for (k in 0 until 3) drawArc(tint, 232f + k * 30f, 14f, false, tl, box, style = Stroke(w, cap = StrokeCap.Round))
+        if (filled) drawCircle(tint, r * 0.56f, center)
+        else drawCircle(tint, r * 0.56f, center, style = Stroke(w))
     }
 }
 

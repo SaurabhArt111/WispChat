@@ -2220,3 +2220,36 @@ audio.media-failed {
     background-position: -200% 0;
   }
 }
+/* ---- GIF / sticker masonry (replaces the squashed grid) ---- */
+.gif-tab { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.gif-masonry {
+  flex: 1; min-height: 0; overflow-y: auto;
+  column-count: 3; column-gap: 6px;
+  padding: 4px 12px 12px;
+  overscroll-behavior: contain;
+}
+.gif-tab.is-sticker .gif-masonry { column-count: 4; }
+.gif-tile {
+  display: block; width: 100%; height: auto; margin: 0 0 6px; padding: 0;
+  border: none; border-radius: 10px; overflow: hidden; cursor: pointer;
+  break-inside: avoid;
+  background: var(--surface-3) center / cover no-repeat;
+  transition: transform 120ms ease, filter 120ms;
+}
+.wa-panel .gif-tile { background-color: #2a2d2e; }
+.gif-tab.is-sticker .gif-tile, .wa-panel .gif-tab.is-sticker .gif-tile { background: transparent; }
+.gif-tile:hover { filter: brightness(1.08); }
+.gif-tile:active { transform: scale(0.95); }
+.gif-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gif-tab.is-sticker .gif-tile img { object-fit: contain; }
+.gif-masonry .gif-skel { width: 100%; height: auto; margin: 0 0 6px; break-inside: avoid; border-radius: 10px; }
+.gif-masonry .emoji-panel-hint { column-span: all; text-align: center; }
+.wa-panel .gif-tab .gif-attrib { display: block; }
+@media (max-width: 420px) { .gif-masonry { column-count: 2; } .gif-tab.is-sticker .gif-masonry { column-count: 3; } }
+
+/* stickers in chat: no bubble, just the sticker (like WhatsApp) */
+.bubble.bubble-sticker { background: transparent !important; box-shadow: none !important; padding: 0 !important; border: none !important; }
+.bubble.bubble-sticker .image-grid, .bubble.bubble-sticker .image-grid-item { background: transparent !important; }
+.bubble.bubble-sticker .image-grid { width: 160px; max-width: 160px; }
+.bubble.bubble-sticker .image-grid-item img { object-fit: contain; }
+.bubble.bubble-sticker .bubble-meta { background: rgba(0,0,0,0.45); color: #fff; border-radius: 10px; padding: 1px 8px; width: fit-content; margin-left: auto; }

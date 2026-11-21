@@ -102,7 +102,7 @@ fun ExploreTab(nav: Nav) {
         Column(Modifier.fillMaxSize()) {
             WispTopBar("Explore")
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp), singleLine = true, shape = RoundedCornerShape(26.dp),
-                placeholder = { Text("Search users") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                placeholder = { Text("Search people by @username or name") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search))
             if (query.trim().length >= 2) {

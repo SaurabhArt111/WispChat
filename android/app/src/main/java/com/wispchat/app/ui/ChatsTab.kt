@@ -31,6 +31,7 @@ private enum class ChatFilter { ALL, UNREAD, GROUPS }
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatsTab(nav: Nav) {
+    var photoFor by remember { mutableStateOf<com.wispchat.app.data.Conversation?>(null) }
     val ctx = LocalContext.current
     val repo = ctx.repo
     val scope = rememberCoroutineScope()
@@ -185,6 +186,7 @@ fun ChatsTab(nav: Nav) {
                                 onClick = { if (selecting) selected = if (c.id in selected) selected - c.id else selected + c.id else nav.openChat(c.id) },
                                 onLongClick = { selected = if (c.id in selected) selected - c.id else selected + c.id },
                             ),
+                            onAvatarClick = if (selecting) null else ({ photoFor = c }),
                         )
                     }
                 }
@@ -195,6 +197,7 @@ fun ChatsTab(nav: Nav) {
         }
     }
 
+    photoFor?.let { c -> ProfilePopup(c, myId, nav) { photoFor = null } }
     if (menu) Sheet(onDismiss = { menu = false }) {
         SheetItem(Icons.Rounded.GroupAdd, "New group", { menu = false; nav.push(Route.NewGroup) })
         SheetItem(Icons.Rounded.Group, "Groups", { menu = false; nav.push(Route.Groups) })
@@ -217,7 +220,7 @@ fun ChatsTab(nav: Nav) {
 @Composable
 fun ConversationRow(
     c: Conversation, myId: String, preview: String, typing: Boolean, draft: String, online: Boolean,
-    selected: Boolean = false, modifier: Modifier = Modifier,
+    selected: Boolean = false, modifier: Modifier = Modifier, onAvatarClick: (() -> Unit)? = null,
 ) {
     val title = c.title(myId)
     val other = c.other(myId)
@@ -226,7 +229,7 @@ fun ConversationRow(
         modifier.fillMaxWidth().background(if (selected) wc.wisp.copy(alpha = 0.22f) else Color.Transparent).padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
+        Box(if (onAvatarClick != null) Modifier.clip(CircleShape).clickable(onClick = onAvatarClick) else Modifier) {
             if (c.isGroup) Avatar(title, "#64748b", 52.dp, url = c.avatar) else UserAvatar(other, 52.dp)
             if (online) OnlineDot(Modifier.align(Alignment.BottomEnd))
             if (selected) Box(Modifier.align(Alignment.BottomEnd).size(20.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), Alignment.Center) { Icon(Icons.Rounded.Check, null, Modifier.size(14.dp), tint = WispInk) }

@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -96,6 +97,9 @@ private enum class PanelTab { EMOJI, GIF, STICKER }
 
 private data class Gif(val id: String, val preview: String, val url: String, val w: Int, val h: Int)
 
+/** Results already fetched this session ("true|cats" → list): reopening a tab or query is instant. */
+private val GifMemory = LinkedHashMap<String, List<Gif>>()
+
 // ================================================================================================ the panel
 
 /**
@@ -131,7 +135,12 @@ fun ExpressionPanel(onEmoji: (String) -> Unit, onBackspace: () -> Unit, onGif: (
         )
     }
 
-    Column(Modifier.fillMaxWidth().height(with(density) { height.value.toDp() }).clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(wc.surface2)) {
+    // The height is read in the LAYOUT phase only, so dragging the panel doesn't recompose the chat on every frame.
+    Column(Modifier.fillMaxWidth().layout { measurable, constraints ->
+        val h = height.value.toInt().coerceAtLeast(0)
+        val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+        layout(p.width, h) { p.place(0, 0) }
+    }.clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(wc.surface2)) {
         // grip
         Box(Modifier.fillMaxWidth().then(dragHandle).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
             scope.launch { height.animateTo(if (height.value < (minPx + maxPx) / 2) maxPx else minPx, spring(stiffness = 500f)) }
@@ -222,14 +231,19 @@ private fun GifGrid(stickers: Boolean, query: String, onPick: (String) -> Unit) 
     var problem by remember(stickers) { mutableStateOf<String?>(null) }
     val grid = rememberLazyStaggeredGridState()
     LaunchedEffect(stickers, query) {
-        loading = true; problem = null
-        if (query.isNotBlank()) delay(350)
+        problem = null
+        val cacheKey = "$stickers|${query.trim()}"
+        GifMemory[cacheKey]?.let { items = it; loading = false; return@LaunchedEffect }
+        loading = true
+        if (query.isNotBlank()) delay(300)
         try {
             val r = repo.api.get("/gifs?type=${if (stickers) "stickers" else "gifs"}&q=" + java.net.URLEncoder.encode(query.trim(), "UTF-8"))
             val arr = r.optJSONArray("items")
             items = (0 until (arr?.length() ?: 0)).mapNotNull { i -> arr!!.optJSONObject(i)?.let { o ->
                 Gif(o.optString("id"), o.optString("preview"), o.optString("url"), o.optInt("width", 200), o.optInt("height", 200)).takeIf { it.url.isNotEmpty() }
             } }
+            GifMemory[cacheKey] = items
+            if (GifMemory.size > 40) GifMemory.remove(GifMemory.keys.first())
             grid.scrollToItem(0)
         } catch (e: ApiException) {
             problem = if (e.status == 503) "GIFs and stickers need a free GIPHY key on the server: set GIPHY_API_KEY in server/.env and restart it."
@@ -241,7 +255,7 @@ private fun GifGrid(stickers: Boolean, query: String, onPick: (String) -> Unit) 
         problem != null -> Box(Modifier.fillMaxSize().padding(28.dp), Alignment.Center) { Text(problem!!, color = wc.dim, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
         loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp) }
         items.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Nothing found", color = wc.dim) }
-        else -> LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(if (stickers) 4 else 2), Modifier.fillMaxSize(), grid,
+        else -> LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(if (stickers) 4 else 3), Modifier.fillMaxSize(), grid,
             contentPadding = PaddingValues(6.dp), verticalItemSpacing = 6.dp, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(items, key = { it.id }) { g ->
                 AsyncImage(model = g.preview.ifEmpty { g.url }, contentDescription = null,

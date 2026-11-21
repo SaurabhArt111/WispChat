@@ -16,8 +16,8 @@ android {
         applicationId = "com.wispchat.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
         val backend = (project.findProperty("WISP_BACKEND") as String? ?: "https://wispchat-bkjl.onrender.com").trimEnd('/')
         buildConfigField("String", "BACKEND_URL", "\"$backend\"")
     }
@@ -56,6 +56,13 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-gif:2.7.0")    // animated GIFs / stickers
     implementation("io.coil-kt:coil-video:2.7.0")  // video thumbnails in the camera's gallery strip
+    // videos are re-encoded with the phone's hardware encoder before sending (720p H.264)
+    val media3 = "1.5.1"
+    implementation("androidx.media3:media3-transformer:$media3")
+    implementation("androidx.media3:media3-effect:$media3")
+    implementation("androidx.media3:media3-common:$media3")
+    // faster first launch / scrolling: ships ahead-of-time compiled code profiles
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     // in-app camera (WhatsApp-style: photo / video, recents strip, swipe up for the gallery)
     val camerax = "1.4.1"
     implementation("androidx.camera:camera-core:$camerax")
@@ -69,4 +76,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+composeCompiler {
+    // immutable models → stable → Compose skips unchanged rows (see compose_stability.conf)
+    stabilityConfigurationFile = project.layout.projectDirectory.file("compose_stability.conf")
 }

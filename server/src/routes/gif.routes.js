@@ -13,15 +13,18 @@ const TTL_MS = 10 * 60 * 1000;
 
 function shape(g) {
   const img = g.images || {};
-  const small = img.fixed_width || img.fixed_width_downsampled || img.downsized || img.original || {};
-  const full = img.downsized_medium || img.downsized || img.original || small;
+  // tiny animated WebP for the picker grid (~100 px wide, a few KB → loads fast)
+  const small = img.fixed_width_small || img.fixed_width_downsampled || img.fixed_width || img.original || {};
+  // what actually gets sent: capped at ~2 MB so sending is quick too
+  const send = img.downsized || img.fixed_width || img.original || small;
   return {
     id: g.id,
     title: g.title || "",
     preview: small.webp || small.url || "",
-    url: full.url || small.url || "",
-    width: Number(small.width) || 200,
-    height: Number(small.height) || 200,
+    still: img.fixed_width_small_still?.url || "",
+    url: send.url || small.url || "",
+    width: Number(small.width) || 100,
+    height: Number(small.height) || 100,
   };
 }
 
@@ -35,6 +38,7 @@ router.get("/", async (req, res) => {
   const url = q
     ? `https://api.giphy.com/v1/${type}/search?api_key=${key}&q=${encodeURIComponent(q)}&limit=30&offset=${offset}&rating=pg-13`
     : `https://api.giphy.com/v1/${type}/trending?api_key=${key}&limit=30&offset=${offset}&rating=pg-13`;
+  res.set("Cache-Control", "private, max-age=600");
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL_MS) return res.json(hit.body);
   try {

@@ -40,10 +40,12 @@ class MainActivity : ComponentActivity() {
         repo.restore()
         setContent {
             WispTheme {
-                val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-                LaunchedEffect(Unit) {
-                    if (Build.VERSION.SDK_INT >= 33) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+                val me by repo.me.collectAsState()
+                // Screenshots / screen recordings of WispChat come out black (Settings → Privacy → Screen security).
+                val secure by repo.settings.screenSecurity.collectAsState()
+                LaunchedEffect(secure) { applySecure(this@MainActivity, secure) }
+                // after sign-in: every permission the app needs, asked one by one with a reason
+                if (me != null) PermissionOnboarding()
                 Root(openConv, onConsumed = { openConv = null }, callBack = callBack, onCallBackDone = { callBack = null })
             }
         }
@@ -65,6 +67,11 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** FLAG_SECURE: blocks screenshots and makes screen recordings / recent-apps previews black. */
+        fun applySecure(a: android.app.Activity, on: Boolean) {
+            if (on) a.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            else a.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
         const val EXTRA_CONVERSATION = "conversationId"
         const val EXTRA_CALL_BACK = "callBack"
     }
@@ -140,6 +147,7 @@ private fun RouteContent(route: Route, nav: Nav) {
         Route.FriendRequests -> FriendRequestsScreen(nav)
         is Route.Person -> PersonScreen(route.user, nav)
         is Route.ContactInfo -> ContactInfoScreen(route.convId, nav)
+        is Route.CallInfo -> CallInfoScreen(route.convId, nav)
         is Route.GroupInfo -> GroupInfoScreen(route.convId, nav)
         is Route.StatusView -> StatusViewerScreen(route.userId, nav)
         Route.StatusText -> StatusTextEditor(nav)

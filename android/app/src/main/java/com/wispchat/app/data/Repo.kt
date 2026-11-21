@@ -523,17 +523,29 @@ class Repo(
     private fun kindOf(mime: String) = when { mime.startsWith("image/") -> "image"; mime.startsWith("video/") -> "video"; mime.startsWith("audio/") -> "audio"; else -> "file" }
 
     suspend fun sendAttachments(conv: Conversation, uris: List<Uri>, caption: String = "", replyTo: String? = null) {
-        val cr = ctx.contentResolver
-        val items = ArrayList<OutItem>()
-        for (u in uris) {
-            val mime = cr.getType(u) ?: "application/octet-stream"
-            val name = cr.query(u, null, null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null } ?: "file"
-            // Copy into private storage right away: the picker's Uri may stop working before we're back online.
-            val dest = File(outboxDir, UUID.randomUUID().toString())
-            withContext(Dispatchers.IO) { cr.openInputStream(u)?.use { i -> dest.outputStream().use { o -> i.copyTo(o) } } }
-            if (dest.length() > 0) items += OutItem(dest, name, mime, kindOf(mime))
-        }
-        enqueueMedia(conv, items, caption, replyTo)
+        // Runs in the app's scope: leaving the chat while a video is being encoded never cancels the send.
+        scope.launch {
+            val cr = ctx.contentResolver
+            val items = ArrayList<OutItem>()
+            for (u in uris) {
+                val mime = cr.getType(u) ?: "application/octet-stream"
+                var name = cr.query(u, null, null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else null } ?: "file"
+                // Copy into private storage right away: the picker's Uri may stop working before we're back online.
+                var dest = File(outboxDir, UUID.randomUUID().toString())
+                withContext(Dispatchers.IO) { cr.openInputStream(u)?.use { i -> dest.outputStream().use { o -> i.copyTo(o) } } }
+                if (dest.length() == 0L) continue
+                var outMime = mime
+                if (mime.startsWith("video/")) {
+                    // hardware re-encode (720p H.264) — much smaller, much faster to send
+                    com.wispchat.app.util.VideoEncoder.compress(ctx, dest)?.let { small ->
+                        dest.delete(); dest = small; outMime = "video/mp4"
+                        name = name.substringBeforeLast('.') + ".mp4"
+                    }
+                }
+                items += OutItem(dest, name, outMime, kindOf(outMime))
+            }
+            enqueueMedia(conv, items, caption, replyTo)
+        }.join()
     }
 
     /** Sends a GIF / sticker picked from the GIF panel: downloaded once, then sent (end-to-end encrypted) like any photo. */
@@ -659,16 +671,29 @@ class Repo(
         if (a.url.startsWith("outbox:")) return withContext(Dispatchers.IO) { File(a.url.removePrefix("outbox:")).readBytes() }
         val raw = media.bytes(m.conversationId, m.id, a)
         _mediaTick.update { it + 1 }
-        maybeSaveToGallery(a, media.plain(raw, a, m.mk))
-        return media.plain(raw, a, m.mk)
+        val plain = media.plain(raw, a, m.mk)
+        maybeSaveToGallery(m, a, plain)
+        return plain
     }
 
     fun isDownloaded(a: Attachment) = a.url.startsWith("outbox:") || media.isCached(a.url)
 
-    private suspend fun maybeSaveToGallery(a: Attachment, plain: ByteArray) {
+    private val savingToGallery = HashSet<String>()
+
+    /**
+     * "Save to gallery" (Settings → Storage): only photos / videos you RECEIVED go to the phone's gallery — not what you sent
+     * (you already have those), and never GIFs or stickers (they stay in WispChat's private storage, invisible to the gallery).
+     * Guarded so the same picture is never copied twice when it's shown in two places at once.
+     */
+    private suspend fun maybeSaveToGallery(m: Message, a: Attachment, plain: ByteArray) {
         if (!settings.saveToGallery.value || !(a.kind == "image" || a.kind == "video")) return
-        if (db.mediaRow(a.url)?.galleryUri != null) return
-        media.saveToDevice(a.url, a.name, a.mimeType, plain)
+        if (m.sender?.id == myId) return
+        if (a.mimeType.equals("image/gif", true) || a.name.endsWith(".gif", true) || a.name.startsWith("sticker", true)) return
+        if (!synchronized(savingToGallery) { savingToGallery.add(a.url) }) return
+        try {
+            if (db.mediaRow(a.url)?.galleryUri != null) return
+            media.saveToDevice(a.url, a.name, a.mimeType, plain)
+        } finally { synchronized(savingToGallery) { savingToGallery.remove(a.url) } }
     }
 
     /** Honours Settings → Storage and data → "Media auto-download" for the current kind of network. */

@@ -114,5 +114,10 @@ class Settings(context: Context) {
         get() = p.getLong("recv", 0)
         set(v) = p.edit().putLong("recv", v).apply()
 
+    /** Screen security: block screenshots and black out screen recordings (on by default). */
+    private val _secure = MutableStateFlow(p.getBoolean("screenSecurity", true))
+    val screenSecurity: StateFlow<Boolean> = _secure
+    fun setScreenSecurity(v: Boolean) { p.edit().putBoolean("screenSecurity", v).apply(); _secure.value = v }
+
     companion object { const val DEFAULT_WALLPAPER = "doodle" }
 }

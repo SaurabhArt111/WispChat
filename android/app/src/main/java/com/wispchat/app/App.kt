@@ -19,6 +19,10 @@ class App : Application(), coil.ImageLoaderFactory {
             add(coil.decode.VideoFrameDecoder.Factory())
         }
         .crossfade(true)
+        // bigger in-memory + on-disk image caches: avatars, GIF previews and thumbnails come back instantly
+        .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.25).build() }
+        .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("image_cache")).maxSizeBytes(150L * 1024 * 1024).build() }
+        .respectCacheHeaders(false)
         .build()
 
     companion object {

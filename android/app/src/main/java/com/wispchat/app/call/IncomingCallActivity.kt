@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wispchat.app.calls
+import com.wispchat.app.repo
 import com.wispchat.app.ui.MainActivity
 import com.wispchat.app.ui.WispTheme
 
@@ -59,6 +60,7 @@ class IncomingCallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.wispchat.app.ui.MainActivity.applySecure(this, applicationContext.repo.settings.screenSecurity.value)
         showOverLockScreen()
         handle(intent)
         setContent {

@@ -417,16 +417,13 @@ export default function Composer({
         const panel = (
           <EmojiPanel docked={isPhone}
             onEmoji={(emoji) => insertEmoji(emoji)}
-            onSticker={async (emoji) => {
-              // Stickers go out immediately as a big, bubble-less emoji.
-              setShowEmoji(false);
-              await onSend({ text: emoji, attachments: [], selfPreview: user });
-            }}
-            onGif={async (url, title) => {
+            onGif={async (url, title, sticker) => {
               try {
                 const blob = await (await fetch(url)).blob();
                 setShowEmoji(false);
-                onAttachFiles([new File([blob], `${(title || "gif").replace(/[^\w-]+/g, "_").slice(0, 40)}.gif`, { type: blob.type || "image/gif" })]);
+                const base = (title || "gif").replace(/[^\w-]+/g, "_").slice(0, 40);
+                // "sticker…" names are shown without a bubble on every device (web + Android)
+                onAttachFiles([new File([blob], `${sticker ? "sticker_" : ""}${base}.gif`, { type: blob.type || "image/gif" })]);
               } catch {
                 /* network error — leave the panel open so they can retry */
               }

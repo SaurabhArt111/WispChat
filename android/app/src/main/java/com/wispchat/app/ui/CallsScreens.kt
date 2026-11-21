@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -161,7 +162,7 @@ fun CallsTab(nav: Nav) {
                         item { SectionTitle("Recent") }
                         items(shown, key = { it.id }) { c ->
                             val name = c.peer?.displayName ?: c.convName.ifEmpty { "Unknown" }
-                            Row(Modifier.fillMaxWidth().combinedClickable(onClick = { callBack(c, c.kind) }, onLongClick = { actions = c }).padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().combinedClickable(onClick = { nav.push(Route.CallInfo(c.convId)) }, onLongClick = { actions = c }).padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (c.isGroup) Avatar(name, "#7c5cff", 48.dp, url = c.convAvatar) else UserAvatar(c.peer, 48.dp)
                                 Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                                     Text(name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (c.missed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
@@ -244,4 +245,72 @@ fun NewCallScreen(nav: Nav) {
             }
         }
     }
+}
+
+
+// ================================================================================================ Call info
+
+/** WhatsApp-style "Call info": photo, name, Message · Voice · Video · Info, and every call with this person / group by day. */
+@Composable
+fun CallInfoScreen(convId: String, nav: Nav) {
+    val ctx = LocalContext.current
+    val repo = ctx.repo
+    val calls by repo.social.calls.collectAsState()
+    val convs by repo.conversations.collectAsState()
+    val startCall = rememberCallStarter()
+    val list = remember(calls, convId) { calls.filter { it.convId == convId }.sortedByDescending { it.createdAt } }
+    val conv = convs.firstOrNull { it.id == convId }
+    val first = list.firstOrNull()
+    val peer = first?.peer ?: conv?.participants?.firstOrNull { it.id != repo.myId }
+    val isGroup = conv?.isGroup ?: first?.isGroup ?: false
+    val name = if (isGroup) (conv?.title(repo.myId) ?: first?.convName.orEmpty()) else peer?.displayName ?: first?.convName.orEmpty()
+    var photo by remember { mutableStateOf(false) }
+    val day = remember { java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()) }
+    val clock = remember { java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()) }
+
+    Column(Modifier.fillMaxSize()) {
+        WispTopBar("Call info", onBack = { nav.pop() })
+        LazyColumn(Modifier.fillMaxSize()) {
+            item {
+                Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.clip(CircleShape).clickable { photo = true }) {
+                        if (isGroup) Avatar(name, "#7c5cff", 120.dp, url = conv?.avatar ?: first?.convAvatar.orEmpty()) else UserAvatar(peer, 120.dp)
+                    }
+                    Text(name, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, start = 20.dp, end = 20.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ActionTile(Icons.Outlined.Chat, "Message", Modifier.weight(1f)) { nav.openChat(convId) }
+                        ActionTile(Icons.Outlined.Call, "Voice", Modifier.weight(1f)) { startCall({ repo.conversation(convId) ?: conv }, "audio") }
+                        ActionTile(Icons.Outlined.Videocam, "Video", Modifier.weight(1f)) { startCall({ repo.conversation(convId) ?: conv }, "video") }
+                        ActionTile(Icons.Outlined.Info, "Info", Modifier.weight(1f)) { nav.push(if (isGroup) Route.GroupInfo(convId) else Route.ContactInfo(convId)) }
+                    }
+                }
+                HorizontalDivider(color = wc.border)
+            }
+            if (list.isEmpty()) item { Text("No calls with ${name.ifEmpty { "them" }} on this phone yet.", color = wc.dim, modifier = Modifier.padding(20.dp)) }
+            var lastDay = ""
+            list.forEach { c ->
+                val d = day.format(java.util.Date(c.createdAt))
+                if (d != lastDay) { lastDay = d; item(key = "d$d") { Text(d, color = wc.dim, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp)) } }
+                item(key = c.id) {
+                    val what = if (c.kind == "video") "video" else "voice"
+                    val missed = c.missed
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (c.outgoing) Icons.Rounded.CallMade else if (missed) Icons.Rounded.CallMissed else Icons.Rounded.CallReceived, null,
+                            Modifier.size(22.dp), tint = if (missed) MaterialTheme.colorScheme.error else wc.dim)
+                        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                            Text((if (c.outgoing) "Outgoing" else if (missed) "Missed" else "Incoming") + " $what call", fontSize = 16.sp)
+                            Text(clock.format(java.util.Date(c.createdAt)), color = wc.dim, fontSize = 14.sp)
+                        }
+                        Text(when {
+                            c.durationSec > 0 -> formatDuration(c.durationSec)
+                            c.status == "declined" -> "Declined"
+                            missed && !c.outgoing -> "Missed"
+                            else -> "Not answered"
+                        }, color = wc.dim, fontSize = 14.sp)
+                    }
+                }
+            }
+        }
+    }
+    if (photo) ProfilePhotoViewer(name, if (isGroup) conv?.avatar ?: first?.convAvatar.orEmpty() else peer?.avatar.orEmpty(), if (isGroup) "#7c5cff" else peer?.avatarColor ?: "#6EE7B7") { photo = false }
 }

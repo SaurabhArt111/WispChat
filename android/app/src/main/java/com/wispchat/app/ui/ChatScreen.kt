@@ -34,6 +34,9 @@ import androidx.compose.material.icons.outlined.CameraAlt as OutlinedCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.animation.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
@@ -104,6 +107,8 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
     var selected by remember(convId) { mutableStateOf(setOf<String>()) }
     var menuFor by remember { mutableStateOf<Message?>(null) }
     var reactPickerFor by remember { mutableStateOf<Message?>(null) }
+    var quickReactFor by remember { mutableStateOf<Message?>(null) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var deleteFor by remember { mutableStateOf<List<Message>?>(null) }
     var forwardMsgs by remember { mutableStateOf<List<Message>?>(null) }
     var viewer by remember { mutableStateOf<Pair<List<MediaItem>, Int>?>(null) }
@@ -342,7 +347,9 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                 }
                 msgs.isEmpty() -> EmptyState(Icons.Rounded.Lock, "No messages yet", if (reachable) "Messages in this chat are end-to-end encrypted. Say hi 👋" else "Nothing saved on this phone yet. Messages you write now are sent when you're back online.")
                 else -> LazyColumn(Modifier.fillMaxSize(), listState, contentPadding = PaddingValues(vertical = 8.dp)) {
-                    items(rows, key = { when (it) { is ChatRow.Day -> "d${it.key}"; is ChatRow.Msg -> it.m.id } }) { row ->
+                    items(rows, key = { when (it) { is ChatRow.Day -> "d${it.key}"; is ChatRow.Msg -> it.m.id } },
+                        // lets the list recycle message rows with message rows (cheaper, smoother scrolling)
+                        contentType = { when (it) { is ChatRow.Day -> 0; is ChatRow.Msg -> if (it.m.isCall) 1 else if (it.m.attachments.isEmpty()) 2 else 3 } }) { row ->
                         when (row) {
                             is ChatRow.Day -> DayPill(row.label)
                             is ChatRow.Msg -> {
@@ -354,6 +361,7 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                                     onRetry = { scope.launch { repo.retryFailed(m.clientId) } }, onReply = { startReply(m) },
                                     onLong = { if (selecting) selected = if (m.id in selected) selected - m.id else selected + m.id else menuFor = m },
                                     onTap = { if (selecting) selected = if (m.id in selected) selected - m.id else selected + m.id },
+                                    onDoubleTap = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); quickReactFor = m },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -390,28 +398,39 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                         IconButton(onClick = { if (isEdit) { editing = null; tfv = TextFieldValue(repo.settings.draft(convId)) } else replyTo = null }) { Icon(Icons.Rounded.Close, "Cancel") }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
-                    TextField(
-                        tfv, { tfv = it },
-                        Modifier.weight(1f).focusRequester(focus).onFocusChanged { if (it.isFocused) emojiOpen = false },
-                        placeholder = { Text("Message") }, maxLines = 6, shape = RoundedCornerShape(24.dp),
-                        colors = TextFieldDefaults.colors(focusedContainerColor = wc.surface3, unfocusedContainerColor = wc.surface3, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
-                        leadingIcon = { IconButton(onClick = { if (emojiOpen) { emojiOpen = false; focus.requestFocus(); keyboard?.show() } else { keyboard?.hide(); emojiOpen = true } }) { Icon(if (emojiOpen) Icons.Outlined.OutlinedKeyboard else Icons.Outlined.OutlinedEmoji, "Emoji", tint = wc.dim) } },
-                        trailingIcon = if (text.isEmpty()) ({
-                            Row {
-                                IconButton(onClick = { attachSheet = true }) { Icon(Icons.Rounded.AttachFile, "Attach", tint = wc.dim, modifier = Modifier.rotate(-35f)) }
-                                IconButton(onClick = { camPerm.launch(Manifest.permission.CAMERA) }) { Icon(Icons.Outlined.OutlinedCamera, "Camera", tint = wc.dim) }
-                            }
-                        }) else null,
-                        keyboardOptions = KeyboardOptions(imeAction = if (enterSend) ImeAction.Send else ImeAction.Default),
-                        keyboardActions = KeyboardActions(onSend = { send() }),
-                    )
+                // WhatsApp-style input bar: a slim rounded pill (emoji · text · attach · camera) + one round button that
+                // morphs between mic and send. Grows up to 6 lines, camera hides while typing to give the text room.
+                Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
+                    Row(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(wc.surface3), verticalAlignment = Alignment.Bottom) {
+                        IconButton(onClick = { if (emojiOpen) { emojiOpen = false; focus.requestFocus(); keyboard?.show() } else { keyboard?.hide(); emojiOpen = true } }) {
+                            Crossfade(emojiOpen, label = "emojiKb") { open -> Icon(if (open) Icons.Outlined.OutlinedKeyboard else Icons.Outlined.OutlinedEmoji, "Emoji", tint = wc.dim) }
+                        }
+                        Box(Modifier.weight(1f).padding(vertical = 13.dp), Alignment.CenterStart) {
+                            if (tfv.text.isEmpty()) Text("Message", color = wc.dim, fontSize = 17.sp)
+                            BasicTextField(
+                                tfv, { tfv = it },
+                                Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { if (it.isFocused) emojiOpen = false },
+                                textStyle = androidx.compose.ui.text.TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, lineHeight = 22.sp),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6,
+                                keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences, imeAction = if (enterSend) ImeAction.Send else ImeAction.Default),
+                                keyboardActions = KeyboardActions(onSend = { send() }),
+                            )
+                        }
+                        IconButton(onClick = { attachSheet = true }) { Icon(Icons.Rounded.AttachFile, "Attach", tint = wc.dim, modifier = Modifier.rotate(-35f)) }
+                        AnimatedVisibility(text.isEmpty(), enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+                            IconButton(onClick = { camPerm.launch(Manifest.permission.CAMERA) }) { Icon(Icons.Outlined.OutlinedCamera, "Camera", tint = wc.dim) }
+                        }
+                    }
                     Spacer(Modifier.width(6.dp))
-                    FilledIconButton(
-                        onClick = { if (text.isNotBlank()) send() else micPerm.launch(Manifest.permission.RECORD_AUDIO) },
-                        Modifier.size(50.dp).padding(bottom = 2.dp),
-                        enabled = conv != null,
-                    ) { Icon(if (text.isNotBlank()) (if (editing != null) Icons.Rounded.Check else Icons.Rounded.Send) else Icons.Rounded.Mic, if (text.isNotBlank()) "Send" else "Record voice note") }
+                    val sendMode = text.isNotBlank()
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(if (conv != null) MaterialTheme.colorScheme.primary else wc.surface4)
+                        .clickable(enabled = conv != null) { if (sendMode) send() else micPerm.launch(Manifest.permission.RECORD_AUDIO) }, Alignment.Center) {
+                        AnimatedContent(if (sendMode) (if (editing != null) 2 else 1) else 0, transitionSpec = {
+                            (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut())
+                        }, label = "micSend") { mode ->
+                            Icon(when (mode) { 2 -> Icons.Rounded.Check; 1 -> Icons.Rounded.Send; else -> Icons.Rounded.Mic }, if (mode > 0) "Send" else "Record voice note", tint = WispInk)
+                        }
+                    }
                 }
                 if (emojiOpen) ExpressionPanel(
                     onGif = { url, sticker ->
@@ -430,6 +449,19 @@ fun ChatScreen(convId: String, jumpTo: String?, nav: Nav) {
                     },
                 )
                 Spacer(Modifier.navigationBarsPadding())
+            }
+        }
+    }
+
+    // ---- double-tap: just the reaction row (WhatsApp)
+    quickReactFor?.let { m ->
+        val mineEmoji = m.reactions.firstOrNull { it.userId == myId }?.emoji
+        androidx.compose.ui.window.Dialog({ quickReactFor = null }) {
+            Row(Modifier.clip(RoundedCornerShape(32.dp)).background(wc.surface2).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                QuickReactions.forEach { e ->
+                    Box(Modifier.size(46.dp).clip(CircleShape).background(if (e == mineEmoji) wc.wispDim else Color.Transparent).clickable { quickReactFor = null; react(m, e) }, Alignment.Center) { Text(e, fontSize = 28.sp) }
+                }
+                Box(Modifier.size(40.dp).clip(CircleShape).background(wc.surface4).clickable { quickReactFor = null; reactPickerFor = m }, Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions") }
             }
         }
     }

@@ -21,6 +21,7 @@ sealed interface Route {
     data object FriendRequests : Route
     data class Person(val user: User) : Route
     data class ContactInfo(val convId: String) : Route
+    data class CallInfo(val convId: String) : Route
     data class GroupInfo(val convId: String) : Route
     data class StatusView(val userId: String) : Route
     data object StatusText : Route

@@ -1,3 +1,31 @@
+# WispChat — update 6 (GIFs, gallery, gestures, Call info, security, permissions, speed)
+
+**Web**
+- GIF & Sticker tabs rebuilt: masonry layout where every tile has the GIF's real shape (no more squashed strips), tiny animated
+  WebP previews, results cached, trending pre-loaded when the panel opens, endless scroll. Goes through the server like the app
+  (`GIPHY_API_KEY` in `server/.env`). Stickers are real GIPHY stickers now and show **without a bubble** in chat.
+
+**Android**
+- **Gallery**: "Save to gallery" now only copies media you *received* — never what you sent, never GIFs or stickers (those stay in
+  WispChat's private storage, invisible to the gallery). Fixed the same picture being saved twice.
+- **Double-tap a message** → reaction bar. **Long-press on a photo / file** now opens the message menu, same as the rest of the bubble.
+- **Calls tab → tap a call** → new **Call info** page (photo, Message · Voice · Video · Info, every call with that person by day).
+- **Tap a profile picture** (chat list, Contact/Group info, Call info) → photo popup / full-screen photo with pinch-zoom.
+- **Screen security** (Settings → Privacy, on by default): screenshots blocked, screen recordings and recent-apps previews are black.
+- **Permissions one at a time** after sign-in, each with a short reason: notifications, microphone, camera, photos, nearby devices,
+  full-screen calls (Android 14+), background running for calls. "Not now" skips; each is offered once.
+- **Hardware video encoding**: videos are re-encoded by the phone's own encoder (Media3 Transformer → MediaCodec, 720p H.264, ~2 Mbit/s)
+  before sending — smaller and faster to send. Short/small clips go untouched; if a phone can't encode, the original is sent.
+- **Input bar** redesigned: slim rounded pill (emoji · text · attach · camera), camera hides while typing, round button morphs mic ↔ send.
+- **Emoji panel**: smoother drag (no re-layout of the chat each frame), **3 GIFs per row**, GIF results cached for the session.
+- **New Status tab icon** (solid ring breaking into dashes, dot in the middle; filled when active).
+- **Speed**: Compose stability config (unchanged rows are skipped), list row content types, bigger image memory/disk cache,
+  profileinstaller for faster startup.
+- **Server**: GIF proxy returns small previews + capped send size, with cache headers.
+
+New Android dependencies: Media3 transformer/effect/common 1.5.1, profileinstaller. New permission: REQUEST_IGNORE_BATTERY_OPTIMIZATIONS.
+Not built here (no Android SDK); Kotlin passes a syntax check and the web client builds.
+
 # WispChat — native Android update 5 (big emoji, camera, GIFs & stickers, media/links/docs)
 
 - **Big emoji with no bubble**: a message of 1–3 emoji only is shown large (bigger for one) with no bubble behind it, just a small time pill —
